@@ -4,16 +4,17 @@ import { loadWebpackModule } from "./webpack-loader.js";
 /**
  * SeeSo Eye Tracking Web Demo
  *
- * Fix 1: Calibration stuck at 0%
- *  - Bind calibration callbacks (NextPoint / Progress / Finish)
- *  - Call seeso.startCollectSamples() after the calibration dot is rendered
+ * Goals:
+ *  1) Calibration must not get stuck at 0%
+ *  2) Gaze x,y must be visible (both in logs and on-screen HUD)
  *
- * Fix 2: Ensure gaze x,y is always logged
- *  - Print x,y as a STRING message (JSON.stringify converts NaN -> null)
+ * Notes:
+ *  - SeeSo Web SDK typically requires startCollectSamples() after the calibration point is shown.
+ *  - JSON.stringify converts NaN -> null, so gaze x/y logging uses string formatting.
  *
  * Debug:
- *  - ?debug=1 (default) : INFO/WARN/ERROR
- *  - ?debug=2           : verbose DEBUG
+ *  - ?debug=1 (default): INFO/WARN/ERROR
+ *  - ?debug=2          : verbose DEBUG
  */
 const LICENSE_KEY = "dev_1ntzip9admm6g0upynw3gooycnecx0vl93hz8nox";
 
@@ -25,6 +26,7 @@ const DEBUG_LEVEL = (() => {
 
 // ---------- DOM ----------
 const els = {
+  hud: document.getElementById("hud"),
   video: document.getElementById("preview"),
   canvas: document.getElementById("output"),
   status: document.getElementById("status"),
@@ -150,17 +152,27 @@ function pushLog(line) {
 }
 
 function logBase(level, tag, msg, data) {
-  const line = `[${ts()}] ${level.padEnd(5)} ${tag.padEnd(10)} ${msg}${data !== undefined ? " " + JSON.stringify(safeJson(data)) : ""}`;
+  const line = `[${ts()}] ${level.padEnd(5)} ${tag.padEnd(10)} ${msg}${
+    data !== undefined ? " " + JSON.stringify(safeJson(data)) : ""
+  }`;
   if (level === "ERROR") console.error(line);
   else if (level === "WARN") console.warn(line);
   else console.log(line);
   pushLog(line);
 }
 
-function logI(tag, msg, data) { if (DEBUG_LEVEL >= 1) logBase("INFO", tag, msg, data); }
-function logW(tag, msg, data) { if (DEBUG_LEVEL >= 1) logBase("WARN", tag, msg, data); }
-function logE(tag, msg, data) { logBase("ERROR", tag, msg, data); }
-function logD(tag, msg, data) { if (DEBUG_LEVEL >= 2) logBase("DEBUG", tag, msg, data); }
+function logI(tag, msg, data) {
+  if (DEBUG_LEVEL >= 1) logBase("INFO", tag, msg, data);
+}
+function logW(tag, msg, data) {
+  if (DEBUG_LEVEL >= 1) logBase("WARN", tag, msg, data);
+}
+function logE(tag, msg, data) {
+  logBase("ERROR", tag, msg, data);
+}
+function logD(tag, msg, data) {
+  if (DEBUG_LEVEL >= 2) logBase("DEBUG", tag, msg, data);
+}
 
 window.addEventListener("error", (e) => {
   logE("window", "Unhandled error", {
@@ -177,8 +189,12 @@ window.addEventListener("unhandledrejection", (e) => {
 });
 
 // ---------- UI helpers ----------
-function setPill(el, text) { if (el) el.textContent = text; }
-function setStatus(text) { if (els.status) els.status.textContent = text; }
+function setPill(el, text) {
+  if (el) el.textContent = text;
+}
+function setStatus(text) {
+  if (els.status) els.status.textContent = text;
+}
 
 function showRetry(show, reason) {
   if (!els.btnRetry) return;
@@ -202,6 +218,37 @@ function throttle(fn, ms) {
   };
 }
 
+// Create/ensure gaze info line in HUD
+function ensureGazeInfoEl() {
+  if (!els.hud) return null;
+
+  let el = document.getElementById("gazeInfo");
+  if (el) return el;
+
+  el = document.createElement("div");
+  el.id = "gazeInfo";
+  el.style.fontSize = "12px";
+  el.style.lineHeight = "1.35";
+  el.style.color = "rgba(255,255,255,0.75)";
+  el.style.margin = "0 0 10px 0";
+  el.textContent = "gaze: -";
+
+  // Insert right after #status (so it stays above the pills)
+  const statusEl = document.getElementById("status");
+  if (statusEl && statusEl.parentNode === els.hud) {
+    els.hud.insertBefore(el, statusEl.nextSibling);
+  } else {
+    els.hud.appendChild(el);
+  }
+
+  return el;
+}
+
+const gazeInfoEl = ensureGazeInfoEl();
+function setGazeInfo(text) {
+  if (gazeInfoEl) gazeInfoEl.textContent = text;
+}
+
 // ---------- State ----------
 const state = { perm: "-", sdk: "-", track: "-", cal: "-" };
 
@@ -219,30 +266,45 @@ setPill(els.pillCoi, `coi: ${window.crossOriginIsolated ? "enabled" : "disabled"
 let mediaStream = null;
 
 const overlay = {
-  gaze: null,        // {x,y,trackingState,confidence}
-  calPoint: null,    // {x,y}
+  gaze: null, // {x,y,trackingState,confidence}
+  gazeRaw: null, // {x,y,trackingState,confidence}
+  calPoint: null, // {x,y}
   calProgress: null, // 0..1
   calRunning: false,
 };
 
+function getCanvasCssSize() {
+  if (!els.canvas) return { w: window.innerWidth, h: window.innerHeight, left: 0, top: 0 };
+  const rect = els.canvas.getBoundingClientRect();
+  // fixed inset:0 => rect.left/top should be 0, but keep robust
+  return {
+    w: rect.width || window.innerWidth,
+    h: rect.height || window.innerHeight,
+    left: rect.left || 0,
+    top: rect.top || 0,
+  };
+}
+
 function resizeCanvas() {
   if (!els.canvas) return;
   const dpr = window.devicePixelRatio || 1;
-  const w = window.innerWidth;
-  const h = window.innerHeight;
+  const { w, h } = getCanvasCssSize();
 
-  // Backing store at DPR; drawing in CSS pixels using setTransform
-  els.canvas.width = Math.floor(w * dpr);
-  els.canvas.height = Math.floor(h * dpr);
+  els.canvas.width = Math.max(1, Math.floor(w * dpr));
+  els.canvas.height = Math.max(1, Math.floor(h * dpr));
 
   const ctx = els.canvas.getContext("2d");
+  // draw in CSS pixels
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 function clearCanvas() {
   if (!els.canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = els.canvas.width / dpr;
+  const h = els.canvas.height / dpr;
   const ctx = els.canvas.getContext("2d");
-  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  ctx.clearRect(0, 0, w, h);
 }
 
 function drawDot(x, y, r, color) {
@@ -253,18 +315,39 @@ function drawDot(x, y, r, color) {
   ctx.fill();
 }
 
+function clamp(n, min, max) {
+  if (typeof n !== "number" || !Number.isFinite(n)) return null;
+  return Math.min(max, Math.max(min, n));
+}
+
+function toCanvasLocalPoint(x, y) {
+  const { w, h, left, top } = getCanvasCssSize();
+  // Assume SDK returns viewport coordinates; convert to canvas-local.
+  // If coordinates are already canvas-local and the canvas is fullscreen, left/top are 0 so it remains correct.
+  const lx = x - left;
+  const ly = y - top;
+
+  // Keep visible even if slightly outside
+  const cx = clamp(lx, 0, w);
+  const cy = clamp(ly, 0, h);
+  if (cx == null || cy == null) return null;
+  return { x: cx, y: cy };
+}
+
 function renderOverlay() {
   if (!els.canvas) return;
   clearCanvas();
 
   // Calibration dot
   if (overlay.calRunning && overlay.calPoint) {
-    drawDot(overlay.calPoint.x, overlay.calPoint.y, 14, "#00ff3b");
+    const pt = toCanvasLocalPoint(overlay.calPoint.x, overlay.calPoint.y) || overlay.calPoint;
+    drawDot(pt.x, pt.y, 14, "#00ff3b");
   }
 
   // Gaze dot
   if (overlay.gaze && overlay.gaze.x != null && overlay.gaze.y != null) {
-    drawDot(overlay.gaze.x, overlay.gaze.y, 7, "#88ff3b");
+    const pt = toCanvasLocalPoint(overlay.gaze.x, overlay.gaze.y) || overlay.gaze;
+    drawDot(pt.x, pt.y, 7, "#88ff3b");
   }
 }
 
@@ -323,7 +406,6 @@ let lastCollectAt = 0;
 let lastProgressAt = 0;
 let lastFinishAt = 0;
 
-// Format helper for gaze logging (string message)
 function fmt(v) {
   if (typeof v === "number") return Number.isFinite(v) ? v.toFixed(2) : "NaN";
   if (v === undefined) return "undefined";
@@ -331,59 +413,81 @@ function fmt(v) {
   return String(v);
 }
 
+function enumName(enumObj, value) {
+  if (!enumObj || value === undefined || value === null) return String(value);
+  for (const [k, v] of Object.entries(enumObj)) {
+    if (v === value) return k;
+  }
+  return String(value);
+}
+
 function attachSeesoCallbacks() {
   if (!seeso) return;
 
-  // ---- Gaze callback (always log x,y) ----
+  // ---- Gaze callback (log + HUD) ----
   const logGazeXY = throttle((g) => {
-    // Prefer standard keys: x/y
     const xRaw = g?.x ?? g?.gazeInfo?.x ?? g?.data?.x ?? g?.screenX ?? g?.gazeX ?? g?.rawX;
     const yRaw = g?.y ?? g?.gazeInfo?.y ?? g?.data?.y ?? g?.screenY ?? g?.gazeY ?? g?.rawY;
-
-    const st = g?.trackingState;
+    const stVal = g?.trackingState;
     const conf = g?.confidence;
 
-    // IMPORTANT: log as string, not as JSON fields
-    logI("gaze", `xy x=${fmt(xRaw)} y=${fmt(yRaw)} state=${fmt(st)} conf=${fmt(conf)}`);
+    const stName = SDK?.TrackingState ? enumName(SDK.TrackingState, stVal) : String(stVal);
 
-    // If x/y are missing, also log keys (debug)
+    // IMPORTANT: string message so NaN/undefined remains visible
+    logI("gaze", `xy x=${fmt(xRaw)} y=${fmt(yRaw)} state=${stName}(${fmt(stVal)}) conf=${fmt(conf)}`);
+
+    // Also reflect on HUD
+    setGazeInfo(`gaze: x=${fmt(xRaw)}  y=${fmt(yRaw)}  state=${stName}(${fmt(stVal)})  conf=${fmt(conf)}`);
+
     if ((typeof xRaw !== "number" || typeof yRaw !== "number") && DEBUG_LEVEL >= 2) {
       logD("gaze", "schema", { keys: g ? Object.keys(g) : null });
     }
   }, 150);
 
+  // For debug=2, keep a lightweight sample object (throttled)
+  const logGazeSample = throttle(() => {
+    if (DEBUG_LEVEL >= 2 && overlay.gazeRaw) {
+      logD("gaze", "sample", {
+        x: overlay.gazeRaw.x,
+        y: overlay.gazeRaw.y,
+        trackingState: overlay.gazeRaw.trackingState,
+      });
+    }
+  }, 60);
+
   if (typeof seeso.addGazeCallback === "function") {
     seeso.addGazeCallback((gazeInfo) => {
       lastGazeAt = performance.now();
 
-      // Use finite numbers only for drawing (avoid NaN drawing glitches)
-      const x = gazeInfo?.x;
-      const y = gazeInfo?.y;
+      // Raw values (for HUD/log)
+      const xRaw = gazeInfo?.x;
+      const yRaw = gazeInfo?.y;
 
-      overlay.gaze = {
-        x: (typeof x === "number" && Number.isFinite(x)) ? x : null,
-        y: (typeof y === "number" && Number.isFinite(y)) ? y : null,
+      overlay.gazeRaw = {
+        x: xRaw,
+        y: yRaw,
         trackingState: gazeInfo?.trackingState,
         confidence: gazeInfo?.confidence,
       };
 
+      // Use finite numbers only for drawing
+      overlay.gaze = {
+        x: typeof xRaw === "number" && Number.isFinite(xRaw) ? xRaw : null,
+        y: typeof yRaw === "number" && Number.isFinite(yRaw) ? yRaw : null,
+        trackingState: gazeInfo?.trackingState,
+        confidence: gazeInfo?.confidence,
+      };
+
+      // Log + HUD
       logGazeXY(gazeInfo);
+      logGazeSample();
+
       renderOverlay();
     });
 
-    logI("sdk", "addGazeCallback bound (xy logging enabled)");
+    logI("sdk", "addGazeCallback bound (xy HUD/log enabled)");
   } else {
     logW("sdk", "addGazeCallback not found on seeso instance");
-  }
-
-  // ---- Face callback (optional) ----
-  if (typeof seeso.addFaceCallback === "function") {
-    const logFace = throttle((f) => {
-      logD("face", "sample", { score: f?.score, yaw: f?.yaw, pitch: f?.pitch, roll: f?.roll });
-    }, 500);
-
-    seeso.addFaceCallback((faceInfo) => logFace(faceInfo));
-    logI("sdk", "addFaceCallback bound");
   }
 
   // ---- Debug callback (optional) ----
@@ -401,7 +505,7 @@ function attachSeesoCallbacks() {
       overlay.calRunning = true;
       overlay.calProgress = 0;
 
-      logI("cal", `nextPoint x=${fmt(x)} y=${fmt(y)}`);
+      logI("cal", `onCalibrationNextPoint x=${fmt(x)} y=${fmt(y)}`);
       renderOverlay();
 
       // Must collect samples AFTER the point is on screen
@@ -409,10 +513,10 @@ function attachSeesoCallbacks() {
         setTimeout(() => {
           try {
             lastCollectAt = performance.now();
-            seeso.startCollectSamples(); // <-- 핵심 (0% stuck 해결)
-            logI("cal", "startCollectSamples() called");
+            seeso.startCollectSamples();
+            logI("cal", "startCollectSamples called");
           } catch (e) {
-            logE("cal", "startCollectSamples() threw", e);
+            logE("cal", "startCollectSamples threw", e);
           }
         }, 80);
       });
@@ -428,7 +532,7 @@ function attachSeesoCallbacks() {
       lastProgressAt = performance.now();
       overlay.calProgress = progress;
 
-      const pct = (typeof progress === "number") ? Math.round(progress * 100) : NaN;
+      const pct = typeof progress === "number" ? Math.round(progress * 100) : NaN;
       if (Number.isFinite(pct)) {
         setStatus(`Calibrating... ${pct}% (keep your head steady, look at the green dot)`);
         setState("cal", `running (${pct}%)`);
@@ -455,10 +559,11 @@ function attachSeesoCallbacks() {
 
       setState("cal", "finished");
       setStatus("Calibration finished.");
-      logI("cal", "finished", {
+
+      logI("cal", "onCalibrationFinished", {
         type: typeof calibrationData,
         length: calibrationData?.length,
-        preview: (typeof calibrationData === "string") ? calibrationData.slice(0, 120) + "..." : null,
+        preview: typeof calibrationData === "string" ? calibrationData.slice(0, 120) + "..." : null,
       });
     });
 
@@ -523,7 +628,7 @@ function startTracking() {
 
   try {
     const ok = seeso.startTracking(mediaStream);
-    logI("track", `startTracking returned ok=${String(ok)}`);
+    logI("track", "startTracking returned", { ok });
     setState("track", ok ? "running" : "failed");
     return !!ok;
   } catch (e) {
@@ -543,8 +648,8 @@ function startCalibration() {
     overlay.calRunning = !!ok;
     overlay.calProgress = 0;
 
-    logI("cal", `startCalibration returned ok=${String(ok)} criteria=${String(criteria)}`);
-    setState("cal", ok ? "running (0%)" : "failed");
+    logI("cal", "startCalibration returned", { ok, criteria });
+    setState("cal", ok ? "running" : "failed");
     setStatus("Calibrating... 0% (keep your head steady, look at the green dot)");
 
     return !!ok;
@@ -571,18 +676,24 @@ setInterval(() => {
     calProgress: overlay.calProgress,
   };
 
+  // For calibration phases, keep watchdog verbose
   if (String(state.cal).startsWith("running")) {
     logI("hb", "calibration heartbeat", hb);
 
     if (!lastNextPointAt) {
       logW("hb", "No next-point callback yet (dot not emitted or callbacks not bound).", hb);
-    } else if (!lastCollectAt || (lastCollectAt < lastNextPointAt)) {
-      logW("hb", "Next-point emitted but collect not called (classic 0% stuck).", hb);
-    } else if (!lastProgressAt || (now - lastProgressAt > 2500)) {
-      logW("hb", "Collect called but no progress events (progress callback not bound / SDK internal issue).", hb);
+    } else if (!lastCollectAt || lastCollectAt < lastNextPointAt) {
+      logW("hb", "Next-point emitted but collect not called.", hb);
+    } else if (!lastProgressAt || now - lastProgressAt > 2500) {
+      logW("hb", "Collect called but no progress events.", hb);
     }
   } else if (DEBUG_LEVEL >= 2) {
     logD("hb", "heartbeat", hb);
+  }
+
+  // If tracking is running but gaze callbacks stopped, surface it
+  if (state.track === "running" && lastGazeAt && now - lastGazeAt > 1500) {
+    logW("hb", "No gaze samples for >1.5s while tracking is running.", hb);
   }
 }, 2000);
 
@@ -592,6 +703,7 @@ async function boot() {
   renderOverlay();
 
   setStatus("Initializing...");
+  setGazeInfo("gaze: -");
   showRetry(false);
 
   if (!navigator.mediaDevices?.getUserMedia) {
