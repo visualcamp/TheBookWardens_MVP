@@ -341,7 +341,7 @@ function renderOverlay() {
   // Calibration dot
   if (overlay.calRunning && overlay.calPoint) {
     const pt = toCanvasLocalPoint(overlay.calPoint.x, overlay.calPoint.y) || overlay.calPoint;
-    drawDot(pt.x, pt.y, 14, "#00ff3b");
+    drawDot(pt.x, pt.y, 14, "#ffff3b");
   }
 
   // Gaze dot
