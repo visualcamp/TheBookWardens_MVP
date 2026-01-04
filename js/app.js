@@ -2,13 +2,18 @@
 import { loadWebpackModule } from "./webpack-loader.js";
 
 /**
- * SeeSo Web Demo (1-point calibration)
- * Fix for "Calibrating... 0%" stuck:
- *  - When calibration next-point is emitted, you MUST call seeso.startCollectSamples()
- *    after rendering the green dot. Without this, progress can remain at 0%.
+ * SeeSo Eye Tracking Web Demo
+ *
+ * Fix 1: Calibration stuck at 0%
+ *  - Bind calibration callbacks (NextPoint / Progress / Finish)
+ *  - Call seeso.startCollectSamples() after the calibration dot is rendered
+ *
+ * Fix 2: Ensure gaze x,y is always logged
+ *  - Print x,y as a STRING message (JSON.stringify converts NaN -> null)
  *
  * Debug:
- *  - Add ?debug=2 to enable verbose logs.
+ *  - ?debug=1 (default) : INFO/WARN/ERROR
+ *  - ?debug=2           : verbose DEBUG
  */
 const LICENSE_KEY = "dev_1ntzip9admm6g0upynw3gooycnecx0vl93hz8nox";
 
@@ -31,14 +36,16 @@ const els = {
   btnRetry: document.getElementById("btnRetry"),
 };
 
-// ---------- Logging ----------
+// ---------- Logging (console + on-page panel) ----------
 const LOG_MAX = 1500;
 const LOG_BUFFER = [];
+
 function ts() {
   const d = new Date();
   const pad = (n, w = 2) => String(n).padStart(w, "0");
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
 }
+
 function safeJson(v) {
   try {
     if (v instanceof Error) return { name: v.name, message: v.message, stack: v.stack };
@@ -47,6 +54,7 @@ function safeJson(v) {
     return String(v);
   }
 }
+
 function ensureLogPanel() {
   let panel = document.getElementById("debugLogPanel");
   if (panel) return panel;
@@ -65,7 +73,8 @@ function ensureLogPanel() {
   panel.style.borderRadius = "10px";
   panel.style.background = "rgba(0,0,0,0.75)";
   panel.style.color = "#d7f7d7";
-  panel.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
+  panel.style.fontFamily =
+    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
   panel.style.fontSize = "12px";
   panel.style.lineHeight = "1.35";
   panel.style.zIndex = "99999";
@@ -139,6 +148,7 @@ function pushLog(line) {
   panel.textContent = LOG_BUFFER.join("\n");
   panel.scrollTop = panel.scrollHeight;
 }
+
 function logBase(level, tag, msg, data) {
   const line = `[${ts()}] ${level.padEnd(5)} ${tag.padEnd(10)} ${msg}${data !== undefined ? " " + JSON.stringify(safeJson(data)) : ""}`;
   if (level === "ERROR") console.error(line);
@@ -146,6 +156,7 @@ function logBase(level, tag, msg, data) {
   else console.log(line);
   pushLog(line);
 }
+
 function logI(tag, msg, data) { if (DEBUG_LEVEL >= 1) logBase("INFO", tag, msg, data); }
 function logW(tag, msg, data) { if (DEBUG_LEVEL >= 1) logBase("WARN", tag, msg, data); }
 function logE(tag, msg, data) { logBase("ERROR", tag, msg, data); }
@@ -160,11 +171,12 @@ window.addEventListener("error", (e) => {
     error: e.error ? safeJson(e.error) : null,
   });
 });
+
 window.addEventListener("unhandledrejection", (e) => {
   logE("promise", "Unhandled rejection", safeJson(e.reason));
 });
 
-// ---------- UI ----------
+// ---------- UI helpers ----------
 function setPill(el, text) { if (el) el.textContent = text; }
 function setStatus(text) { if (els.status) els.status.textContent = text; }
 
@@ -178,6 +190,7 @@ if (els.btnRetry) {
   els.btnRetry.onclick = () => location.reload();
 }
 
+// Throttle helper
 function throttle(fn, ms) {
   let last = 0;
   return (...args) => {
@@ -189,9 +202,9 @@ function throttle(fn, ms) {
   };
 }
 
-
 // ---------- State ----------
 const state = { perm: "-", sdk: "-", track: "-", cal: "-" };
+
 function setState(key, val) {
   state[key] = val;
   if (key === "perm") setPill(els.pillPerm, `perm: ${val}`);
@@ -199,15 +212,16 @@ function setState(key, val) {
   if (key === "track") setPill(els.pillTrack, `track: ${val}`);
   if (key === "cal") setPill(els.pillCal, `cal: ${val}`);
 }
+
 setPill(els.pillCoi, `coi: ${window.crossOriginIsolated ? "enabled" : "disabled"}`);
 
 // ---------- Video / Canvas ----------
 let mediaStream = null;
 
 const overlay = {
-  gaze: null,          // {x,y,trackingState,confidence}
-  calPoint: null,      // {x,y}
-  calProgress: null,   // 0..1
+  gaze: null,        // {x,y,trackingState,confidence}
+  calPoint: null,    // {x,y}
+  calProgress: null, // 0..1
   calRunning: false,
 };
 
@@ -217,12 +231,12 @@ function resizeCanvas() {
   const w = window.innerWidth;
   const h = window.innerHeight;
 
-  // Keep CSS at 100%, set backing store scaled by DPR.
+  // Backing store at DPR; drawing in CSS pixels using setTransform
   els.canvas.width = Math.floor(w * dpr);
   els.canvas.height = Math.floor(h * dpr);
 
   const ctx = els.canvas.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // draw in CSS pixels
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 function clearCanvas() {
@@ -243,12 +257,12 @@ function renderOverlay() {
   if (!els.canvas) return;
   clearCanvas();
 
-  // Calibration dot: larger and on top priority
+  // Calibration dot
   if (overlay.calRunning && overlay.calPoint) {
-    drawDot(overlay.calPoint.x, overlay.calPoint.y, 14, "#00ff3b"); // green
+    drawDot(overlay.calPoint.x, overlay.calPoint.y, 14, "#00ff3b");
   }
 
-  // Gaze dot: smaller
+  // Gaze dot
   if (overlay.gaze && overlay.gaze.x != null && overlay.gaze.y != null) {
     drawDot(overlay.gaze.x, overlay.gaze.y, 7, "#88ff3b");
   }
@@ -259,6 +273,7 @@ window.addEventListener("resize", () => {
   renderOverlay();
 });
 
+// ---------- Camera ----------
 async function ensureCamera() {
   setState("perm", "requesting");
   try {
@@ -271,6 +286,7 @@ async function ensureCamera() {
       },
       audio: false,
     });
+
     setState("perm", "granted");
 
     if (els.video) {
@@ -278,16 +294,15 @@ async function ensureCamera() {
       els.video.playsInline = true;
       els.video.muted = true;
       await els.video.play().catch((e) => {
-        // Autoplay may be blocked; still fine because the stream exists.
         logW("camera", "video.play() blocked; continuing", e?.message || e);
       });
     }
 
-    // Track settings
     const tracks = mediaStream.getVideoTracks();
     if (tracks && tracks[0]) {
       logI("camera", "track settings", tracks[0].getSettings?.());
     }
+
     return true;
   } catch (e) {
     setState("perm", "denied");
@@ -299,68 +314,158 @@ async function ensureCamera() {
 
 // ---------- SeeSo ----------
 let seeso = null;
-let SDK = null; // module exports (enums etc)
+let SDK = null;
 
 // timestamps for watchdog
 let lastGazeAt = 0;
 let lastNextPointAt = 0;
 let lastCollectAt = 0;
 let lastProgressAt = 0;
+let lastFinishAt = 0;
 
-function attachSeesoCallbacks() {
-// (attachSeesoCallbacks 내부)
-
-// 200ms마다 x,y를 INFO로 로깅(너무 스팸이면 300~500으로 조정)
-const logGazeXY = throttle((gazeInfo) => {
-  const x = gazeInfo?.x;
-  const y = gazeInfo?.y;
-
-  // SDK/브라우저에 따라 키가 다를 수 있어 후보도 같이 찍음
-  const altX = gazeInfo?.screenX ?? gazeInfo?.gazeX ?? gazeInfo?.rawX;
-  const altY = gazeInfo?.screenY ?? gazeInfo?.gazeY ?? gazeInfo?.rawY;
-
-  if (typeof x === "number" && typeof y === "number") {
-    logI("gaze", "xy", {
-      x: Number(x.toFixed(2)),
-      y: Number(y.toFixed(2)),
-      trackingState: gazeInfo?.trackingState,
-      confidence: gazeInfo?.confidence,
-    });
-  } else {
-    // x,y가 undefined면 어떤 키로 오는지 파악 가능하게 로그
-    logW("gaze", "xy not found in gazeInfo", {
-      hasX: "x" in (gazeInfo || {}),
-      hasY: "y" in (gazeInfo || {}),
-      altX,
-      altY,
-      keys: gazeInfo ? Object.keys(gazeInfo) : null,
-    });
-  }
-}, 200);
-
-if (typeof seeso.addGazeCallback === "function") {
-  seeso.addGazeCallback((gazeInfo) => {
-    lastGazeAt = performance.now();
-
-    // overlay 갱신은 기존대로
-    overlay.gaze = {
-      x: gazeInfo?.x,
-      y: gazeInfo?.y,
-      trackingState: gazeInfo?.trackingState,
-      confidence: gazeInfo?.confidence,
-    };
-
-    // ★ 여기서 x,y 로그가 찍힘
-    logGazeXY(gazeInfo);
-
-    renderOverlay();
-  });
-
-  logI("sdk", "addGazeCallback bound");
-} else {
-  logW("sdk", "addGazeCallback not found on seeso instance");
+// Format helper for gaze logging (string message)
+function fmt(v) {
+  if (typeof v === "number") return Number.isFinite(v) ? v.toFixed(2) : "NaN";
+  if (v === undefined) return "undefined";
+  if (v === null) return "null";
+  return String(v);
 }
 
+function attachSeesoCallbacks() {
+  if (!seeso) return;
+
+  // ---- Gaze callback (always log x,y) ----
+  const logGazeXY = throttle((g) => {
+    // Prefer standard keys: x/y
+    const xRaw = g?.x ?? g?.gazeInfo?.x ?? g?.data?.x ?? g?.screenX ?? g?.gazeX ?? g?.rawX;
+    const yRaw = g?.y ?? g?.gazeInfo?.y ?? g?.data?.y ?? g?.screenY ?? g?.gazeY ?? g?.rawY;
+
+    const st = g?.trackingState;
+    const conf = g?.confidence;
+
+    // IMPORTANT: log as string, not as JSON fields
+    logI("gaze", `xy x=${fmt(xRaw)} y=${fmt(yRaw)} state=${fmt(st)} conf=${fmt(conf)}`);
+
+    // If x/y are missing, also log keys (debug)
+    if ((typeof xRaw !== "number" || typeof yRaw !== "number") && DEBUG_LEVEL >= 2) {
+      logD("gaze", "schema", { keys: g ? Object.keys(g) : null });
+    }
+  }, 150);
+
+  if (typeof seeso.addGazeCallback === "function") {
+    seeso.addGazeCallback((gazeInfo) => {
+      lastGazeAt = performance.now();
+
+      // Use finite numbers only for drawing (avoid NaN drawing glitches)
+      const x = gazeInfo?.x;
+      const y = gazeInfo?.y;
+
+      overlay.gaze = {
+        x: (typeof x === "number" && Number.isFinite(x)) ? x : null,
+        y: (typeof y === "number" && Number.isFinite(y)) ? y : null,
+        trackingState: gazeInfo?.trackingState,
+        confidence: gazeInfo?.confidence,
+      };
+
+      logGazeXY(gazeInfo);
+      renderOverlay();
+    });
+
+    logI("sdk", "addGazeCallback bound (xy logging enabled)");
+  } else {
+    logW("sdk", "addGazeCallback not found on seeso instance");
+  }
+
+  // ---- Face callback (optional) ----
+  if (typeof seeso.addFaceCallback === "function") {
+    const logFace = throttle((f) => {
+      logD("face", "sample", { score: f?.score, yaw: f?.yaw, pitch: f?.pitch, roll: f?.roll });
+    }, 500);
+
+    seeso.addFaceCallback((faceInfo) => logFace(faceInfo));
+    logI("sdk", "addFaceCallback bound");
+  }
+
+  // ---- Debug callback (optional) ----
+  if (typeof seeso.addDebugCallback === "function") {
+    seeso.addDebugCallback((info) => logD("sdkdbg", "debug", info));
+    logI("sdk", "addDebugCallback bound");
+  }
+
+  // ---- Calibration callbacks (crucial) ----
+  if (typeof seeso.addCalibrationNextPointCallback === "function") {
+    seeso.addCalibrationNextPointCallback((x, y) => {
+      lastNextPointAt = performance.now();
+
+      overlay.calPoint = { x, y };
+      overlay.calRunning = true;
+      overlay.calProgress = 0;
+
+      logI("cal", `nextPoint x=${fmt(x)} y=${fmt(y)}`);
+      renderOverlay();
+
+      // Must collect samples AFTER the point is on screen
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          try {
+            lastCollectAt = performance.now();
+            seeso.startCollectSamples(); // <-- 핵심 (0% stuck 해결)
+            logI("cal", "startCollectSamples() called");
+          } catch (e) {
+            logE("cal", "startCollectSamples() threw", e);
+          }
+        }, 80);
+      });
+    });
+
+    logI("sdk", "addCalibrationNextPointCallback bound");
+  } else {
+    logW("sdk", "addCalibrationNextPointCallback not found");
+  }
+
+  if (typeof seeso.addCalibrationProgressCallback === "function") {
+    seeso.addCalibrationProgressCallback((progress) => {
+      lastProgressAt = performance.now();
+      overlay.calProgress = progress;
+
+      const pct = (typeof progress === "number") ? Math.round(progress * 100) : NaN;
+      if (Number.isFinite(pct)) {
+        setStatus(`Calibrating... ${pct}% (keep your head steady, look at the green dot)`);
+        setState("cal", `running (${pct}%)`);
+      } else {
+        setStatus(`Calibrating... (progress=${String(progress)})`);
+        setState("cal", "running");
+      }
+
+      if (DEBUG_LEVEL >= 2) logD("cal", "progress", { progress, pct });
+    });
+
+    logI("sdk", "addCalibrationProgressCallback bound");
+  } else {
+    logW("sdk", "addCalibrationProgressCallback not found");
+  }
+
+  if (typeof seeso.addCalibrationFinishCallback === "function") {
+    seeso.addCalibrationFinishCallback((calibrationData) => {
+      lastFinishAt = performance.now();
+
+      overlay.calRunning = false;
+      overlay.calPoint = null;
+      renderOverlay();
+
+      setState("cal", "finished");
+      setStatus("Calibration finished.");
+      logI("cal", "finished", {
+        type: typeof calibrationData,
+        length: calibrationData?.length,
+        preview: (typeof calibrationData === "string") ? calibrationData.slice(0, 120) + "..." : null,
+      });
+    });
+
+    logI("sdk", "addCalibrationFinishCallback bound");
+  } else {
+    logW("sdk", "addCalibrationFinishCallback not found");
+  }
 }
 
 async function initSeeso() {
@@ -373,6 +478,7 @@ async function initSeeso() {
 
     seeso = new SeesoClass();
     window.__seeso = { SDK, seeso };
+
     setState("sdk", "constructed");
     logI("sdk", "module loaded", { exportedKeys: Object.keys(SDK || {}) });
   } catch (e) {
@@ -382,9 +488,9 @@ async function initSeeso() {
     return false;
   }
 
+  // Bind callbacks before init
   attachSeesoCallbacks();
 
-  // init
   try {
     const userStatusOption = SDK?.UserStatusOption
       ? new SDK.UserStatusOption(true, true, true)
@@ -417,7 +523,7 @@ function startTracking() {
 
   try {
     const ok = seeso.startTracking(mediaStream);
-    logI("track", "startTracking returned", { ok });
+    logI("track", `startTracking returned ok=${String(ok)}`);
     setState("track", ok ? "running" : "failed");
     return !!ok;
   } catch (e) {
@@ -433,12 +539,14 @@ function startCalibration() {
   try {
     const criteria = SDK?.CalibrationAccuracyCriteria?.DEFAULT ?? 0;
     const ok = seeso.startCalibration(1, criteria);
+
     overlay.calRunning = !!ok;
     overlay.calProgress = 0;
 
-    logI("cal", "startCalibration returned", { ok, criteria });
-    setState("cal", ok ? "running" : "failed");
+    logI("cal", `startCalibration returned ok=${String(ok)} criteria=${String(criteria)}`);
+    setState("cal", ok ? "running (0%)" : "failed");
     setStatus("Calibrating... 0% (keep your head steady, look at the green dot)");
+
     return !!ok;
   } catch (e) {
     setState("cal", "failed");
@@ -447,7 +555,7 @@ function startCalibration() {
   }
 }
 
-// ---------- Watchdog (pinpoint why stuck at 0%) ----------
+// ---------- Watchdog ----------
 setInterval(() => {
   const now = performance.now();
   const hb = {
@@ -459,22 +567,19 @@ setInterval(() => {
     nextPointMsAgo: lastNextPointAt ? Math.round(now - lastNextPointAt) : null,
     collectMsAgo: lastCollectAt ? Math.round(now - lastCollectAt) : null,
     progressMsAgo: lastProgressAt ? Math.round(now - lastProgressAt) : null,
+    finishMsAgo: lastFinishAt ? Math.round(now - lastFinishAt) : null,
     calProgress: overlay.calProgress,
   };
 
-  if (state.cal.startsWith("running")) {
+  if (String(state.cal).startsWith("running")) {
     logI("hb", "calibration heartbeat", hb);
 
-    // Strong signal for the root cause:
-    // - nextPoint happens, collect happens, but progress callback never fires => progress callback not bound / SDK internal failure
-    // - nextPoint never happens => calibration didn't really start (or callbacks not bound)
-    // - collect never happens => startCollectSamples not called (classic 0% stuck)
     if (!lastNextPointAt) {
-      logW("hb", "No next-point callback yet (dot may not be emitted).", hb);
+      logW("hb", "No next-point callback yet (dot not emitted or callbacks not bound).", hb);
     } else if (!lastCollectAt || (lastCollectAt < lastNextPointAt)) {
-      logW("hb", "Next-point emitted but collect not called (0% stuck).", hb);
+      logW("hb", "Next-point emitted but collect not called (classic 0% stuck).", hb);
     } else if (!lastProgressAt || (now - lastProgressAt > 2500)) {
-      logW("hb", "Collect called but no progress events (check callback binding / SDK).", hb);
+      logW("hb", "Collect called but no progress events (progress callback not bound / SDK internal issue).", hb);
     }
   } else if (DEBUG_LEVEL >= 2) {
     logD("hb", "heartbeat", hb);
@@ -484,6 +589,8 @@ setInterval(() => {
 // ---------- Boot ----------
 async function boot() {
   resizeCanvas();
+  renderOverlay();
+
   setStatus("Initializing...");
   showRetry(false);
 
