@@ -602,6 +602,7 @@ function attachSeesoCallbacks() {
   if (typeof seeso.addCalibrationNextPointCallback === "function") {
     seeso.addCalibrationNextPointCallback((x, y) => {
       lastNextPointAt = performance.now();
+      overlay.isFinishing = false; // Reset flag
 
       // Increment point counter (1-based)
       overlay.calPointCount = (overlay.calPointCount || 0) + 1;
@@ -622,7 +623,7 @@ function attachSeesoCallbacks() {
       }
 
       // Must collect samples AFTER the point is on screen
-      // Give 300ms for eyes to fixate (prevents data noise and unnatural jumps)
+      // Give 100ms for eyes to fixate (prevents data noise and unnatural jumps)
       if (overlay.collectTimer) clearTimeout(overlay.collectTimer);
 
       overlay.collectTimer = setTimeout(() => {
@@ -633,7 +634,7 @@ function attachSeesoCallbacks() {
         } catch (e) {
           logE("cal", "startCollectSamples threw", e);
         }
-      }, 300);
+      }, 100);
     });
 
     logI("sdk", "addCalibrationNextPointCallback bound");
@@ -643,6 +644,8 @@ function attachSeesoCallbacks() {
 
   if (typeof seeso.addCalibrationProgressCallback === "function") {
     seeso.addCalibrationProgressCallback((progress) => {
+      if (overlay.isFinishing) return; // Prevent overwriting finish animation
+
       lastProgressAt = performance.now();
       overlay.calProgress = progress;
 
@@ -689,6 +692,7 @@ function attachSeesoCallbacks() {
   if (typeof seeso.addCalibrationFinishCallback === "function") {
     seeso.addCalibrationFinishCallback((calibrationData) => {
       lastFinishAt = performance.now();
+      overlay.isFinishing = true; // Lock progress updates
       logI("cal", "onCalibrationFinished start");
 
       // Smoothly fill to 100% over 1.5 seconds (simulating "more looking")
