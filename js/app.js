@@ -689,29 +689,46 @@ function attachSeesoCallbacks() {
   if (typeof seeso.addCalibrationFinishCallback === "function") {
     seeso.addCalibrationFinishCallback((calibrationData) => {
       lastFinishAt = performance.now();
+      logI("cal", "onCalibrationFinished start");
 
-      // VISUAL FEEDBACK: Force 100% (Red) and wait 1s
-      overlay.calProgress = 1.0;
-      overlay.displayProgress = 1.0;
-      renderOverlay();
+      // Smoothly fill to 100% over 1.5 seconds (simulating "more looking")
+      setStatus("Finalizing...");
+      setState("cal", "finishing");
 
-      setState("cal", "finished");
-      setStatus("Calibration Complete!");
+      const startProgress = overlay.displayProgress || overlay.calProgress || 0;
+      const duration = 1500; // 1.5 seconds fill
+      const startTime = performance.now();
 
-      setTimeout(() => {
-        overlay.calRunning = false;
-        overlay.calPoint = null;
-        renderOverlay();
+      const finishAnim = setInterval(() => {
+        const now = performance.now();
+        const p = Math.min(1.0, (now - startTime) / duration);
 
-        // Hide stage (dots)
-        const stage = document.getElementById("stage");
-        if (stage) stage.classList.remove("visible");
+        // Interpolate from startProgress to 1.0
+        const target = startProgress + (1.0 - startProgress) * p;
+        overlay.calProgress = target;
 
-        // Notify Game
-        if (typeof window.Game !== "undefined") {
-          window.Game.onCalibrationFinish();
+        if (p >= 1.0) {
+          clearInterval(finishAnim);
+
+          // Visual 100% reached
+          overlay.calProgress = 1.0;
+          setStatus("Calibration Complete!");
+
+          // Wait a moment then finish
+          setTimeout(() => {
+            overlay.calRunning = false;
+            overlay.calPoint = null;
+            renderOverlay();
+
+            const stage = document.getElementById("stage");
+            if (stage) stage.classList.remove("visible");
+
+            if (typeof window.Game !== "undefined") {
+              window.Game.onCalibrationFinish();
+            }
+          }, 500);
         }
-      }, 1000);
+      }, 30);
 
       logI("cal", "onCalibrationFinished", {
         type: typeof calibrationData,
