@@ -630,13 +630,7 @@ function attachSeesoCallbacks() {
 
       logI("cal", `onCalibrationNextPoint x=${fmt(x)} y=${fmt(y)}`);
 
-      // START ANIMATION LOOP
-      const tick = () => {
-        if (!overlay.calRunning) return;
-        renderOverlay();
-        requestAnimationFrame(tick);
-      };
-      tick();
+
 
       // UI Feedback for Calibration Screen
       const statusEl = document.getElementById("calibration-status");
@@ -659,7 +653,7 @@ function attachSeesoCallbacks() {
           } catch (e) {
             logE("cal", "startCollectSamples threw", e);
           }
-        }, 80);
+        }, 200);
       });
     });
 
@@ -810,6 +804,16 @@ function startCalibration() {
 
     overlay.calRunning = !!ok;
     overlay.calProgress = 0;
+
+    if (ok) {
+      // Start single animation loop for calibration
+      const tick = () => {
+        if (!overlay.calRunning) return;
+        renderOverlay();
+        requestAnimationFrame(tick);
+      };
+      tick();
+    }
 
     logI("cal", "startCalibration returned", { ok, criteria });
     setState("cal", ok ? "running" : "failed");
