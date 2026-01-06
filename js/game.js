@@ -35,15 +35,8 @@ const Game = {
                     if (typeof window.startEyeTracking === "function") {
                         const ok = await window.startEyeTracking();
                         if (ok) {
-                            // Success -> Move to Calibration
-                            this.switchScreen("screen-calibration");
-
-                            // Start calibration after UI transition
-                            setTimeout(() => {
-                                if (typeof window.startCalibrationRoutine === "function") {
-                                    window.startCalibrationRoutine();
-                                }
-                            }, 500);
+                            // Success -> Move to Word Forge (Calibration later)
+                            this.switchScreen("screen-word");
                         } else {
                             alert("Eye tracking failed to initialize. Please reload and try again.");
                             startBtn.disabled = false;
@@ -65,10 +58,10 @@ const Game = {
     },
 
     onCalibrationFinish() {
-        console.log("Calibration done. Entering Word Forge...");
+        console.log("Calibration done. Entering Reading Rift...");
         // Wait a moment for user to see success message
         setTimeout(() => {
-            this.switchScreen("screen-word");
+            this.switchScreen("screen-read");
         }, 1000);
     },
 
@@ -127,8 +120,18 @@ const Game = {
             alert("Correct! +10 Gems");
             this.state.gems += 10;
             this.updateUI();
-            // Move to next stage
-            this.switchScreen("screen-read");
+
+            // Move to Calibration before Reading
+            this.switchScreen("screen-calibration");
+
+            setTimeout(() => {
+                if (typeof window.startCalibrationRoutine === "function") {
+                    window.startCalibrationRoutine();
+                } else {
+                    // Fallback
+                    this.switchScreen("screen-read");
+                }
+            }, 500);
         } else {
             alert("Try again!");
         }
