@@ -319,6 +319,10 @@ function drawDot(x, y, r, color) {
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fillStyle = color;
   ctx.fill();
+  // Add stroke for visibility on light backgrounds
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "black";
+  ctx.stroke();
 }
 
 function clamp(n, min, max) {
@@ -676,6 +680,9 @@ function startCalibration() {
   // Make canvas layer visible for calibration dots
   const stage = document.getElementById("stage");
   if (stage) stage.classList.add("visible");
+
+  // Force resize in case layout changed
+  resizeCanvas();
 
   try {
     const criteria = SDK?.CalibrationAccuracyCriteria?.DEFAULT ?? 0;

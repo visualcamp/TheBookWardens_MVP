@@ -61,6 +61,14 @@ body {
   height: 100%;
 }
 
+#preview {
+  z-index: 1;
+}
+
+#output {
+  z-index: 10;
+}
+
 #stage.debug {
   opacity: 0.3;
 }
