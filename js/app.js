@@ -344,36 +344,92 @@ function toCanvasLocalPoint(x, y) {
   return { x: cx, y: cy };
 }
 
+let frameCount = 0;
+
 function renderOverlay() {
   if (!els.canvas) return;
+  frameCount++;
   clearCanvas();
 
-  // Calibration dot
+  // --- Calibration: Magic Orb Style (Arcane Focus) ---
   if (overlay.calRunning && overlay.calPoint) {
     const pt = toCanvasLocalPoint(overlay.calPoint.x, overlay.calPoint.y) || overlay.calPoint;
+    const progress = overlay.calProgress || 0;
+    const ctx = els.canvas.getContext("2d");
 
-    // Dynamic Color: Red (0%) -> Yellow (50%) -> Green (100%)
-    // But simpler: Red -> Green interpolation
-    const p = overlay.calProgress || 0;
-    // R: 255 -> 0, G: 0 -> 255
-    const r = Math.round(255 * (1 - p));
-    const g = Math.round(255 * p);
-    const color = `rgb(${r}, ${g}, 0)`;
+    // 1. Color: Dark Purple (50,0,100) -> Bright Gold/Cyan mix
+    // Let's go for Purple -> Gold as requested
+    // Purple: (128, 0, 128), Gold: (255, 215, 0)
+    // Interpolate
+    const r = 128 + (127 * progress);
+    const g = 0 + (215 * progress);
+    const b = 128 + (-128 * progress);
+    const mainColor = `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
 
-    drawDot(pt.x, pt.y, 20, color); // Increased size
+    // 2. Pulse: Speed increases with progress
+    const pulseSpeed = 0.1 + (progress * 0.4);
+    const baseSize = 25;
+    const scale = baseSize + Math.sin(frameCount * pulseSpeed) * 4;
+
+    // 3. Shake: only near completion (> 80%)
+    let shakeX = 0, shakeY = 0;
+    if (progress > 0.8) {
+      const shakeMag = (progress - 0.8) * 20; // 0..4
+      shakeX = (Math.random() - 0.5) * shakeMag;
+      shakeY = (Math.random() - 0.5) * shakeMag;
+    }
+
+    const cx = pt.x + shakeX;
+    const cy = pt.y + shakeY;
+
+    // --- Draw: Orb Glow (Background) ---
+    const grad = ctx.createRadialGradient(cx, cy, scale * 0.2, cx, cy, scale * 2.0);
+    grad.addColorStop(0, mainColor);
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, scale * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // --- Draw: Core Orb ---
+    ctx.fillStyle = "white";
+    ctx.beginPath();
+    ctx.arc(cx, cy, scale * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // --- Draw: Charging Ring (Progress Arc) ---
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    // Start from -90deg (12 o'clock)
+    ctx.arc(cx, cy, scale + 8, -Math.PI / 2, (-Math.PI / 2) + (Math.PI * 2 * progress));
+    ctx.stroke();
+
+    // --- Draw: Magic Runes/Outer Ring (Rotating) ---
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(frameCount * 0.03); // Rotate
+    ctx.strokeStyle = `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)}, 0.5)`;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 8]); // Dashed ring
+    ctx.beginPath();
+    ctx.arc(0, 0, scale + 16, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
-  // Gaze dot
+  // --- Gaze dot ---
   if (overlay.gaze && overlay.gaze.x != null && overlay.gaze.y != null) {
     const opacity = overlay.gazeOpacity !== undefined ? overlay.gazeOpacity : 0; // Default hidden if not requested
     if (opacity > 0) {
       const pt = toCanvasLocalPoint(overlay.gaze.x, overlay.gaze.y) || overlay.gaze;
       // Draw with opacity
-      const r = 3; // radius
       const ctx = els.canvas.getContext("2d");
+      ctx.save();
       ctx.globalAlpha = opacity;
       drawDot(pt.x, pt.y, 7, "#ffff3b");
-      ctx.globalAlpha = 1.0; // Reset
+      ctx.restore();
     }
   }
 }
