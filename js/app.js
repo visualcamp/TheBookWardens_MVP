@@ -372,7 +372,7 @@ function renderOverlay() {
     const mainColor = `rgb(${r}, ${g}, ${b})`;
 
     // 2. Size: Fixed (No heartbeat/pulse)
-    const baseSize = 6.25; // Reduced by another 50%
+    const baseSize = 12.5; // Doubled size
     const scale = baseSize;
 
     // 3. Shake: REMOVED (Fixed center)
@@ -657,7 +657,7 @@ function attachSeesoCallbacks() {
 
       if (DEBUG_LEVEL >= 2) logD("cal", "progress", { progress, pct });
 
-      // FORCE FINISH WATCHDOG: If stuck at 100% for > 1.5s, force finish
+      // FORCE FINISH WATCHDOG: If stuck at 100% for > 0.7s, force finish
       if (progress >= 1.0) {
         setTimeout(() => {
           if (overlay.calRunning) {
@@ -677,7 +677,7 @@ function attachSeesoCallbacks() {
               window.Game.onCalibrationFinish();
             }
           }
-        }, 1500);
+        }, 700);
       }
     });
 
