@@ -656,6 +656,29 @@ function attachSeesoCallbacks() {
       }
 
       if (DEBUG_LEVEL >= 2) logD("cal", "progress", { progress, pct });
+
+      // FORCE FINISH WATCHDOG: If stuck at 100% for > 1.5s, force finish
+      if (progress >= 1.0) {
+        setTimeout(() => {
+          if (overlay.calRunning) {
+            logW("cal", "Force finishing calibration (stuck at 100%)");
+
+            overlay.calRunning = false;
+            overlay.calPoint = null;
+            renderOverlay();
+
+            setState("cal", "finished");
+            setStatus("Calibration finished.");
+
+            const stage = document.getElementById("stage");
+            if (stage) stage.classList.remove("visible");
+
+            if (typeof window.Game !== "undefined") {
+              window.Game.onCalibrationFinish();
+            }
+          }
+        }, 1500);
+      }
     });
 
     logI("sdk", "addCalibrationProgressCallback bound");
