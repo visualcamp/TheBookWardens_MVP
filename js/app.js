@@ -393,6 +393,12 @@ function renderOverlay() {
     ctx.beginPath();
     ctx.arc(cx, cy, scale * 0.4, 0, Math.PI * 2);
     ctx.fill();
+
+    // --- Draw: Progress Percentage ---
+    ctx.fillStyle = "white";
+    ctx.font = "bold 14px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(`${Math.round(progress * 100)}%`, cx, cy - 30);
   }
 
   // --- Gaze dot ---
