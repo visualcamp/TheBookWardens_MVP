@@ -598,26 +598,25 @@ function attachSeesoCallbacks() {
   }
 
   // ---- Calibration callbacks (crucial) ----
+  // ---- Calibration callbacks (crucial) ----
   if (typeof seeso.addCalibrationNextPointCallback === "function") {
     seeso.addCalibrationNextPointCallback((x, y) => {
       lastNextPointAt = performance.now();
+
+      // Increment point counter (1-based)
+      overlay.calPointCount = (overlay.calPointCount || 0) + 1;
 
       overlay.calPoint = { x, y };
       overlay.calRunning = true;
       overlay.calProgress = 0;
       overlay.displayProgress = 0; // Reset smoothed progress
 
-      logI("cal", `onCalibrationNextPoint x=${fmt(x)} y=${fmt(y)}`);
-
-
+      logI("cal", `onCalibrationNextPoint (#${overlay.calPointCount}) x=${fmt(x)} y=${fmt(y)}`);
 
       // UI Feedback for Calibration Screen
       const statusEl = document.getElementById("calibration-status");
       if (statusEl) {
-        // Assuming 5 points standard mode
-        // We don't get 'point index' here directly easily unless we track it manually, 
-        // but just showing "Look at the magic orb!" is sufficient.
-        statusEl.textContent = "Look at the Magic Orb!";
+        statusEl.textContent = `Look at the Magic Orb! (${overlay.calPointCount}/5)`;
         statusEl.style.color = "#0f0";
         statusEl.style.textShadow = "0 0 10px #0f0";
       }
@@ -648,7 +647,7 @@ function attachSeesoCallbacks() {
 
       const pct = typeof progress === "number" ? Math.round(progress * 100) : NaN;
       if (Number.isFinite(pct)) {
-        setStatus(`Calibrating... ${pct}% (keep your head steady, look at the green dot)`);
+        setStatus(`Calibrating... ${pct}% (Point ${overlay.calPointCount}/5)`);
         setState("cal", `running (${pct}%)`);
       } else {
         setStatus(`Calibrating... (progress=${String(progress)})`);
@@ -657,11 +656,11 @@ function attachSeesoCallbacks() {
 
       if (DEBUG_LEVEL >= 2) logD("cal", "progress", { progress, pct });
 
-      // FORCE FINISH WATCHDOG: If stuck at 100% for > 0.7s, force finish
-      if (progress >= 1.0) {
+      // FORCE FINISH WATCHDOG: If stuck at 100% for > 0.7s AND it's the 5th point, force finish
+      if (progress >= 1.0 && overlay.calPointCount >= 5) {
         setTimeout(() => {
-          if (overlay.calRunning) {
-            logW("cal", "Force finishing calibration (stuck at 100%)");
+          if (overlay.calRunning && overlay.calPointCount >= 5) {
+            logW("cal", "Force finishing calibration (stuck at 100% on last point)");
 
             overlay.calRunning = false;
             overlay.calPoint = null;
@@ -806,6 +805,7 @@ function startCalibration() {
 
     overlay.calRunning = !!ok;
     overlay.calProgress = 0;
+    overlay.calPointCount = 0;
 
     if (ok) {
       // Start single animation loop for calibration
