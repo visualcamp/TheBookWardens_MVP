@@ -622,7 +622,7 @@ function attachSeesoCallbacks() {
       }
 
       // Must collect samples AFTER the point is on screen
-      // Give 500ms for eyes to fixate (prevents data noise and unnatural jumps)
+      // Give 300ms for eyes to fixate (prevents data noise and unnatural jumps)
       if (overlay.collectTimer) clearTimeout(overlay.collectTimer);
 
       overlay.collectTimer = setTimeout(() => {
@@ -633,7 +633,7 @@ function attachSeesoCallbacks() {
         } catch (e) {
           logE("cal", "startCollectSamples threw", e);
         }
-      }, 500);
+      }, 300);
     });
 
     logI("sdk", "addCalibrationNextPointCallback bound");
@@ -690,21 +690,28 @@ function attachSeesoCallbacks() {
     seeso.addCalibrationFinishCallback((calibrationData) => {
       lastFinishAt = performance.now();
 
-      overlay.calRunning = false;
-      overlay.calPoint = null;
+      // VISUAL FEEDBACK: Force 100% (Red) and wait 1s
+      overlay.calProgress = 1.0;
+      overlay.displayProgress = 1.0;
       renderOverlay();
 
       setState("cal", "finished");
-      setStatus("Calibration finished.");
+      setStatus("Calibration Complete!");
 
-      // Hide stage (dots)
-      const stage = document.getElementById("stage");
-      if (stage) stage.classList.remove("visible");
+      setTimeout(() => {
+        overlay.calRunning = false;
+        overlay.calPoint = null;
+        renderOverlay();
 
-      // Notify Game
-      if (typeof window.Game !== "undefined") {
-        window.Game.onCalibrationFinish();
-      }
+        // Hide stage (dots)
+        const stage = document.getElementById("stage");
+        if (stage) stage.classList.remove("visible");
+
+        // Notify Game
+        if (typeof window.Game !== "undefined") {
+          window.Game.onCalibrationFinish();
+        }
+      }, 1000);
 
       logI("cal", "onCalibrationFinished", {
         type: typeof calibrationData,
