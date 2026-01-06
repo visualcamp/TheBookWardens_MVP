@@ -382,10 +382,11 @@ function renderOverlay() {
 let gazeFadeTimer = null;
 let gazeFadeInterval = null;
 
-window.showGazeDot = function (durationMs = 10000) {
+window.showGazeDot = function (durationMs = 15000) {
   // Reset
   if (gazeFadeTimer) clearTimeout(gazeFadeTimer);
   if (gazeFadeInterval) clearInterval(gazeFadeInterval);
+  gazeFadeTimer = null;
 
   overlay.gazeOpacity = 1.0;
 
@@ -393,20 +394,24 @@ window.showGazeDot = function (durationMs = 10000) {
   const stage = document.getElementById("stage");
   if (stage) stage.classList.add("visible");
 
-  // Start fade out after duration
-  gazeFadeTimer = setTimeout(() => {
-    gazeFadeInterval = setInterval(() => {
-      overlay.gazeOpacity -= 0.05;
-      if (overlay.gazeOpacity <= 0) {
-        overlay.gazeOpacity = 0;
-        clearInterval(gazeFadeInterval);
-        gazeFadeInterval = null;
+  const startTime = performance.now();
 
-        // Hide stage again to prevent z-index issues
-        if (stage) stage.classList.remove("visible");
-      }
-    }, 100); // Fade step every 100ms
-  }, durationMs);
+  // Fade out linearly over the entire duration (15s)
+  gazeFadeInterval = setInterval(() => {
+    const elapsed = performance.now() - startTime;
+    const progress = elapsed / durationMs; // 0.0 -> 1.0
+
+    if (progress >= 1.0) {
+      overlay.gazeOpacity = 0;
+      clearInterval(gazeFadeInterval);
+      gazeFadeInterval = null;
+
+      // Hide stage again to prevent z-index issues
+      if (stage) stage.classList.remove("visible");
+    } else {
+      overlay.gazeOpacity = 1.0 - progress;
+    }
+  }, 33); // ~30fps update
 };
 
 window.addEventListener("resize", () => {

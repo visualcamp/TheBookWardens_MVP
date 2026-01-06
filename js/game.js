@@ -143,9 +143,9 @@ const Game = {
         this.state.isTracking = true;
         console.log("Reading session started. Waiting for gaze...");
 
-        // Show gaze dot for 10 seconds (10000ms) then fade out
+        // Show gaze dot for 15 seconds (15000ms) then fade out
         if (typeof window.showGazeDot === "function") {
-            window.showGazeDot(10000);
+            window.showGazeDot(15000);
         }
     },
 
