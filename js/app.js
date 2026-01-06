@@ -796,13 +796,5 @@ async function boot() {
 // Expose boot control to Game
 window.startEyeTracking = boot;
 
-// IMMEDIATE: Check In-App Browser on Load
-if (isInAppBrowser()) {
-  console.warn("In-app browser detected. Halting game UI and showing guide.");
-  // Force hide game UI
-  const gameUI = document.getElementById("game-ui");
-  if (gameUI) gameUI.style.display = "none";
-  // Show guide
-  handleInAppBrowser();
-}
+// (Auto-check removed to allow UI access)
 

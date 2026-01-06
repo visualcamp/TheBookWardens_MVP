@@ -20,15 +20,22 @@ const Game = {
         const startBtn = document.getElementById("btn-start-game");
         if (startBtn) {
             startBtn.onclick = async () => {
+                // 1. Check In-App Browser
+                if (this.isInAppBrowser()) {
+                    this.openSystemBrowser();
+                    return;
+                }
+
+                // 2. Normal Flow
                 startBtn.disabled = true;
                 startBtn.textContent = "Initializing Eye Tracking...";
 
                 try {
-                    // 1. Request Camera & Init SDK
+                    // Request Camera & Init SDK
                     if (typeof window.startEyeTracking === "function") {
                         const ok = await window.startEyeTracking();
                         if (ok) {
-                            // 2. Success -> Move to Game
+                            // Success -> Move to Game
                             this.switchScreen("screen-word");
                         } else {
                             alert("Eye tracking failed to initialize. Please reload and try again.");
@@ -47,6 +54,35 @@ const Game = {
                     startBtn.textContent = "Enter the Rift";
                 }
             };
+        }
+    },
+
+    isInAppBrowser() {
+        const ua = navigator.userAgent || navigator.vendor || window.opera;
+        return (
+            /KAKAOTALK/i.test(ua) ||
+            /FBAV/i.test(ua) ||
+            /Line/i.test(ua) ||
+            /Instagram/i.test(ua) ||
+            /Snapchat/i.test(ua) ||
+            /Twitter/i.test(ua) ||
+            /DaumApps/i.test(ua)
+        );
+    },
+
+    openSystemBrowser() {
+        const url = window.location.href;
+        if (/Android/i.test(navigator.userAgent)) {
+            // Android: Intent to open Chrome
+            const noProtocol = url.replace(/^https?:\/\//, "");
+            const intentUrl = `intent://${noProtocol}#Intent;scheme=https;package=com.android.chrome;end`;
+            window.location.href = intentUrl;
+        } else {
+            // iOS/Others: Alert and Clipboard
+            alert("Please copy the URL and open it in Safari or Chrome to play.");
+            navigator.clipboard.writeText(url).then(() => {
+                alert("URL copied to clipboard!");
+            }).catch(() => { });
         }
     },
 
