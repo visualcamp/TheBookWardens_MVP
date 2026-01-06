@@ -375,16 +375,9 @@ function renderOverlay() {
     const baseSize = 12.5; // Reduced by 50%
     const scale = baseSize;
 
-    // 3. Shake: only near completion (> 80%)
-    let shakeX = 0, shakeY = 0;
-    if (progress > 0.8) {
-      const shakeMag = (progress - 0.8) * 10; // Reduced shake mag
-      shakeX = (Math.random() - 0.5) * shakeMag;
-      shakeY = (Math.random() - 0.5) * shakeMag;
-    }
-
-    const cx = pt.x + shakeX;
-    const cy = pt.y + shakeY;
+    // 3. Shake: REMOVED (Fixed center)
+    const cx = pt.x;
+    const cy = pt.y;
 
     // --- Draw: Orb Glow (Background) ---
     const grad = ctx.createRadialGradient(cx, cy, scale * 0.2, cx, cy, scale * 2.0);
