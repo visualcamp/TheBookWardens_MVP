@@ -812,7 +812,8 @@ function startCalibration() {
   resizeCanvas();
 
   try {
-    const criteria = SDK?.CalibrationAccuracyCriteria?.DEFAULT ?? 0;
+    // Force High Accuracy (2) to ensure sufficient data collection (prevents 0% finish)
+    const criteria = 2;
     // 5-point calibration (mode 5 is standard usually, check docs. Here current code sends 1?)
     // Actually mode 1 might be 1-point? The user mentioned 5-point.
     // Changing to 5 for better accuracy if supported, but sticking to existing logic first.
