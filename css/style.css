@@ -43,6 +43,11 @@ body {
   opacity: 0;
   /* Hide camera feed by default */
   pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+#stage.visible {
+  opacity: 1;
 }
 
 #stage.debug {

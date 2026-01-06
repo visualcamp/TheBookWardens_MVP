@@ -35,8 +35,15 @@ const Game = {
                     if (typeof window.startEyeTracking === "function") {
                         const ok = await window.startEyeTracking();
                         if (ok) {
-                            // Success -> Move to Game
-                            this.switchScreen("screen-word");
+                            // Success -> Move to Calibration
+                            this.switchScreen("screen-calibration");
+
+                            // Start calibration after UI transition
+                            setTimeout(() => {
+                                if (typeof window.startCalibrationRoutine === "function") {
+                                    window.startCalibrationRoutine();
+                                }
+                            }, 500);
                         } else {
                             alert("Eye tracking failed to initialize. Please reload and try again.");
                             startBtn.disabled = false;
@@ -55,6 +62,14 @@ const Game = {
                 }
             };
         }
+    },
+
+    onCalibrationFinish() {
+        console.log("Calibration done. Entering Word Forge...");
+        // Wait a moment for user to see success message
+        setTimeout(() => {
+            this.switchScreen("screen-word");
+        }, 1000);
     },
 
     isInAppBrowser() {

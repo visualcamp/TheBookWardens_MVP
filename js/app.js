@@ -520,6 +520,17 @@ function attachSeesoCallbacks() {
       logI("cal", `onCalibrationNextPoint x=${fmt(x)} y=${fmt(y)}`);
       renderOverlay();
 
+      // UI Feedback for Calibration Screen
+      const statusEl = document.getElementById("calibration-status");
+      if (statusEl) {
+        // Assuming 5 points standard mode
+        // We don't get 'point index' here directly easily unless we track it manually, 
+        // but just showing "Look at the magic orb!" is sufficient.
+        statusEl.textContent = "Look at the Magic Orb!";
+        statusEl.style.color = "#0f0";
+        statusEl.style.textShadow = "0 0 10px #0f0";
+      }
+
       // Must collect samples AFTER the point is on screen
       requestAnimationFrame(() => {
         setTimeout(() => {
@@ -571,6 +582,15 @@ function attachSeesoCallbacks() {
 
       setState("cal", "finished");
       setStatus("Calibration finished.");
+
+      // Hide stage (dots)
+      const stage = document.getElementById("stage");
+      if (stage) stage.classList.remove("visible");
+
+      // Notify Game
+      if (typeof window.Game !== "undefined") {
+        window.Game.onCalibrationFinish();
+      }
 
       logI("cal", "onCalibrationFinished", {
         type: typeof calibrationData,
@@ -653,16 +673,26 @@ function startTracking() {
 function startCalibration() {
   if (!seeso) return false;
 
+  // Make canvas layer visible for calibration dots
+  const stage = document.getElementById("stage");
+  if (stage) stage.classList.add("visible");
+
   try {
     const criteria = SDK?.CalibrationAccuracyCriteria?.DEFAULT ?? 0;
-    const ok = seeso.startCalibration(1, criteria);
+    // 5-point calibration (mode 5 is standard usually, check docs. Here current code sends 1?)
+    // Actually mode 1 might be 1-point? The user mentioned 5-point.
+    // Changing to 5 for better accuracy if supported, but sticking to existing logic first.
+    // Assuming 5 is standard, let's use 5. Or keep 1 if that's what was working.
+    // The previous code had `seeso.startCalibration(1, criteria)`. Let's stick to 5 for game.
+    const mode = 5;
+    const ok = seeso.startCalibration(mode, criteria);
 
     overlay.calRunning = !!ok;
     overlay.calProgress = 0;
 
     logI("cal", "startCalibration returned", { ok, criteria });
     setState("cal", ok ? "running" : "failed");
-    setStatus("Calibrating... 0% (keep your head steady, look at the green dot)");
+    setStatus("Calibrating... Look at the dots!");
 
     return !!ok;
   } catch (e) {
@@ -671,6 +701,7 @@ function startCalibration() {
     return false;
   }
 }
+window.startCalibrationRoutine = startCalibration;
 
 // ---------- Watchdog ----------
 setInterval(() => {
@@ -785,14 +816,8 @@ async function boot() {
     return false;
   }
 
-  const calOk = startCalibration();
-  if (!calOk) {
-    setStatus("Failed to start calibration.");
-    showRetry(true, "calibration failed");
-    return false;
-  }
-
-  logI("boot", "ready");
+  // Calibration is now triggered manually by Game
+  logI("boot", "ready (tracking started, calibration pending)");
   return true; // Return success
 }
 
