@@ -1,104 +1,276 @@
-/* css/style.css */
-
 :root {
-  color-scheme: dark;
-  --bg: #0b0d10;
-  --panel: rgba(20, 24, 30, 0.72);
-  --border: rgba(255, 255, 255, 0.10);
-  --text: rgba(255, 255, 255, 0.92);
-  --muted: rgba(255, 255, 255, 0.65);
-  --green: #00ff00;
+  --bg-color: #0f0c15; /* Deep dark purple/black */
+  --card-bg: #1a1625;
+  --primary-accent: #8b2fc9; /* Neon Purple */
+  --secondary-accent: #2c9c91; /* Teal for focus/success */
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0b0;
+  --rift-glow: 0 0 20px rgba(139, 47, 201, 0.4);
 }
 
-html, body {
+* {
+  box-sizing: border-box;
+}
+
+body {
   margin: 0;
   padding: 0;
-  height: 100%;
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
-  overflow: hidden;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  font-family: 'Outfit', 'Segoe UI', sans-serif; /* Modern game font */
+  overflow: hidden; /* App style */
+  height: 100vh;
+  width: 100vw;
 }
 
+/* --- Eye Tracking Layers (Hidden by default or Debug) --- */
 #stage {
   position: fixed;
-  inset: 0;
-}
-
-#preview {
-  position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  filter: grayscale(1);
-  opacity: 0.18;
-  transform: scaleX(-1);
-}
-
-#output {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  z-index: 0; /* Behind game UI */
+  opacity: 0; /* Hide camera feed by default */
   pointer-events: none;
+}
+
+#stage.debug {
+  opacity: 0.3;
 }
 
 #hud {
   position: fixed;
-  top: 14px;
-  left: 14px;
-  right: 14px;
-  max-width: 720px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 12px 14px;
-  backdrop-filter: blur(10px);
+  top: 10px;
+  right: 10px;
+  z-index: 9999;
+  font-size: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 5px;
+  border-radius: 4px;
+  color: #0f0;
+  pointer-events: none; 
+  display: none; /* Hidden for default gameplay */
 }
 
-#title {
-  font-size: 14px;
-  font-weight: 650;
-  margin: 0 0 8px 0;
-  color: var(--text);
-}
-
-#status {
-  font-size: 13px;
-  line-height: 1.35;
-  color: var(--muted);
-  margin: 0 0 10px 0;
-}
-
-#pills {
+/* --- Game Container --- */
+#game-ui {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+}
+
+/* --- Navigation / Header --- */
+.game-header {
+  height: 60px;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: rgba(20, 15, 30, 0.9);
+  border-bottom: 1px solid rgba(139, 47, 201, 0.3);
 }
 
-.pill {
-  font-size: 12px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.18);
-  color: var(--muted);
+.currency-badge {
+  background: rgba(139, 47, 201, 0.2);
+  border: 1px solid var(--primary-accent);
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-weight: bold;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
-#btnRetry {
-  display: none;
-  margin-left: auto;
-  font-size: 12px;
-  padding: 7px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text);
+/* --- Screens State Manager --- */
+.screen {
+  display: none; /* All screens hidden by default */
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 60px; /* Below header */
+  left: 0;
+  padding: 20px;
+  overflow-y: auto;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.screen.active {
+  display: flex;
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- 0. Home Screen --- */
+#screen-home {
+  text-align: center;
+  background: radial-gradient(circle at center, #2e1045 0%, #0f0c15 70%);
+}
+
+.title-logo {
+  font-size: 2.5rem;
+  color: var(--primary-accent);
+  text-shadow: var(--rift-glow);
+  margin-bottom: 10px;
+  font-family: 'Cinzel', serif; /* Fantasy feeling */
+}
+
+.btn-primary {
+  background: linear-gradient(90deg, #6200ea, #b000df);
+  color: white;
+  border: none;
+  padding: 15px 40px;
+  border-radius: 30px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(139, 47, 201, 0.5);
+  transition: transform 0.2s;
+}
+
+.btn-primary:hover {
+  transform: scale(1.05);
+}
+
+/* --- 1. Word Forge --- */
+.word-card {
+  background: var(--card-bg);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 400px;
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.1);
+  text-align: center;
+}
+
+.word-image-placeholder {
+  width: 100%;
+  height: 200px;
+  background: linear-gradient(135deg, #2c3e50, #000);
+  border-radius: 12px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #aaa;
+}
+
+.word-title {
+  font-size: 2rem;
+  color: white;
+  margin: 10px 0;
+}
+
+.option-btn {
+  display: block;
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: white;
+  padding: 15px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  text-align: left;
   cursor: pointer;
 }
 
-#btnRetry:hover {
-  background: rgba(255, 255, 255, 0.10);
+.option-btn:hover, .option-btn.selected {
+  background: rgba(139, 47, 201, 0.3);
+  border-color: var(--primary-accent);
+}
+
+/* --- 2. Reading Room (Rift) --- */
+#screen-read {
+  justify-content: flex-start; /* Align text to top */
+  padding-top: 40px;
+}
+
+.book-container {
+  max-width: 600px;
+  line-height: 1.8;
+  font-family: 'Georgia', serif;
+  font-size: 1.1rem;
+  color: #ccc;
+  position: relative;
+}
+
+.rift-text {
+  color: #ddd;
+  transition: color 0.3s;
+}
+
+/* The 'Reading' effect: when gaze hits text */
+.rift-text.read {
+  color: #fff;
+  text-shadow: 0 0 8px var(--primary-accent);
+}
+
+.highlight-word {
+  color: var(--secondary-accent);
+  font-weight: bold;
+}
+
+.rift-seal-bar {
+  position: fixed;
+  bottom: 20px;
+  width: 90%;
+  max-width: 600px;
+  height: 12px;
+  background: #333;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.rift-seal-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--secondary-accent), var(--primary-accent));
+  width: 0%;
+  transition: width 0.5s;
+}
+
+/* --- 3. Boss Battle --- */
+.boss-avatar {
+  width: 150px;
+  height: 150px;
+  background: #000;
+  border-radius: 50%;
+  border: 4px solid #f00;
+  box-shadow: 0 0 20px #f00;
+  margin-bottom: 20px;
+  background-image: url('https://via.placeholder.com/150/000000/FF0000?text=Ink+Shadow');
+  background-size: cover;
+}
+
+.boss-dialogue {
+  background: rgba(20, 10, 40, 0.9);
+  padding: 20px;
+  border-radius: 15px;
+  margin-bottom: 30px;
+  border-left: 5px solid #8b2fc9;
+}
+
+/* --- In-App Browser Guide (Overlay) --- */
+#inappGuide {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: #111;
+  color: #fff;
+  z-index: 20000;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }

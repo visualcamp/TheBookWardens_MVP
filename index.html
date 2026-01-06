@@ -1,40 +1,141 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SeeSo Eye Tracking Web Demo</title>
-    <link rel="stylesheet" href="./css/style.css" />
-    <script src="./coi-serviceworker.js"></script>
-  </head>
-  <body>
-    <div id="stage">
-      <video id="preview" autoplay muted playsinline></video>
-      <canvas id="output"></canvas>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeeSo Eye Tracking Web Demo</title>
+  <link rel="stylesheet" href="./css/style.css" />
+  <script src="./coi-serviceworker.js"></script>
+</head>
+
+<body>
+  <!-- 1. Eye Tracking Layer (Background/Debug) -->
+  <div id="stage">
+    <video id="preview" autoplay muted playsinline></video>
+    <canvas id="output"></canvas>
+  </div>
+
+  <!-- 2. Global HUD (Debug Overlay) -->
+  <div id="hud">
+    <div id="status">Initializing...</div>
+    <div id="gazeInfo">gaze: -</div>
+    <div id="pills">
+      <span class="pill" id="pillCoi">-</span>
+      <span class="pill" id="pillPerm">-</span>
+      <span class="pill" id="pillSdk">-</span>
+      <span class="pill" id="pillTrack">-</span>
+      <span class="pill" id="pillCal">-</span>
+      <button id="btnRetry" type="button" style="pointer-events:all;">Reload SDK</button>
     </div>
+  </div>
 
-    <div id="hud">
-      <h1 id="title">SeeSo Eye Tracking Web Demo</h1>
-      <div id="status">Initializing...</div>
+  <!-- 3. MAIN GAME UI CONTAINER -->
+  <div id="game-ui">
 
-      <div id="pills">
-        <span class="pill" id="pillCoi">coi: -</span>
-        <span class="pill" id="pillPerm">perm: -</span>
-        <span class="pill" id="pillSdk">sdk: -</span>
-        <span class="pill" id="pillTrack">track: -</span>
-        <span class="pill" id="pillCal">cal: -</span>
+    <!-- Top Navigation Header -->
+    <header class="game-header">
+      <div class="user-level">Rank: Apprentice</div>
+      <div class="currency-badge">
+        💎 <span id="gem-count">0</span>
+      </div>
+    </header>
 
-      <button id="btnRetry" type="button">Reload</button>
+    <!-- SCREEN 0: HOME / LOBBY -->
+    <section id="screen-home" class="screen active">
+      <h1 class="title-logo">The Book Wardens</h1>
+      <p style="color: #aaa; margin-bottom: 30px;">Rift of Pages - Day 1</p>
+
+      <div style="margin-bottom: 20px;">
+        <h3>Today's Mission:</h3>
+        <p>"Alice's Adventures in Wonderland"</p>
       </div>
 
-      <div id="inappGuide" style="display: none; margin-top: 20px; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px;">
-        <p style="margin-bottom: 10px; color: #ffeb3b;">For the best experience, please open in Chrome or Safari.</p>
-        <button id="btnOpenExternal" type="button" style="padding: 10px 20px; font-size: 16px; cursor: pointer; color: black; font-weight: bold;">
-          Open in System Browser
-        </button>
-      </div>
-    </div>
+      <button id="btn-start-game" class="btn-primary">Enter the Rift</button>
+      <p style="font-size: 0.8rem; color: #555; margin-top: 20px;" id="perm-instruct">Please allow camera access when
+        prompted.</p>
+    </section>
 
-    <script type="module" src="./js/app.js"></script>
-  </body>
+    <!-- SCREEN 1: WORD FORGE (Vocab) -->
+    <section id="screen-word" class="screen">
+      <div style="text-align: center; margin-bottom: 10px; color: var(--primary-accent);">
+        WORD FORGE (1/3)
+      </div>
+
+      <div class="word-card">
+        <div class="word-image-placeholder">
+          [Magic Image Placeholder]
+        </div>
+        <h2 class="word-title" id="vocab-word">Luminous</h2>
+        <p style="color: #bbb; margin-bottom: 20px;">"The <b>luminous</b> mushroom lit up the dark cave."</p>
+
+        <div id="vocab-options">
+          <button class="option-btn" onclick="Game.checkVocab(0)">A. Very heavy and dark</button>
+          <button class="option-btn" onclick="Game.checkVocab(1)">B. Full of light / Shining</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 2: READING RIFT (Eye Tracking Gameplay) -->
+    <section id="screen-read" class="screen">
+      <div style="margin-bottom: 20px; text-align: center;">
+        <span style="background: #333; padding: 5px 10px; border-radius: 4px; font-size: 0.8rem;">
+          Chapter 1: Down the Rabbit-Hole
+        </span>
+      </div>
+
+      <div id="book-content" class="book-container">
+        <!-- Text will be injected here by JS -->
+        <p>Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing to do.</p>
+        <p>Once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations in
+          it.</p>
+        <p>"And what is the use of a book," thought Alice, "without pictures or conversations?"</p>
+      </div>
+
+      <div class="rift-seal-bar">
+        <div id="read-progress" class="rift-seal-fill"></div>
+      </div>
+      <p style="margin-top: 10px; font-size: 0.8rem; color: #777;">Read to seal the rift...</p>
+    </section>
+
+    <!-- SCREEN 3: BOSS BATTLE (Comprehension) -->
+    <section id="screen-boss" class="screen">
+      <div class="boss-avatar"></div>
+      <div class="boss-dialogue">
+        <h3 style="margin: 0 0 10px 0; color: #f00;">The Ink Shadow asks:</h3>
+        <p id="boss-question">"Why did Alice follow the Rabbit?"</p>
+      </div>
+
+      <div id="boss-options" style="width: 100%; max-width: 500px;">
+        <button class="option-btn" onclick="Game.checkBoss(0)">A. Because it was late for a party.</button>
+        <button class="option-btn" onclick="Game.checkBoss(1)">B. Because she was bored.</button>
+      </div>
+    </section>
+
+    <!-- SCREEN 4: VICTORY -->
+    <section id="screen-win" class="screen">
+      <h1 style="color: gold;">Rift Sealed!</h1>
+      <p>You have restored the meaning of this page.</p>
+      <div style="font-size: 3rem; margin: 20px;">💎 +50</div>
+      <button class="btn-primary" onclick="location.reload()">Next Day</button>
+    </section>
+
+  </div>
+
+  <!-- In-App Browser Guide -->
+  <div id="inappGuide" style="display: none;">
+    <p style="margin-bottom: 20px; color: #ffeb3b; font-size: 1.2rem;">For the best experience,<br>please open in Chrome
+      or Safari.</p>
+    <button id="btnOpenExternal" type="button" class="btn-primary" style="background: white; color: black;">
+      Open in System Browser
+    </button>
+  </div>
+
+  <!-- Scripts -->
+  <!-- 1. Eye Tracking Core -->
+  <script type="module" src="./js/app.js"></script>
+  <!-- 2. Game Logic (This will be created next) -->
+  <script src="./js/game.js"></script>
+</body>
+
 </html>

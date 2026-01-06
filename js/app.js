@@ -481,6 +481,12 @@ function attachSeesoCallbacks() {
         confidence: gazeInfo?.confidence,
       };
 
+      // --- GAME INTEGRATION ---
+      if (typeof window.Game !== "undefined" && overlay.gaze.x !== null) {
+        window.Game.onGaze(overlay.gaze.x, overlay.gaze.y);
+      }
+      // ------------------------
+
       // Log + HUD
       logGazeXY(gazeInfo);
       logGazeSample();
