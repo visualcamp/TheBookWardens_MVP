@@ -276,6 +276,7 @@ const overlay = {
   gazeRaw: null, // {x,y,trackingState,confidence}
   calPoint: null, // {x,y}
   calProgress: null, // 0..1
+  displayProgress: 0, // smoothed 0..1
   calRunning: false,
 };
 
@@ -354,7 +355,14 @@ function renderOverlay() {
   // --- Calibration: Magic Orb Style (Arcane Focus) ---
   if (overlay.calRunning && overlay.calPoint) {
     const pt = toCanvasLocalPoint(overlay.calPoint.x, overlay.calPoint.y) || overlay.calPoint;
-    const progress = overlay.calProgress || 0;
+
+    // Smooth Interpolation (Lerp)
+    const targetProgress = overlay.calProgress || 0;
+    // Move 10% towards target per frame
+    overlay.displayProgress += (targetProgress - overlay.displayProgress) * 0.1;
+
+    // Retrieve smoothed value
+    const progress = overlay.displayProgress;
     const ctx = els.canvas.getContext("2d");
 
     // 1. Color: Dark Purple (50,0,100) -> Bright Gold/Cyan mix
@@ -622,6 +630,7 @@ function attachSeesoCallbacks() {
       overlay.calPoint = { x, y };
       overlay.calRunning = true;
       overlay.calProgress = 0;
+      overlay.displayProgress = 0; // Reset smoothed progress
 
       logI("cal", `onCalibrationNextPoint x=${fmt(x)} y=${fmt(y)}`);
       renderOverlay();
