@@ -372,13 +372,13 @@ function renderOverlay() {
     const mainColor = `rgb(${r}, ${g}, ${b})`;
 
     // 2. Size: Fixed (No heartbeat/pulse)
-    const baseSize = 25;
-    const scale = baseSize; // constant size
+    const baseSize = 12.5; // Reduced by 50%
+    const scale = baseSize;
 
     // 3. Shake: only near completion (> 80%)
     let shakeX = 0, shakeY = 0;
     if (progress > 0.8) {
-      const shakeMag = (progress - 0.8) * 20; // 0..4
+      const shakeMag = (progress - 0.8) * 10; // Reduced shake mag
       shakeX = (Math.random() - 0.5) * shakeMag;
       shakeY = (Math.random() - 0.5) * shakeMag;
     }
@@ -401,17 +401,15 @@ function renderOverlay() {
     ctx.arc(cx, cy, scale * 0.4, 0, Math.PI * 2);
     ctx.fill();
 
-
-
     // --- Draw: Magic Runes/Outer Ring (Rotating) ---
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(frameCount * 0.03); // Rotate
     ctx.strokeStyle = `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)}, 0.5)`;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 8]); // Dashed ring
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 5]); // Scaled down dash
     ctx.beginPath();
-    ctx.arc(0, 0, scale + 16, 0, Math.PI * 2);
+    ctx.arc(0, 0, scale + 8, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
