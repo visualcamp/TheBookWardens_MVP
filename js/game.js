@@ -192,7 +192,7 @@ const Game = {
         gazeTimer: null,
         currentGazedRune: null,
         gazeDuration: 0,
-        requiredGazeDuration: 800, // 0.8 seconds to activate (easier for low accuracy)
+        requiredGazeDuration: 500, // 0.5 seconds to activate (very fast)
         totalRounds: 3,
         currentRound: 0,
         runeSymbols: ['◈', '◆', '◇', '◉', '◎', '○', '●', '◐', '◑', '◒', '◓', '☆'],
@@ -257,7 +257,7 @@ const Game = {
         this.runeGame.sequence = [];
 
         const containerRect = container.getBoundingClientRect();
-        const runeSize = 100; // Match CSS
+        const runeSize = 50; // Smaller runes
         const padding = 60; // More padding for corner placement
 
         // Fixed positions for 3 runes: top-left, top-right, bottom-center
@@ -365,7 +365,7 @@ const Game = {
 
             const dist = Math.sqrt(Math.pow(relX - runeRelX, 2) + Math.pow(relY - runeRelY, 2));
 
-            if (dist < 120) { // 120px radius - very forgiving for low accuracy tracking
+            if (dist < 240) { // 240px radius - extremely forgiving for low accuracy tracking
                 gazedRune = rune;
                 break;
             }
