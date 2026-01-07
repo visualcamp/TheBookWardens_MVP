@@ -180,20 +180,331 @@ const Game = {
         }
     },
 
-    // --- 1.5 Owl Scene ---
+    // --- 1.5 Rune Sealing Mini-Game ---
+    runeGame: {
+        isActive: false,
+        runes: [],
+        sequence: [],
+        currentIndex: 0,
+        score: 0,
+        timeLeft: 30,
+        timer: null,
+        gazeTimer: null,
+        currentGazedRune: null,
+        gazeDuration: 0,
+        requiredGazeDuration: 1500, // 1.5 seconds to activate
+        totalRounds: 3,
+        currentRound: 0,
+        runeSymbols: ['◈', '◆', '◇', '◉', '◎', '○', '●', '◐', '◑', '◒', '◓', '☆'],
+    },
+
     startOwlScene() {
         this.state.isTracking = true;
         this.state.isOwlTracker = true;
+        this.state.isRuneGame = false; // Not started yet
         this.switchScreen("screen-owl");
         if (typeof window.showGazeDot === "function") {
             window.showGazeDot(999999);
         }
+
+        // Reset button text
+        const btn = document.getElementById('btn-rune-game');
+        if (btn) btn.textContent = 'Start Sealing';
+    },
+
+    startRuneGame() {
+        // Initialize game
+        this.runeGame.isActive = true;
+        this.runeGame.currentRound = 0;
+        this.runeGame.score = 0;
+        this.runeGame.timeLeft = 30;
+        this.state.isRuneGame = true;
+        this.state.isOwlTracker = false;
+
+        // Hide button, show game
+        const btn = document.getElementById('btn-rune-game');
+        if (btn) btn.style.display = 'none';
+
+        // Update instruction
+        const instruction = document.getElementById('rune-instruction');
+        if (instruction) instruction.textContent = 'Gaze at the glowing runes in sequence!';
+
+        // Start first round
+        this.startRuneRound();
+        this.startRuneTimer();
+    },
+
+    startRuneRound() {
+        this.runeGame.currentRound++;
+        this.runeGame.currentIndex = 0;
+        this.runeGame.currentGazedRune = null;
+        this.runeGame.gazeDuration = 0;
+
+        // Generate runes
+        const numRunes = Math.min(6 + this.runeGame.currentRound * 2, 12);
+        const sequenceLength = Math.min(3 + this.runeGame.currentRound, 6);
+
+        this.generateRunes(numRunes, sequenceLength);
+        this.updateRuneUI();
+    },
+
+    generateRunes(count, sequenceLength) {
+        const container = document.getElementById('rune-container');
+        if (!container) return;
+
+        container.innerHTML = '';
+        this.runeGame.runes = [];
+        this.runeGame.sequence = [];
+
+        const containerRect = container.getBoundingClientRect();
+        const runeSize = 60;
+        const padding = 40;
+
+        // Generate random positions
+        for (let i = 0; i < count; i++) {
+            const rune = document.createElement('div');
+            rune.className = 'rune';
+            rune.dataset.index = i;
+
+            // Random position (avoid overlap)
+            let x, y, attempts = 0;
+            do {
+                x = padding + Math.random() * (containerRect.width - runeSize - padding * 2);
+                y = padding + Math.random() * (containerRect.height - runeSize - padding * 2);
+                attempts++;
+            } while (this.checkRuneOverlap(x, y, runeSize) && attempts < 50);
+
+            rune.style.left = x + 'px';
+            rune.style.top = y + 'px';
+
+            // Create symbol
+            const symbol = document.createElement('div');
+            symbol.className = 'rune-symbol';
+            const randomSymbol = this.runeGame.runeSymbols[Math.floor(Math.random() * this.runeGame.runeSymbols.length)];
+            symbol.setAttribute('data-symbol', randomSymbol);
+
+            rune.appendChild(symbol);
+            container.appendChild(rune);
+
+            this.runeGame.runes.push({
+                element: rune,
+                x: x,
+                y: y,
+                index: i
+            });
+        }
+
+        // Select random sequence
+        const shuffled = [...Array(count).keys()].sort(() => Math.random() - 0.5);
+        this.runeGame.sequence = shuffled.slice(0, sequenceLength);
+
+        // Highlight first target
+        this.highlightCurrentTarget();
+    },
+
+    checkRuneOverlap(x, y, size) {
+        const minDist = size * 1.5;
+        return this.runeGame.runes.some(rune => {
+            const dx = rune.x - x;
+            const dy = rune.y - y;
+            return Math.sqrt(dx * dx + dy * dy) < minDist;
+        });
+    },
+
+    highlightCurrentTarget() {
+        // Remove all highlights
+        this.runeGame.runes.forEach(rune => {
+            rune.element.classList.remove('target', 'locked', 'active');
+        });
+
+        if (this.runeGame.currentIndex < this.runeGame.sequence.length) {
+            const targetIndex = this.runeGame.sequence[this.runeGame.currentIndex];
+            const targetRune = this.runeGame.runes[targetIndex];
+            if (targetRune) {
+                targetRune.element.classList.add('target');
+            }
+
+            // Make non-target runes active but dimmed
+            this.runeGame.runes.forEach((rune, idx) => {
+                if (idx !== targetIndex) {
+                    rune.element.classList.add('active');
+                }
+            });
+        }
+    },
+
+    startRuneTimer() {
+        if (this.runeGame.timer) clearInterval(this.runeGame.timer);
+
+        this.runeGame.timer = setInterval(() => {
+            this.runeGame.timeLeft--;
+            this.updateRuneUI();
+
+            if (this.runeGame.timeLeft <= 0) {
+                this.endRuneGame(false);
+            }
+        }, 1000);
+    },
+
+    checkRuneGaze(x, y) {
+        if (!this.runeGame.isActive) return;
+
+        const container = document.getElementById('rune-container');
+        if (!container) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const relX = x - containerRect.left;
+        const relY = y - containerRect.top;
+
+        // Check which rune is being gazed at
+        let gazedRune = null;
+        for (const rune of this.runeGame.runes) {
+            const runeRect = rune.element.getBoundingClientRect();
+            const runeRelX = runeRect.left - containerRect.left + runeRect.width / 2;
+            const runeRelY = runeRect.top - containerRect.top + runeRect.height / 2;
+
+            const dist = Math.sqrt(Math.pow(relX - runeRelX, 2) + Math.pow(relY - runeRelY, 2));
+
+            if (dist < 40) { // 40px radius
+                gazedRune = rune;
+                break;
+            }
+        }
+
+        // Update gaze state
+        if (gazedRune) {
+            if (this.runeGame.currentGazedRune !== gazedRune) {
+                // New rune gazed
+                this.runeGame.currentGazedRune = gazedRune;
+                this.runeGame.gazeDuration = 0;
+                gazedRune.element.classList.add('gazing');
+            } else {
+                // Continue gazing
+                this.runeGame.gazeDuration += 50; // Assuming 50ms update rate
+
+                // Update progress bar
+                const progress = Math.min(100, (this.runeGame.gazeDuration / this.runeGame.requiredGazeDuration) * 100);
+                const progressBar = document.getElementById('rune-progress-bar');
+                if (progressBar) progressBar.style.width = progress + '%';
+
+                // Check if gaze duration met
+                if (this.runeGame.gazeDuration >= this.runeGame.requiredGazeDuration) {
+                    this.activateRune(gazedRune);
+                }
+            }
+        } else {
+            // No rune gazed
+            if (this.runeGame.currentGazedRune) {
+                this.runeGame.currentGazedRune.element.classList.remove('gazing');
+                this.runeGame.currentGazedRune = null;
+                this.runeGame.gazeDuration = 0;
+
+                const progressBar = document.getElementById('rune-progress-bar');
+                if (progressBar) progressBar.style.width = '0%';
+            }
+        }
+    },
+
+    activateRune(rune) {
+        const targetIndex = this.runeGame.sequence[this.runeGame.currentIndex];
+
+        if (rune.index === targetIndex) {
+            // Correct rune!
+            rune.element.classList.add('success');
+            rune.element.classList.remove('gazing', 'target');
+
+            this.runeGame.score += 100 * (this.runeGame.currentRound);
+            this.runeGame.currentIndex++;
+
+            // Reset gaze
+            this.runeGame.currentGazedRune = null;
+            this.runeGame.gazeDuration = 0;
+            const progressBar = document.getElementById('rune-progress-bar');
+            if (progressBar) progressBar.style.width = '0%';
+
+            // Check if sequence complete
+            if (this.runeGame.currentIndex >= this.runeGame.sequence.length) {
+                setTimeout(() => {
+                    if (this.runeGame.currentRound >= this.runeGame.totalRounds) {
+                        this.endRuneGame(true);
+                    } else {
+                        this.startRuneRound();
+                    }
+                }, 500);
+            } else {
+                this.highlightCurrentTarget();
+            }
+
+            this.updateRuneUI();
+        } else {
+            // Wrong rune - penalty
+            rune.element.classList.remove('gazing');
+            this.runeGame.timeLeft = Math.max(0, this.runeGame.timeLeft - 3);
+            this.runeGame.currentGazedRune = null;
+            this.runeGame.gazeDuration = 0;
+
+            const progressBar = document.getElementById('rune-progress-bar');
+            if (progressBar) progressBar.style.width = '0%';
+        }
+    },
+
+    updateRuneUI() {
+        const scoreEl = document.getElementById('rune-score');
+        const timerEl = document.getElementById('rune-timer');
+        const comboEl = document.getElementById('rune-combo');
+
+        if (scoreEl) scoreEl.textContent = this.runeGame.score;
+        if (timerEl) timerEl.textContent = this.runeGame.timeLeft;
+        if (comboEl) comboEl.textContent = `${this.runeGame.currentIndex}/${this.runeGame.sequence.length}`;
+    },
+
+    endRuneGame(success) {
+        this.runeGame.isActive = false;
+        this.state.isRuneGame = false;
+
+        if (this.runeGame.timer) {
+            clearInterval(this.runeGame.timer);
+            this.runeGame.timer = null;
+        }
+
+        const messageEl = document.getElementById('game-message');
+        const titleEl = document.getElementById('message-title');
+        const textEl = document.getElementById('message-text');
+
+        if (success) {
+            if (titleEl) titleEl.textContent = 'Rift Sealed!';
+            if (textEl) textEl.textContent = `You earned ${this.runeGame.score} points! The path to knowledge is open.`;
+            this.state.gems += Math.floor(this.runeGame.score / 10);
+            this.updateUI();
+        } else {
+            if (titleEl) titleEl.textContent = 'Time Ran Out!';
+            if (textEl) textEl.textContent = `You scored ${this.runeGame.score} points. Try again to seal the Rift!`;
+        }
+
+        if (messageEl) messageEl.classList.remove('hidden');
+
+        // Auto-proceed or retry
+        setTimeout(() => {
+            if (messageEl) messageEl.classList.add('hidden');
+
+            if (success) {
+                this.startReadingFromOwl();
+            } else {
+                // Reset for retry
+                const btn = document.getElementById('btn-rune-game');
+                if (btn) {
+                    btn.style.display = 'inline-flex';
+                    btn.textContent = 'Try Again';
+                }
+            }
+        }, 3000);
     },
 
     // Called from Owl screen button to begin reading
     startReadingFromOwl() {
         // Stop owl tracking visuals
         this.state.isOwlTracker = false;
+        this.state.isRuneGame = false;
         // Switch to reading screen and initialize reading session
         this.switchScreen("screen-read");
         this.startReadingSession();
@@ -289,6 +600,25 @@ const Game = {
 
     // Called by app.js (SeeSo overlay)
     onGaze(x, y) {
+        // Rune Game Interaction (highest priority)
+        if (this.state.isRuneGame && this.runeGame.isActive) {
+            this.checkRuneGaze(x, y);
+
+            // Still move owl eyes in background
+            const pupils = document.querySelectorAll('.pupil');
+            const cx = window.innerWidth / 2;
+            const cy = window.innerHeight / 2;
+            const maxMove = 15;
+            let dx = (x - cx) / (window.innerWidth / 2) * maxMove;
+            let dy = (y - cy) / (window.innerHeight / 2) * maxMove;
+            dx = Math.max(-maxMove, Math.min(maxMove, dx));
+            dy = Math.max(-maxMove, Math.min(maxMove, dy));
+            pupils.forEach(p => {
+                p.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+            });
+            return;
+        }
+
         // Owl Interaction
         if (this.state.isOwlTracker) {
             const pupils = document.querySelectorAll('.pupil');
