@@ -190,6 +190,15 @@ const Game = {
         }
     },
 
+    // Called from Owl screen button to begin reading
+    startReadingFromOwl() {
+        // Stop owl tracking visuals
+        this.state.isOwlTracker = false;
+        // Switch to reading screen and initialize reading session
+        this.switchScreen("screen-read");
+        this.startReadingSession();
+    },
+
     // --- 2. Reading Rift ---
     startReadingSession() {
         this.state.readProgress = 0;
