@@ -158,11 +158,12 @@ export class CalibrationManager {
                     // If progress reaches 1.0, clear the maxWaitTimer as we're proceeding to finish
                     if (this.state.maxWaitTimer) clearTimeout(this.state.maxWaitTimer);
                     if (this.state.watchdogTimer) clearTimeout(this.state.watchdogTimer);
+                    if (this.state.softFinishTimer) clearTimeout(this.state.softFinishTimer);
 
                     this.state.watchdogTimer = setTimeout(() => {
                         this.state.watchdogTimer = null;
                         if (this.state.running && this.state.pointCount >= 1) {
-                            logW("cal", "Force finishing calibration (watchdog 100%)");
+                            this.ctx.logW("cal", "Force finishing calibration (watchdog 100%)");
                             this.finishSequence();
                         }
                     }, 700);
@@ -172,6 +173,13 @@ export class CalibrationManager {
                         this.state.watchdogTimer = null;
                     }
 
+                    // Soft Finish Guard: If we are > 85% done, don't let it hang forever.
+                    if (progress > 0.85 && !this.state.softFinishTimer) {
+                        this.state.softFinishTimer = setTimeout(() => {
+                            this.ctx.logW("cal", "Soft finish triggered (>85% stuck)");
+                            this.finishSequence();
+                        }, 2500);
+                    }
                 }
 
                 // Trigger render update

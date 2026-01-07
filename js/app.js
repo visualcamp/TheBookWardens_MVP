@@ -675,7 +675,10 @@ function startCalibration() {
 
   try {
     // Force High Accuracy (2) to ensure sufficient data collection (prevents 0% finish)
-    const criteria = 2;
+    // On Mobile, use Medium (1) or Low (0) to avoid getting stuck.
+    const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+    const criteria = isMobile ? 1 : 2;
+
     // 5-point calibration (mode 5 is standard usually, check docs. Here current code sends 1?)
     // Actually mode 1 might be 1-point? The user mentioned 5-point.
     // Changing to 5 for better accuracy if supported, but sticking to existing logic first.
@@ -684,6 +687,7 @@ function startCalibration() {
     // 1-point calibration (mode 1)
     calManager.reset();
     const mode = 1;
+
     const ok = seeso.startCalibration(mode, criteria);
 
     overlay.calRunning = !!ok;
