@@ -76,42 +76,45 @@ export class CalibrationManager {
                 setStatus(`Calibrating... ${pct}% (Point ${this.state.pointCount}/5)`);
                 setState("cal", `running (${pct}%)`);
 
-                // Watchdog: If stuck at 100% on last point
-                if (this.state.pointCount >= 5) {
-                    // Safety Timeout: If we have > 70% progress, start a 6s timer to force finish
-                    // This handles cases where user looks away and progress stalls at e.g. 85%
-                    if (progress > 0.7 && !this.state.safetyTimer) {
-                        this.state.safetyTimer = setTimeout(() => {
-                            if (this.state.running && this.state.pointCount >= 5) {
-                                logW("cal", "Safety timeout triggering finish (stalled?)");
-                                this.finishSequence();
-                            }
-                        }, 6000);
-                    }
+                // Watchdog & Safety for ALL points
+                // Safety Timeout: If we have > 70% progress for 5s, we consider it "done enough"
+                // Note: For points 1-4, SDK doesn't allow forcing "next", so this mostly helps the final point.
+                if (progress > 0.7 && !this.state.safetyTimer) {
+                    this.state.safetyTimer = setTimeout(() => {
+                        // Ideally we want to "go to next point", but SDK only allows finishing the whole process manually.
+                        // So if this happens on the last point, we finish.
+                        // If it happens on points 1-4, we essentially just have to wait, but we'll log it.
+                        logW("cal", `Safety timeout (5s) at >70% for Point ${this.state.pointCount}`);
 
-                    if (progress >= 1.0) {
-                        if (this.state.watchdogTimer) clearTimeout(this.state.watchdogTimer);
-
-                        this.state.watchdogTimer = setTimeout(() => {
-                            this.state.watchdogTimer = null;
-                            if (this.state.running && this.state.pointCount >= 5) {
-                                logW("cal", "Force finishing calibration (watchdog 100%)");
-                                this.finishSequence();
-                            }
-                        }, 700);
-                    } else {
-                        if (this.state.watchdogTimer) {
-                            clearTimeout(this.state.watchdogTimer);
-                            this.state.watchdogTimer = null;
+                        if (this.state.running && this.state.pointCount >= 5) {
+                            logW("cal", "Force finishing calibration (stalled at 5th point)");
+                            this.finishSequence();
                         }
-                    }
+                    }, 5000);
                 }
 
-                // Trigger render update
-                requestRender();
-            });
+                if (progress >= 1.0) {
+                    if (this.state.watchdogTimer) clearTimeout(this.state.watchdogTimer);
+
+                    this.state.watchdogTimer = setTimeout(() => {
+                        this.state.watchdogTimer = null;
+                        if (this.state.running && this.state.pointCount >= 5) {
+                            logW("cal", "Force finishing calibration (watchdog 100%)");
+                            this.finishSequence();
+                        }
+                    }, 700);
+                } else {
+                    if (this.state.watchdogTimer) {
+                        clearTimeout(this.state.watchdogTimer);
+                        this.state.watchdogTimer = null;
+                    }
+
+                    // Trigger render update
+                    requestRender();
+                });
             logI("sdk", "addCalibrationProgressCallback bound (CalibrationManager)");
         }
+
 
         // 3. Finish
         if (typeof seeso.addCalibrationFinishCallback === "function") {
