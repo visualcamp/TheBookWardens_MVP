@@ -14,6 +14,17 @@ const Game = {
         console.log("Game Init");
         this.bindEvents();
         this.updateUI();
+
+        // 3. Auto-start if redirected from In-App Browser
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("skip") === "1" && !this.isInAppBrowser()) {
+            console.log("Auto-starting game due to skip param");
+            const startBtn = document.getElementById("btn-start-game");
+            if (startBtn) {
+                // Short delay to ensure page is settled
+                setTimeout(() => startBtn.click(), 500);
+            }
+        }
     },
 
     bindEvents() {
@@ -82,7 +93,12 @@ const Game = {
         const url = window.location.href;
         if (/Android/i.test(navigator.userAgent)) {
             // Android: Intent to open Chrome
-            const noProtocol = url.replace(/^https?:\/\//, "");
+            // Append skip=1 to URL so we know to auto-start
+            let newUrl = url;
+            if (newUrl.indexOf("?") === -1) newUrl += "?skip=1";
+            else if (newUrl.indexOf("skip=1") === -1) newUrl += "&skip=1";
+
+            const noProtocol = newUrl.replace(/^https?:\/\//, "");
             const intentUrl = `intent://${noProtocol}#Intent;scheme=https;package=com.android.chrome;end`;
             window.location.href = intentUrl;
         } else {
