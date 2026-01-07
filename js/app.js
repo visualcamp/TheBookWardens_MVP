@@ -212,6 +212,22 @@ if (els.btnRetry) {
   els.btnRetry.onclick = () => location.reload();
 }
 
+const btnCalStart = document.getElementById("btn-calibration-start");
+if (btnCalStart) {
+  btnCalStart.onclick = () => {
+    btnCalStart.style.display = "none";
+    if (seeso) {
+      try {
+        lastCollectAt = performance.now();
+        seeso.startCollectSamples();
+        logI("cal", "startCollectSamples called manually");
+      } catch (e) {
+        logE("cal", "startCollectSamples threw", e);
+      }
+    }
+  };
+}
+
 // Throttle helper
 function throttle(fn, ms) {
   let last = 0;
@@ -604,7 +620,6 @@ function attachSeesoCallbacks() {
   }
 
   // ---- Calibration callbacks (crucial) ----
-  // ---- Calibration callbacks (crucial) ----
   if (typeof seeso.addCalibrationNextPointCallback === "function") {
     seeso.addCalibrationNextPointCallback((x, y) => {
       lastNextPointAt = performance.now();
@@ -628,19 +643,14 @@ function attachSeesoCallbacks() {
         statusEl.style.textShadow = "0 0 10px #0f0";
       }
 
-      // Must collect samples AFTER the point is on screen
-      // Give 100ms for eyes to fixate (prevents data noise and unnatural jumps)
-      if (overlay.collectTimer) clearTimeout(overlay.collectTimer);
-
-      overlay.collectTimer = setTimeout(() => {
-        try {
-          lastCollectAt = performance.now();
-          seeso.startCollectSamples();
-          logI("cal", "startCollectSamples called");
-        } catch (e) {
-          logE("cal", "startCollectSamples threw", e);
-        }
-      }, 100);
+      // Manual Calibration Flow: Show button to start collection
+      const btn = document.getElementById("btn-calibration-start");
+      if (btn) {
+        btn.style.display = "inline-block";
+        btn.textContent = `Start Point ${overlay.calPointCount}`;
+        // Ensure it's clickable
+        btn.style.pointerEvents = "auto";
+      }
     });
 
     logI("sdk", "addCalibrationNextPointCallback bound");
