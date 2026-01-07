@@ -192,7 +192,7 @@ const Game = {
         gazeTimer: null,
         currentGazedRune: null,
         gazeDuration: 0,
-        requiredGazeDuration: 1500, // 1.5 seconds to activate
+        requiredGazeDuration: 800, // 0.8 seconds to activate (easier for low accuracy)
         totalRounds: 3,
         currentRound: 0,
         runeSymbols: ['◈', '◆', '◇', '◉', '◎', '○', '●', '◐', '◑', '◒', '◓', '☆'],
@@ -240,9 +240,9 @@ const Game = {
         this.runeGame.currentGazedRune = null;
         this.runeGame.gazeDuration = 0;
 
-        // Generate runes
-        const numRunes = Math.min(6 + this.runeGame.currentRound * 2, 12);
-        const sequenceLength = Math.min(3 + this.runeGame.currentRound, 6);
+        // Simple: Always 3 runes, sequence of 3
+        const numRunes = 3;
+        const sequenceLength = 3;
 
         this.generateRunes(numRunes, sequenceLength);
         this.updateRuneUI();
@@ -257,30 +257,30 @@ const Game = {
         this.runeGame.sequence = [];
 
         const containerRect = container.getBoundingClientRect();
-        const runeSize = 60;
-        const padding = 40;
+        const runeSize = 100; // Match CSS
+        const padding = 60; // More padding for corner placement
 
-        // Generate random positions
-        for (let i = 0; i < count; i++) {
+        // Fixed positions for 3 runes: top-left, top-right, bottom-center
+        const positions = [
+            { x: padding, y: padding }, // Top-left
+            { x: containerRect.width - runeSize - padding, y: padding }, // Top-right
+            { x: (containerRect.width - runeSize) / 2, y: containerRect.height - runeSize - padding } // Bottom-center
+        ];
+
+        // Generate exactly 3 runes in fixed positions
+        for (let i = 0; i < Math.min(count, 3); i++) {
             const rune = document.createElement('div');
             rune.className = 'rune';
             rune.dataset.index = i;
 
-            // Random position (avoid overlap)
-            let x, y, attempts = 0;
-            do {
-                x = padding + Math.random() * (containerRect.width - runeSize - padding * 2);
-                y = padding + Math.random() * (containerRect.height - runeSize - padding * 2);
-                attempts++;
-            } while (this.checkRuneOverlap(x, y, runeSize) && attempts < 50);
-
-            rune.style.left = x + 'px';
-            rune.style.top = y + 'px';
+            const pos = positions[i];
+            rune.style.left = pos.x + 'px';
+            rune.style.top = pos.y + 'px';
 
             // Create symbol
             const symbol = document.createElement('div');
             symbol.className = 'rune-symbol';
-            const randomSymbol = this.runeGame.runeSymbols[Math.floor(Math.random() * this.runeGame.runeSymbols.length)];
+            const randomSymbol = this.runeGame.runeSymbols[i % this.runeGame.runeSymbols.length];
             symbol.setAttribute('data-symbol', randomSymbol);
 
             rune.appendChild(symbol);
@@ -288,15 +288,15 @@ const Game = {
 
             this.runeGame.runes.push({
                 element: rune,
-                x: x,
-                y: y,
+                x: pos.x,
+                y: pos.y,
                 index: i
             });
         }
 
-        // Select random sequence
-        const shuffled = [...Array(count).keys()].sort(() => Math.random() - 0.5);
-        this.runeGame.sequence = shuffled.slice(0, sequenceLength);
+        // Random sequence of all 3 runes
+        const shuffled = [0, 1, 2].sort(() => Math.random() - 0.5);
+        this.runeGame.sequence = shuffled;
 
         // Highlight first target
         this.highlightCurrentTarget();
@@ -365,7 +365,7 @@ const Game = {
 
             const dist = Math.sqrt(Math.pow(relX - runeRelX, 2) + Math.pow(relY - runeRelY, 2));
 
-            if (dist < 40) { // 40px radius
+            if (dist < 120) { // 120px radius - very forgiving for low accuracy tracking
                 gazedRune = rune;
                 break;
             }
