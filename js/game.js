@@ -365,7 +365,7 @@ const Game = {
 
             const dist = Math.sqrt(Math.pow(relX - runeRelX, 2) + Math.pow(relY - runeRelY, 2));
 
-            if (dist < 400) { // 400px radius - maximum accessibility
+            if (dist < 200) { // 200px radius
                 gazedRune = rune;
                 break;
             }
