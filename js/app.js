@@ -413,7 +413,7 @@ window.showGazeDot = function (durationMs = 15000) {
 
   // "Infinite" mode (e.g. > 1000s) -> Static opacity, no fade
   if (durationMs > 1000000) { // arbitrary large number check
-    overlay.gazeOpacity = 0.3; // More transparent (0.3) so it doesn't block text
+    overlay.gazeOpacity = 0.1; // User requested 0.1 (very transparent)
     return;
   }
 
