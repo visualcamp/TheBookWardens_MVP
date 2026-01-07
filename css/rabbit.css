@@ -98,12 +98,20 @@
     }
 
     .rabbit-eye-overlay {
-        width: 40px;
-        height: 40px;
+        width: 60px;
+        height: 60px;
     }
 
     .rabbit-eye-overlay .pupil {
-        width: 14px;
-        height: 14px;
+        width: 16px;
+        height: 16px;
+    }
+
+    .left-eye-overlay {
+        left: 35%;
+    }
+
+    .right-eye-overlay {
+        right: 35%;
     }
 }
