@@ -190,13 +190,19 @@ const Game = {
         this.state.currentPage = 1;
         const el = document.getElementById("book-content");
         if (el) {
+            // Force precise column width to match container width
+            // This forces horizontal overflow (new columns) when height is filled
+            el.style.columnWidth = el.clientWidth + "px";
+            el.style.columnGap = "80px";
+
             el.scrollLeft = 0;
-            el.scrollTop = 0; // Ensure top is 0 too
-            // Delay slightly to ensure layout is ready
+            el.scrollTop = 0;
+
+            // Delay to allow layout update
             setTimeout(() => {
-                // Horizontal pagination with columns
-                const gap = 80; // Must match CSS column-gap
+                const gap = 80;
                 const pageWidth = el.clientWidth + gap;
+                // scrollWidth should now be large
                 this.state.totalPages = Math.ceil(el.scrollWidth / pageWidth);
                 if (this.state.totalPages < 1) this.state.totalPages = 1;
                 this.updatePageUI();
