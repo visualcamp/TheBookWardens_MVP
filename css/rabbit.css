@@ -30,13 +30,13 @@
 }
 
 .left-eye-overlay {
-    top: 33%;
-    left: 37%;
+    top: 28%;
+    left: 40%;
 }
 
 .right-eye-overlay {
-    top: 33%;
-    right: 37%;
+    top: 28%;
+    right: 40%;
 }
 
 /* Pupil that moves with gaze */
