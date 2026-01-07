@@ -187,7 +187,7 @@ const Game = {
         sequence: [],
         currentIndex: 0,
         score: 0,
-        timeLeft: 30,
+        timeLeft: 120,
         timer: null,
         gazeTimer: null,
         currentGazedRune: null,
@@ -217,7 +217,7 @@ const Game = {
         this.runeGame.isActive = true;
         this.runeGame.currentRound = 0;
         this.runeGame.score = 0;
-        this.runeGame.timeLeft = 30;
+        this.runeGame.timeLeft = 120;
         this.state.isRuneGame = true;
         this.state.isOwlTracker = false;
 
@@ -365,7 +365,7 @@ const Game = {
 
             const dist = Math.sqrt(Math.pow(relX - runeRelX, 2) + Math.pow(relY - runeRelY, 2));
 
-            if (dist < 240) { // 240px radius - extremely forgiving for low accuracy tracking
+            if (dist < 400) { // 400px radius - maximum accessibility
                 gazedRune = rune;
                 break;
             }
