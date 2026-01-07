@@ -52,6 +52,12 @@
       </div>
 
       <button id="btn-start-game" class="btn-primary">Enter the Rift</button>
+      <div id="loader-container"
+        style="display:none; width: 220px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; margin: 20px auto; overflow: hidden; position: relative;">
+        <div id="loader-bar"
+          style="width: 0%; height: 100%; background: linear-gradient(90deg, #6200ea, #b000df); transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1); box-shadow: 0 0 10px #b000df;">
+        </div>
+      </div>
       <p style="font-size: 0.8rem; color: #555; margin-top: 20px;" id="perm-instruct">Please allow camera access when
         prompted.</p>
     </section>

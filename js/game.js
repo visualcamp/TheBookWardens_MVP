@@ -38,9 +38,21 @@ const Game = {
                 }
 
                 // 2. Normal Flow
-                // 2. Normal Flow
-                // Optimistic Navigation: Go to Word Forge immediately for speed feeling
-                this.switchScreen("screen-word");
+                // UI Animation: Fake progress bar
+                startBtn.style.display = "none";
+                const loader = document.getElementById("loader-container");
+                const bar = document.getElementById("loader-bar");
+                if (loader && bar) {
+                    loader.style.display = "block";
+                    // Force reflow to ensure transition happens
+                    bar.getBoundingClientRect();
+                    bar.style.width = "100%";
+                }
+
+                // Switch screen after animation (800ms)
+                setTimeout(() => {
+                    this.switchScreen("screen-word");
+                }, 800);
 
                 // Initialize in background
                 this.trackingInitPromise = (async () => {
@@ -59,9 +71,16 @@ const Game = {
                         console.error(e);
                         alert("Eye tracking initialization failed: " + e.message);
                         this.switchScreen("screen-home");
+
+                        // Reset UI
                         if (startBtn) {
+                            startBtn.style.display = "inline-block";
                             startBtn.disabled = false;
                             startBtn.textContent = "Enter the Rift";
+                        }
+                        if (loader && bar) {
+                            loader.style.display = "none";
+                            bar.style.width = "0%";
                         }
                         return false;
                     }
