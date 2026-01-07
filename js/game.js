@@ -38,32 +38,34 @@ const Game = {
                 }
 
                 // 2. Normal Flow
-                startBtn.disabled = true;
-                startBtn.textContent = "Initializing Eye Tracking...";
+                // 2. Normal Flow
+                // Optimistic Navigation: Go to Word Forge immediately for speed feeling
+                this.switchScreen("screen-word");
 
-                try {
-                    // Request Camera & Init SDK
-                    if (typeof window.startEyeTracking === "function") {
-                        const ok = await window.startEyeTracking();
-                        if (ok) {
-                            // Success -> Move to Word Forge (Calibration later)
-                            this.switchScreen("screen-word");
+                // Initialize in background
+                this.trackingInitPromise = (async () => {
+                    try {
+                        if (typeof window.startEyeTracking === "function") {
+                            const ok = await window.startEyeTracking();
+                            if (!ok) {
+                                throw new Error("Permission denied or initialization failed.");
+                            }
+                            return true;
                         } else {
-                            alert("Eye tracking failed to initialize. Please reload and try again.");
+                            console.warn("window.startEyeTracking not found.");
+                            return false; // Fallback mode?
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        alert("Eye tracking initialization failed: " + e.message);
+                        this.switchScreen("screen-home");
+                        if (startBtn) {
                             startBtn.disabled = false;
                             startBtn.textContent = "Enter the Rift";
                         }
-                    } else {
-                        // Fallback/Debug
-                        console.warn("window.startEyeTracking not found. Starting without eye tracking.");
-                        this.switchScreen("screen-word");
+                        return false;
                     }
-                } catch (e) {
-                    console.error(e);
-                    alert("Initialization error: " + e.message);
-                    startBtn.disabled = false;
-                    startBtn.textContent = "Enter the Rift";
-                }
+                })();
             };
         }
     },
@@ -129,7 +131,7 @@ const Game = {
     },
 
     // --- 1. Word Forge ---
-    checkVocab(optionIndex) {
+    async checkVocab(optionIndex) {
         // In a real app, check vs data. Luminous -> 1 (Shining)
         const isCorrect = (optionIndex === 1);
         if (isCorrect) {
@@ -138,6 +140,12 @@ const Game = {
             this.updateUI();
 
             // Move to Calibration before Reading
+            // Ensure tracking is ready
+            if (this.trackingInitPromise) {
+                const ok = await this.trackingInitPromise;
+                if (!ok) return; // Already handled in background, but stop here
+            }
+
             this.switchScreen("screen-calibration");
 
             setTimeout(() => {
