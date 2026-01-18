@@ -340,12 +340,18 @@
         </p>
       </div>
 
-      <!-- Pagination Controls -->
+      <!-- Speed Controls -->
       <div id="read-controls"
-        style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; width: 100%; max-width: 600px;">
-        <button id="btn-page-prev" class="btn-secondary" onclick="Game.prevPage()" disabled>Previous</button>
-        <span id="page-indicator" style="color: #fff; font-weight: bold;">Page 1</span>
-        <button id="btn-page-next" class="btn-secondary" onclick="Game.nextPage()">Next</button>
+        style="display: flex; justify-content: center; align-items: center; margin-top: 20px; width: 100%; gap: 20px;">
+        <button class="btn-secondary" onclick="Game.typewriter.changeSpeed(-10)"
+          style="font-size: 1.5rem; width: 50px;">-</button>
+        <div style="text-align: center;">
+          <span id="wpm-display" style="color: #f0c420; font-size: 1.5rem; font-weight: bold; display: block;">0
+            WPM</span>
+          <span style="color: #888; font-size: 0.8rem;">Reading Speed</span>
+        </div>
+        <button class="btn-secondary" onclick="Game.typewriter.changeSpeed(10)"
+          style="font-size: 1.5rem; width: 50px;">+</button>
       </div>
 
       <div class="rift-seal-bar">

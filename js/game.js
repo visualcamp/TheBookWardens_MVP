@@ -270,9 +270,22 @@ Game.typewriter = {
     timer: null,
     isPaused: false,
 
+    // Speed and WPM
+    baseSpeed: 30, // ms delay
+    startTime: null,
+    totalPausedTime: 0,
+    pauseStartTimestamp: null,
+    wordCount: 0,
+    wpmInterval: null,
+
     start() {
         // Reset
         this.currentParaIndex = 0;
+        this.baseSpeed = 30; // Reset speed
+        this.wordCount = 0;
+        this.startTime = null;
+        this.totalPausedTime = 0;
+
         const el = document.getElementById("book-content");
         if (el) {
             el.innerHTML = "";
@@ -288,7 +301,40 @@ Game.typewriter = {
             el.style.overflowY = "auto";
             el.style.width = "100%";
         }
+
+        // Start WPM Timer
+        if (this.wpmInterval) clearInterval(this.wpmInterval);
+        this.wpmInterval = setInterval(() => this.updateWPM(), 1000);
+
         this.playNextParagraph();
+    },
+
+    changeSpeed(delta) {
+        // Decrease delay = Increase speed
+        // Button + -> Increase Speed -> Decrease Delay
+        // Button - -> Decrease Speed -> Increase Delay
+        // Oops, user said: "(+)버튼 누르면 글자 보이는 속도 증가" -> Delay must decrease.
+        // changeSpeed(10) called by (+) -> should decrease delay.
+
+        // Let's interpret delta as "Speed Up factor"
+        // If delta is positive (+10), we subtract from delay to make it faster.
+        // If delta is negative (-10), we add to delay to make it slower.
+
+        this.baseSpeed -= delta;
+        if (this.baseSpeed < 5) this.baseSpeed = 5; // Max speed
+        if (this.baseSpeed > 200) this.baseSpeed = 200; // Min speed
+    },
+
+    updateWPM() {
+        if (!this.startTime || this.isPaused) return;
+
+        const now = Date.now();
+        const elapsedSec = (now - this.startTime - this.totalPausedTime) / 1000;
+        if (elapsedSec <= 0) return;
+
+        const wpm = Math.round(this.wordCount / (elapsedSec / 60));
+        const disp = document.getElementById("wpm-display");
+        if (disp) disp.textContent = `${wpm} WPM`;
     },
 
     playNextParagraph() {
@@ -299,12 +345,23 @@ Game.typewriter = {
 
         if (this.currentParaIndex >= this.paragraphs.length) {
             Game.switchScreen("screen-win");
+            if (this.wpmInterval) clearInterval(this.wpmInterval);
             return;
         }
 
         this.currentText = this.paragraphs[this.currentParaIndex];
         this.charIndex = 0;
+
+        if (this.pauseStartTimestamp) {
+            this.totalPausedTime += Date.now() - this.pauseStartTimestamp;
+            this.pauseStartTimestamp = null;
+        }
         this.isPaused = false;
+
+        // Init Start Time if First Paragraph
+        if (this.currentParaIndex === 0 && !this.startTime) {
+            this.startTime = Date.now();
+        }
 
         this.currentP = document.createElement("p");
         // Font size 50% decrease -> 1.2rem
@@ -326,7 +383,12 @@ Game.typewriter = {
     },
 
     tick() {
-        if (this.isPaused) return;
+        if (this.isPaused) {
+            // Track pause time if not already handled? 
+            // Logic handles pause via explicit flags, but we need time tracking.
+            // Usually pause happens at end of paragraph.
+            return;
+        }
 
         // Advance character
         let char = this.currentText[this.charIndex];
@@ -335,7 +397,7 @@ Game.typewriter = {
         let isChunkEnd = false;
         if (char === '/') {
             isChunkEnd = true;
-            this.charIndex++; // Skip the slash
+            this.charIndex++;
             if (this.charIndex < this.currentText.length) {
                 char = this.currentText[this.charIndex];
             } else {
@@ -347,6 +409,11 @@ Game.typewriter = {
         if (this.charIndex < this.currentText.length) {
             const charNode = document.createTextNode(char);
             this.currentP.insertBefore(charNode, this.cursorBlob);
+
+            // Count Words (Space or Chunk Split)
+            // Simple naive count: if char is space, count++
+            if (char === ' ') this.wordCount++;
+
             this.charIndex++;
         }
 
@@ -357,8 +424,8 @@ Game.typewriter = {
         // Check if finished
         if (this.charIndex >= this.currentText.length) {
             this.isPaused = true;
-            // Remove cursor after done? Or keep blinking? User didn't specify, but nice to remove or stop.
-            // Reference code keeps removing it per paragraph.
+            this.pauseStartTimestamp = Date.now(); // Start Pause Tracking
+
             if (this.currentP.contains(this.cursorBlob)) {
                 this.currentP.removeChild(this.cursorBlob);
             }
@@ -368,10 +435,10 @@ Game.typewriter = {
             }, 1000);
         } else {
             // Speed Logic
-            let nextDelay = 30; // Fast base speed
+            let nextDelay = this.baseSpeed; // Use variable base speed
 
             if (isChunkEnd) {
-                nextDelay = 800; // Chunk End
+                nextDelay = 800; // Explicit chunk pause (Fixed)
             } else {
                 const lastChar = char;
                 if (lastChar === '.' || lastChar === '!' || lastChar === '?') {
