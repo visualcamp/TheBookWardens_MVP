@@ -527,8 +527,8 @@ const Game = {
         this.startReadingSession();
     },
 
-    // --- 2. Reading Rift ---
-    startReadingSession() {
+    // --- 2. Reading Rift (Original Logic kept for reference, overlaid below) ---
+    startReadingSession_OLD() {
         this.state.readProgress = 0;
         this.state.isTracking = true;
         this.state.isOwlTracker = false; // Stop owl tracking
@@ -668,43 +668,9 @@ const Game = {
             return;
         }
 
-        // Only active in reading screen
-        const readScreen = document.getElementById("screen-read");
-        if (!readScreen || !readScreen.classList.contains("active")) return;
-
-        // Rift Cleansing Logic
-        const el = document.elementFromPoint(x, y);
-
-        // 1. hit test for rift words
-        if (el && el.classList.contains('rift-word') && !el.classList.contains('fixed')) {
-            if (this.state.rift.currentWord !== el) {
-                // New word target
-                this.state.rift.currentWord = el;
-                this.state.rift.dwellTime = 0;
-                // Optional: visuals for 'locking on'
-                el.style.transform = "scale(1.1)";
-            } else {
-                // Dwell
-                this.state.rift.dwellTime += 100; // approximate since onGaze is throttled or called per frame
-                if (this.state.rift.dwellTime >= this.state.rift.requiredDwell) {
-                    this.cleanseRiftWord(el);
-                }
-            }
-        } else {
-            // Lost focus
-            if (this.state.rift.currentWord) {
-                this.state.rift.currentWord.style.transform = ""; // Reset scale
-                this.state.rift.currentWord = null;
-                this.state.rift.dwellTime = 0;
-            }
-
-            // Standard reading progress (fallback)
-            if (el && (el.tagName === 'P' || el.closest('.book-container'))) {
-                // Slow background progress just for reading text
-                // this.state.readProgress += 0.05; 
-                // this.updateProgressBar();
-            }
-        }
+        // Only active in reading screen (Typewriter mode handles itself in tick, but check gaze for rifts if needed)
+        // For now, Typewriter mode is auto-play, so onGaze isn't strictly needed for progress, but we can visuals.
+        // If we want gaze trigger, we'd add it here.
     },
 
     cleanseRiftWord(el) {
@@ -762,7 +728,7 @@ const Game = {
 };
 
 // --- Typewriter Mode Logic (New) ---
-typewriter: {
+Game.typewriter = {
     paragraphs: [
         "Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing to do: once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations in it, “and what is the use of a book,” thought Alice “without pictures or conversations?”",
 
@@ -774,20 +740,20 @@ typewriter: {
 
         "In another moment down went Alice after it, never once considering how in the world she was to get out again. The rabbit-hole went straight on like a tunnel for some way, and then dipped suddenly down, so suddenly that Alice had not a moment to think about stopping herself before she found herself falling down a very deep well."
     ],
-        quizzes: [
-            { q: "Why was Alice bored?", o: ["It was raining.", "The book had no pictures.", "She was hungry."], a: 1 },
-            { q: "What did Alice see?", o: ["A White Rabbit.", "A Cheshire Cat.", "A Mad Hatter."], a: 0 },
-            { q: "What did the Rabbit say?", o: ["I'm hungry!", "Oh dear! I shall be late!", "Hello Alice!"], a: 1 },
-            { q: "What did the Rabbit pull out?", o: ["A carrot.", "A watch.", "A map."], a: 1 },
-            { q: "Where did Alice fall?", o: ["Up a tree.", "Into a deep well.", "Into a river."], a: 1 }
-        ],
-            currentParaIndex: 0,
-                currentText: "",
-                    charIndex: 0,
-                        timer: null,
-                            isPaused: false,
+    quizzes: [
+        { q: "Why was Alice bored?", o: ["It was raining.", "The book had no pictures.", "She was hungry."], a: 1 },
+        { q: "What did Alice see?", o: ["A White Rabbit.", "A Cheshire Cat.", "A Mad Hatter."], a: 0 },
+        { q: "What did the Rabbit say?", o: ["I'm hungry!", "Oh dear! I shall be late!", "Hello Alice!"], a: 1 },
+        { q: "What did the Rabbit pull out?", o: ["A carrot.", "A watch.", "A map."], a: 1 },
+        { q: "Where did Alice fall?", o: ["Up a tree.", "Into a deep well.", "Into a river."], a: 1 }
+    ],
+    currentParaIndex: 0,
+    currentText: "",
+    charIndex: 0,
+    timer: null,
+    isPaused: false,
 
-                                start() {
+    start() {
         // Reset
         this.currentParaIndex = 0;
         const el = document.getElementById("book-content");
@@ -804,9 +770,7 @@ typewriter: {
         const el = document.getElementById("book-content");
         if (!el) return;
 
-        // Clear screen for new paragraph (User Req: 1. Empty screen ... 4. Like this repeatedly)
-        // Wait, User said: "1. Empty screen... 4. Like this repeatedly (implying sequence)... 5. After paragraph ends... 6. If all done..."
-        // "1번으로 돌아간다" means after quiz, screen clears again.
+        // Clear screen for new paragraph
         el.innerHTML = "";
 
         if (this.currentParaIndex >= this.paragraphs.length) {
@@ -838,7 +802,7 @@ typewriter: {
         this.charIndex++;
         this.currentP.textContent = this.currentText.substring(0, this.charIndex);
 
-        // Auto-scroll to bottom if needed (User mentioned 'scroll up' code, assuming we just follow bottom)
+        // Auto-scroll to bottom
         const el = document.getElementById("book-content");
         if (el) el.scrollTop = el.scrollHeight;
 
@@ -858,7 +822,11 @@ typewriter: {
         const qEl = document.getElementById("quiz-text");
         const oEl = document.getElementById("quiz-options");
 
-        if (!modal || !qEl || !oEl) return;
+        if (!modal || !qEl || !oEl) {
+            console.warn("Villain modal elements missing!");
+            this.onQuizCorrect(); // Auto-skip
+            return;
+        }
 
         // Get quiz
         const qData = this.quizzes[this.currentParaIndex] || { q: "Continue?", o: ["Yes", "No", "Maybe"], a: 0 };
@@ -892,10 +860,10 @@ typewriter: {
         this.currentParaIndex++;
         this.playNextParagraph();
     }
-},
+};
 
 // Override startReadingSession
-startReadingSession() {
+Game.startReadingSession = function () {
     console.log("Starting Typewriter Logic...");
 
     // Show gaze dot?
@@ -904,7 +872,6 @@ startReadingSession() {
     // Setup UI
     const el = document.getElementById("book-content");
     if (el) {
-        // Reset styles specific to Rift mode if any
         el.style.columnWidth = "auto";
         el.style.columnGap = "normal";
     }
@@ -915,7 +882,6 @@ startReadingSession() {
 
     // Start Typewriter
     this.typewriter.start();
-}
 };
 
 // Expose to window for HTML onclicks
