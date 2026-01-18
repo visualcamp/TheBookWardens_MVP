@@ -457,19 +457,42 @@ Game.typewriter = {
     },
 
     showVillainQuiz() {
+        // Calculate Ink
+        const earnedInk = this.currentText ? this.currentText.replace(/\//g, "").length : 50;
+        Game.state.ink = (Game.state.ink || 0) + earnedInk;
+        Game.updateUI();
+
+        // --- Fake Fixation Visualization ---
+        // Generate random points on the text area
+        const bookEl = document.getElementById("book-content");
+        if (bookEl) {
+            const rect = bookEl.getBoundingClientRect();
+            // Create ~10 fake fixations distributed roughly over the text
+            for (let i = 0; i < 10; i++) {
+                const dot = document.createElement("div");
+                dot.className = "fake-fixation";
+                // Random position within the book content rect
+                const x = rect.left + Math.random() * (rect.width - 40) + 20;
+                const y = rect.top + Math.random() * (rect.height - 40) + 20;
+                dot.style.left = x + "px";
+                dot.style.top = y + "px";
+                document.body.appendChild(dot);
+
+                // Remove them after 2.5 seconds
+                setTimeout(() => { if (dot.parentNode) dot.parentNode.removeChild(dot); }, 2500);
+            }
+        }
+
+        // Wait 2 seconds before showing the Quiz
+        setTimeout(() => {
+            this.openQuizModal();
+        }, 2000);
+    },
+
+    openQuizModal() {
         const modal = document.getElementById("villain-modal");
         const quizContainer = document.getElementById("quiz-container");
         const rewardContainer = document.getElementById("reward-container");
-        const rewardValue = document.getElementById("reward-ink-value");
-
-        if (!modal) {
-            console.error("Villain modal not found");
-            this.onQuizCorrect();
-            return;
-        }
-
-        // Calculate Ink
-        const earnedInk = this.currentText ? this.currentText.replace(/\//g, "").length : 50;
 
         // Show Quiz immediately
         if (modal) modal.style.display = "flex";
@@ -485,17 +508,13 @@ Game.typewriter = {
             return;
         }
 
-        // Add to global state silently or with minimal feedback elsewhere
-        Game.state.ink = (Game.state.ink || 0) + earnedInk;
-        Game.updateUI();
-
         // Setup Quiz
         const qData = this.quizzes[this.currentParaIndex];
 
         if (!qData) {
             console.warn("No quiz data found");
             this.onQuizCorrect();
-            modal.style.display = "none";
+            if (modal) modal.style.display = "none";
             return;
         }
 
@@ -508,7 +527,6 @@ Game.typewriter = {
             btn.textContent = optText;
             btn.onclick = () => {
                 if (idx === qData.a) {
-                    // Correct logic...
                     btn.classList.add("correct");
                     Game.state.gems = (Game.state.gems || 0) + 1;
                     Game.updateUI();
@@ -517,7 +535,6 @@ Game.typewriter = {
                         this.onQuizCorrect();
                     }, 500);
                 } else {
-                    // Wrong logic...
                     btn.classList.add("wrong");
                     Game.state.gems = Math.max(0, (Game.state.gems || 0) - 1);
                     Game.updateUI();
@@ -526,7 +543,6 @@ Game.typewriter = {
             };
             oEl.appendChild(btn);
         });
-
     },
 
     onQuizCorrect() {
