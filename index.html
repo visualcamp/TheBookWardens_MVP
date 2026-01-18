@@ -402,12 +402,30 @@
   </div>
 
   <!-- Villain Modal (Moved here) -->
+  <!-- Villain Modal (Moved here) -->
   <div id="villain-modal">
     <div class="villain-card">
-      <div class="villain-avatar">🎩</div>
-      <h2 class="villain-title">The Timekeeper</h2>
-      <p id="quiz-text" class="quiz-question">...</p>
-      <div id="quiz-options" class="quiz-options"></div>
+
+      <!-- Reward Container -->
+      <div id="reward-container"
+        style="display:none; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 200px;">
+        <div style="font-size: 3rem; margin-bottom: 15px;">🖋️</div>
+        <h2
+          style="color: #f0c420; margin: 0 0 10px 0; font-size: 1.8rem; text-transform: uppercase; letter-spacing: 2px;">
+          Ink Collected</h2>
+        <div id="reward-ink-value"
+          style="font-size: 3.5rem; font-weight: bold; color: #fff; text-shadow: 0 0 15px #f0c420; font-family: 'Cinzel', serif;">
+          +0</div>
+      </div>
+
+      <!-- Quiz Container -->
+      <div id="quiz-container">
+        <div class="villain-avatar">🎩</div>
+        <h2 class="villain-title">The Timekeeper</h2>
+        <p id="quiz-text" class="quiz-question">...</p>
+        <div id="quiz-options" class="quiz-options"></div>
+      </div>
+
     </div>
   </div>
 
