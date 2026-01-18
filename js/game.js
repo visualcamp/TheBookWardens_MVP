@@ -461,20 +461,21 @@ Game.typewriter = {
         const quizContainer = document.getElementById("quiz-container");
         const rewardContainer = document.getElementById("reward-container");
         const rewardValue = document.getElementById("reward-ink-value");
-        const qEl = document.getElementById("quiz-text");
-        const oEl = document.getElementById("quiz-options");
 
-        if (!modal) return;
+        if (!modal) {
+            console.error("Villain modal not found");
+            this.onQuizCorrect();
+            return;
+        }
 
         // Calculate Ink
-        // Simple logic: characters in current paragraph (approx)
-        const earnedInk = this.currentText ? this.currentText.replace(/\//g, "").length : 0;
+        const earnedInk = this.currentText ? this.currentText.replace(/\//g, "").length : 50;
 
         // 1. Show Reward Animation
         modal.style.display = "flex";
-        quizContainer.style.display = "none";
-        rewardContainer.style.display = "flex";
-        rewardValue.textContent = `+${earnedInk}`;
+        if (quizContainer) quizContainer.style.display = "none";
+        if (rewardContainer) rewardContainer.style.display = "flex";
+        if (rewardValue) rewardValue.textContent = `+${earnedInk}`;
 
         // Add to global state
         Game.state.ink = (Game.state.ink || 0) + earnedInk;
@@ -482,11 +483,30 @@ Game.typewriter = {
 
         // 2. After 2 seconds, Show Quiz
         setTimeout(() => {
-            rewardContainer.style.display = "none";
-            quizContainer.style.display = "block";
+            if (rewardContainer) rewardContainer.style.display = "none";
+            if (quizContainer) quizContainer.style.display = "block";
+
+            const qEl = document.getElementById("quiz-text");
+            const oEl = document.getElementById("quiz-options");
+
+            if (!qEl || !oEl) {
+                console.error("Quiz text/options elements missing");
+                modal.style.display = "none";
+                this.onQuizCorrect();
+                return;
+            }
 
             // Setup Quiz
-            const qData = this.quizzes[this.currentParaIndex] || { q: "Continue?", o: ["Yes", "No"], a: 0 };
+            const qData = this.quizzes[this.currentParaIndex];
+
+            if (!qData) {
+                console.warn("No quiz data found for index " + this.currentParaIndex);
+                // Fallback or skip
+                modal.style.display = "none";
+                this.onQuizCorrect();
+                return;
+            }
+
             qEl.textContent = qData.q;
             oEl.innerHTML = "";
 
@@ -498,7 +518,7 @@ Game.typewriter = {
                     if (idx === qData.a) {
                         // Correct
                         btn.classList.add("correct");
-                        Game.state.gems = (Game.state.gems || 0) + 1; // Gem +1
+                        Game.state.gems = (Game.state.gems || 0) + 1;
                         Game.updateUI();
 
                         setTimeout(() => {
@@ -508,7 +528,7 @@ Game.typewriter = {
                     } else {
                         // Wrong
                         btn.classList.add("wrong");
-                        Game.state.gems = Math.max(0, (Game.state.gems || 0) - 1); // Gem -1
+                        Game.state.gems = Math.max(0, (Game.state.gems || 0) - 1);
                         Game.updateUI();
 
                         setTimeout(() => btn.classList.remove("wrong"), 500);
