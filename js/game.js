@@ -475,13 +475,34 @@ Game.typewriter = {
         modal.style.display = "flex";
         if (quizContainer) quizContainer.style.display = "none";
         if (rewardContainer) rewardContainer.style.display = "flex";
-        if (rewardValue) rewardValue.textContent = `+${earnedInk}`;
+
+        // Animate Ink Count
+        if (rewardValue) {
+            let start = 0;
+            let end = earnedInk;
+            let duration = 2000; // Animation duration
+            let startTime = null;
+
+            function step(timestamp) {
+                if (!startTime) startTime = timestamp;
+                let progress = Math.min((timestamp - startTime) / duration, 1);
+                // Ease out cubic
+                progress = 1 - Math.pow(1 - progress, 3);
+
+                rewardValue.textContent = "+" + Math.floor(progress * end);
+
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                }
+            }
+            window.requestAnimationFrame(step);
+        }
 
         // Add to global state
         Game.state.ink = (Game.state.ink || 0) + earnedInk;
         Game.updateUI();
 
-        // 2. After 2 seconds, Show Quiz
+        // 2. After 3 seconds, Show Quiz
         setTimeout(() => {
             if (rewardContainer) rewardContainer.style.display = "none";
             if (quizContainer) quizContainer.style.display = "block";
