@@ -497,7 +497,8 @@ Game.typewriter = {
     hideDebugVisuals() {
         if (this.debugEl100) this.debugEl100.style.display = "none";
         if (this.debugEl300) this.debugEl300.style.display = "none";
-        if (this.labelEl) this.labelEl.style.display = "none";
+        const labelEl = document.getElementById("gaze-feedback-label");
+        if (labelEl) labelEl.textContent = "";
     },
 
     checkGazeDistance(gazeX, gazeY) {
@@ -522,7 +523,7 @@ Game.typewriter = {
     },
 
     updateDebugVisuals(cx, cy, dist) {
-        // Create elements if not exist
+        // Create circles if not exist
         if (!this.debugEl100) {
             this.debugEl100 = document.createElement("div");
             this.debugEl100.className = "debug-circle debug-circle-100";
@@ -532,9 +533,7 @@ Game.typewriter = {
             this.debugEl300.className = "debug-circle debug-circle-300";
             document.body.appendChild(this.debugEl300);
 
-            this.labelEl = document.createElement("div");
-            this.labelEl.className = "cursor-label";
-            document.body.appendChild(this.labelEl);
+            // Note: labelEl is now static in HTML (#gaze-feedback-label)
         }
 
         // Update Position (Circles centered on cursor)
@@ -546,23 +545,23 @@ Game.typewriter = {
         this.debugEl300.style.top = cy + "px";
         this.debugEl300.style.display = "block";
 
-        // Update Label
-        // Place label to the right of the cursor (approx 30px offset)
-        this.labelEl.style.left = (cx + 30) + "px";
-        this.labelEl.style.top = cy + "px";
-        this.labelEl.style.transform = "translateY(-50%)";
+        // Update Label (Static Position above WPM)
+        const labelEl = document.getElementById("gaze-feedback-label");
+        if (!labelEl) return;
 
         if (dist <= 100) {
-            this.labelEl.textContent = "Perfect";
-            this.labelEl.className = "cursor-label label-perfect";
-            this.labelEl.style.display = "block";
+            labelEl.textContent = "Perfect";
+            labelEl.style.color = "#00ff00";
+            labelEl.style.textShadow = "0 0 5px #00ff00";
+            labelEl.style.display = "block";
         } else if (dist <= 300) {
-            this.labelEl.textContent = "Good";
-            this.labelEl.className = "cursor-label label-good";
-            this.labelEl.style.display = "block";
+            labelEl.textContent = "Good";
+            labelEl.style.color = "#ffd700";
+            labelEl.style.textShadow = "none";
+            labelEl.style.display = "block";
         } else {
-            // > 300: No label
-            this.labelEl.style.display = "none";
+            // > 300: Clear or show nothing
+            labelEl.textContent = "";
         }
     }
 };
