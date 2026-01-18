@@ -288,6 +288,8 @@ Game.typewriter = {
         this.wordCount = 0;
         this.startTime = null;
         this.totalPausedTime = 0;
+        Game.state.ink = 0; // Reset Ink
+        Game.updateUI();
 
         const el = document.getElementById("book-content");
         if (el) {
@@ -334,9 +336,8 @@ Game.typewriter = {
         el.innerHTML = "";
 
         if (this.currentParaIndex >= this.paragraphs.length) {
-            Game.switchScreen("screen-win");
-            if (this.wpmInterval) clearInterval(this.wpmInterval);
-            this.hideDebugVisuals();
+            // Should have been handled by startBossBattle, but if we got here:
+            this.startBossBattle();
             return;
         }
 
@@ -454,43 +455,122 @@ Game.typewriter = {
 
     showVillainQuiz() {
         const modal = document.getElementById("villain-modal");
+        const quizContainer = document.getElementById("quiz-container");
+        const rewardContainer = document.getElementById("reward-container");
+        const rewardValue = document.getElementById("reward-ink-value");
         const qEl = document.getElementById("quiz-text");
         const oEl = document.getElementById("quiz-options");
 
-        if (!modal || !qEl || !oEl) {
-            this.onQuizCorrect(); return;
-        }
+        if (!modal) return;
 
-        const qData = this.quizzes[this.currentParaIndex] || { q: "Continue?", o: ["Yes", "No"], a: 0 };
-        qEl.textContent = qData.q;
-        oEl.innerHTML = "";
+        // Calculate Ink
+        // Simple logic: characters in current paragraph (approx)
+        const earnedInk = this.currentText ? this.currentText.replace(/\//g, "").length : 0;
 
-        qData.o.forEach((optText, idx) => {
-            const btn = document.createElement("button");
-            btn.className = "quiz-btn";
-            btn.textContent = optText;
-            btn.onclick = () => {
-                if (idx === qData.a) {
-                    btn.classList.add("correct");
-                    setTimeout(() => {
-                        modal.style.display = "none";
-                        this.onQuizCorrect();
-                    }, 500);
-                } else {
-                    btn.classList.add("wrong");
-                    setTimeout(() => btn.classList.remove("wrong"), 500);
-                }
-            };
-            oEl.appendChild(btn);
-        });
-
+        // 1. Show Reward Animation
         modal.style.display = "flex";
+        quizContainer.style.display = "none";
+        rewardContainer.style.display = "flex";
+        rewardValue.textContent = `+${earnedInk}`;
+
+        // Add to global state
+        Game.state.ink = (Game.state.ink || 0) + earnedInk;
+        Game.updateUI();
+
+        // 2. After 2 seconds, Show Quiz
+        setTimeout(() => {
+            rewardContainer.style.display = "none";
+            quizContainer.style.display = "block";
+
+            // Setup Quiz
+            const qData = this.quizzes[this.currentParaIndex] || { q: "Continue?", o: ["Yes", "No"], a: 0 };
+            qEl.textContent = qData.q;
+            oEl.innerHTML = "";
+
+            qData.o.forEach((optText, idx) => {
+                const btn = document.createElement("button");
+                btn.className = "quiz-btn";
+                btn.textContent = optText;
+                btn.onclick = () => {
+                    if (idx === qData.a) {
+                        // Correct
+                        btn.classList.add("correct");
+                        Game.state.gems = (Game.state.gems || 0) + 1; // Gem +1
+                        Game.updateUI();
+
+                        setTimeout(() => {
+                            modal.style.display = "none";
+                            this.onQuizCorrect();
+                        }, 500);
+                    } else {
+                        // Wrong
+                        btn.classList.add("wrong");
+                        Game.state.gems = Math.max(0, (Game.state.gems || 0) - 1); // Gem -1
+                        Game.updateUI();
+
+                        setTimeout(() => btn.classList.remove("wrong"), 500);
+                    }
+                };
+                oEl.appendChild(btn);
+            });
+
+        }, 2000);
     },
 
     onQuizCorrect() {
         this.currentParaIndex++;
         this.hideDebugVisuals();
-        this.playNextParagraph();
+
+        // Check if all paragraphs done -> Boss Battle
+        if (this.currentParaIndex >= this.paragraphs.length) {
+            this.startBossBattle();
+        } else {
+            this.playNextParagraph();
+        }
+    },
+
+    startBossBattle() {
+        if (this.wpmInterval) clearInterval(this.wpmInterval);
+        this.hideDebugVisuals();
+        Game.switchScreen("screen-boss");
+
+        const qEl = document.getElementById("boss-question");
+        const oEl = document.getElementById("boss-options");
+
+        // Hard coded Boss Question for now
+        qEl.textContent = "What is the true underlying theme of Alice's journey down the rabbit hole?";
+        oEl.innerHTML = "";
+
+        const options = [
+            "The struggle against societal norms.",
+            "The loss of childhood innocence.",
+            "The chaotic nature of dream logic."
+        ];
+        const answerIdx = 1; // Let's say #2
+
+        options.forEach((optText, idx) => {
+            const btn = document.createElement("button");
+            btn.className = "quiz-btn";
+            btn.textContent = optText;
+            btn.onclick = () => {
+                if (idx === answerIdx) {
+                    // Boss Defeated
+                    alert(`Boss Defeated! You sealed the rift with ${Game.state.ink} Ink and ${Game.state.gems} Gems!`);
+                    Game.switchScreen("screen-home");
+                } else {
+                    // Wrong -> Lose ALL Gems? Or just one? User said "Gem이 날라간다. Gem이 모두 소진하면 처음부터 다시"
+                    Game.state.gems = (Game.state.gems || 0) - 10; // Big penalty
+                    if (Game.state.gems < 0) {
+                        alert("Game Over! Your Gems have been depleted.");
+                        location.reload();
+                    } else {
+                        alert("The Shadow attacks! You lost 10 Gems. Try again!");
+                        Game.updateUI();
+                    }
+                }
+            };
+            oEl.appendChild(btn);
+        });
     },
 
     // --- Gaze Feedback Logic ---

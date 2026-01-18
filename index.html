@@ -163,7 +163,7 @@
     <header class="game-header">
       <div class="user-level">Rank: Apprentice</div>
       <div class="currency-badge">
-        💎 <span id="gem-count">0</span>
+        💎 <span id="gem-count">0</span> | 🖋️ <span id="ink-count">0</span>
       </div>
     </header>
 
@@ -386,9 +386,8 @@
         <p id="boss-question">"Why did Alice follow the Rabbit?"</p>
       </div>
 
-      <div id="boss-options" style="width: 100%; max-width: 500px;">
-        <button class="option-btn" onclick="Game.checkBoss(0)">A. Because it was late for a party.</button>
-        <button class="option-btn" onclick="Game.checkBoss(1)">B. Because she was bored.</button>
+      <div id="boss-options" class="quiz-options" style="width: 100%; max-width: 500px; margin-top: 20px;">
+        <!-- Options will be injected -->
       </div>
     </section>
 
