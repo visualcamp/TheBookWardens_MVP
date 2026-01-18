@@ -632,6 +632,8 @@ Game.typewriter = {
             // --- DRAW FIXATIONS ---
             if (window.gazeDataManager) {
                 const fixations = window.gazeDataManager.getFixations();
+                console.log("[Game] Fixations to draw:", fixations.length);
+
                 // We need to map screen coordinates to the container relative coords?
                 // Or just absolute positioning over the container.
                 // Since the container scrolls, absolute positioning over it might move with scroll ONLY if appended to container.

@@ -60,6 +60,19 @@ export class GazeDataManager {
         if (gazeInfo.eyemovementState === 0) type = 'Fixation';
         else if (gazeInfo.eyemovementState === 2) type = 'Saccade';
 
+        // --- Fallback: Velocity-based Identification (IVT) ---
+        // If SDK returns Unknown or doesn't support state, use velocity threshold.
+        // Threshold: e.g., 0.5 px/ms (approx 30 deg/sec depending on geometry, but pixels are easier here)
+        // Adjust threshold as needed.
+        if (type === 'Unknown') {
+            const v = Math.sqrt(vx * vx + vy * vy);
+            // Simple threshold: if velocity is very low, it's a fixation.
+            // Note: v is in pixels / ms. 
+            // 0.5 px/ms = 500 px/sec. 
+            if (v < 0.5) type = 'Fixation';
+            else type = 'Saccade';
+        }
+
         // 4. Extremes (Simple placeholder logic)
         // Ideally needs a window to check if current point is peak/valley compared to neighbors
         let isPeakX = false;
@@ -89,6 +102,9 @@ export class GazeDataManager {
         };
 
         this.data.push(entry);
+
+        // Debug Log (First 5 frames)
+        if (this.data.length < 5) console.log("[GazeData] Processed:", entry);
     }
 
     getFixations() {
