@@ -471,94 +471,62 @@ Game.typewriter = {
         // Calculate Ink
         const earnedInk = this.currentText ? this.currentText.replace(/\//g, "").length : 50;
 
-        // 1. Show Reward Animation
-        modal.style.display = "flex";
-        if (quizContainer) quizContainer.style.display = "none";
-        if (rewardContainer) rewardContainer.style.display = "flex";
+        // Show Quiz immediately
+        if (modal) modal.style.display = "flex";
+        if (quizContainer) quizContainer.style.display = "block";
+        if (rewardContainer) rewardContainer.style.display = "none";
 
-        // Animate Ink Count
-        if (rewardValue) {
-            let start = 0;
-            let end = earnedInk;
-            let duration = 2000; // Animation duration
-            let startTime = null;
+        const qEl = document.getElementById("quiz-text");
+        const oEl = document.getElementById("quiz-options");
 
-            function step(timestamp) {
-                if (!startTime) startTime = timestamp;
-                let progress = Math.min((timestamp - startTime) / duration, 1);
-                // Ease out cubic
-                progress = 1 - Math.pow(1 - progress, 3);
-
-                rewardValue.textContent = "+" + Math.floor(progress * end);
-
-                if (progress < 1) {
-                    window.requestAnimationFrame(step);
-                }
-            }
-            window.requestAnimationFrame(step);
+        if (!qEl || !oEl) {
+            console.error("Quiz elements missing");
+            this.onQuizCorrect();
+            return;
         }
 
-        // Add to global state
+        // Add to global state silently or with minimal feedback elsewhere
         Game.state.ink = (Game.state.ink || 0) + earnedInk;
         Game.updateUI();
 
-        // 2. After 3 seconds, Show Quiz
-        setTimeout(() => {
-            if (rewardContainer) rewardContainer.style.display = "none";
-            if (quizContainer) quizContainer.style.display = "block";
+        // Setup Quiz
+        const qData = this.quizzes[this.currentParaIndex];
 
-            const qEl = document.getElementById("quiz-text");
-            const oEl = document.getElementById("quiz-options");
+        if (!qData) {
+            console.warn("No quiz data found");
+            this.onQuizCorrect();
+            modal.style.display = "none";
+            return;
+        }
 
-            if (!qEl || !oEl) {
-                console.error("Quiz text/options elements missing");
-                modal.style.display = "none";
-                this.onQuizCorrect();
-                return;
-            }
+        qEl.textContent = qData.q;
+        oEl.innerHTML = "";
 
-            // Setup Quiz
-            const qData = this.quizzes[this.currentParaIndex];
+        qData.o.forEach((optText, idx) => {
+            const btn = document.createElement("button");
+            btn.className = "quiz-btn";
+            btn.textContent = optText;
+            btn.onclick = () => {
+                if (idx === qData.a) {
+                    // Correct logic...
+                    btn.classList.add("correct");
+                    Game.state.gems = (Game.state.gems || 0) + 1;
+                    Game.updateUI();
+                    setTimeout(() => {
+                        modal.style.display = "none";
+                        this.onQuizCorrect();
+                    }, 500);
+                } else {
+                    // Wrong logic...
+                    btn.classList.add("wrong");
+                    Game.state.gems = Math.max(0, (Game.state.gems || 0) - 1);
+                    Game.updateUI();
+                    setTimeout(() => btn.classList.remove("wrong"), 500);
+                }
+            };
+            oEl.appendChild(btn);
+        });
 
-            if (!qData) {
-                console.warn("No quiz data found for index " + this.currentParaIndex);
-                // Fallback or skip
-                modal.style.display = "none";
-                this.onQuizCorrect();
-                return;
-            }
-
-            qEl.textContent = qData.q;
-            oEl.innerHTML = "";
-
-            qData.o.forEach((optText, idx) => {
-                const btn = document.createElement("button");
-                btn.className = "quiz-btn";
-                btn.textContent = optText;
-                btn.onclick = () => {
-                    if (idx === qData.a) {
-                        // Correct
-                        btn.classList.add("correct");
-                        Game.state.gems = (Game.state.gems || 0) + 1;
-                        Game.updateUI();
-
-                        setTimeout(() => {
-                            modal.style.display = "none";
-                            this.onQuizCorrect();
-                        }, 500);
-                    } else {
-                        // Wrong
-                        btn.classList.add("wrong");
-                        Game.state.gems = Math.max(0, (Game.state.gems || 0) - 1);
-                        Game.updateUI();
-
-                        setTimeout(() => btn.classList.remove("wrong"), 500);
-                    }
-                };
-                oEl.appendChild(btn);
-            });
-
-        }, 3000);
     },
 
     onQuizCorrect() {
