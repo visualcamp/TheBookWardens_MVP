@@ -276,9 +276,17 @@ Game.typewriter = {
         const el = document.getElementById("book-content");
         if (el) {
             el.innerHTML = "";
-            el.style.columnCount = "1";
-            el.style.height = "auto";
+            // Fix layout: Remove column properties causing "center expansion" effect
+            el.style.columnCount = "auto";
+            el.style.columnWidth = "auto";
+            el.style.columnGap = "normal";
+
+            // Enforce fixed box layout
+            el.style.display = "block";
+            el.style.textAlign = "left";
+            el.style.height = "60vh";
             el.style.overflowY = "auto";
+            el.style.width = "100%";
         }
         this.playNextParagraph();
     },
