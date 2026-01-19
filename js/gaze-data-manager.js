@@ -9,6 +9,7 @@ export class GazeDataManager {
         this.buffer = []; // for smoothing window
         // 5-tap kernel approx for Gaussian
         this.KERNEL = [0.05, 0.25, 0.4, 0.25, 0.05];
+        this.firstTimestamp = null;
     }
 
     /**
@@ -18,8 +19,13 @@ export class GazeDataManager {
     processGaze(gazeInfo) {
         if (!gazeInfo) return;
 
-        // Ensure timestamp is in ms (integer)
-        const t = Math.floor(gazeInfo.timestamp);
+        // Initialize start time
+        if (this.firstTimestamp === null) {
+            this.firstTimestamp = gazeInfo.timestamp;
+        }
+
+        // Relative timestamp in ms (integer)
+        const t = Math.floor(gazeInfo.timestamp - this.firstTimestamp);
         const x = gazeInfo.x;
         const y = gazeInfo.y;
 
@@ -119,6 +125,7 @@ export class GazeDataManager {
     reset() {
         this.data = [];
         this.buffer = [];
+        this.firstTimestamp = null;
     }
 
     exportCSV() {
@@ -128,7 +135,7 @@ export class GazeDataManager {
         }
 
         // CSV Header
-        let csv = "Timestamp,RawX,RawY,SmoothX,SmoothY,VelX,VelY,Type\n";
+        let csv = "RelativeTimestamp_ms,RawX,RawY,SmoothX,SmoothY,VelX,VelY,Type\n";
 
         // Rows
         this.data.forEach(d => {
