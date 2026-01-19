@@ -263,7 +263,7 @@ Game.typewriter = {
 
     // Speed and WPM
     baseSpeed: 30, // ms delay
-    chunkDelay: 1500, // delay between chunks
+    chunkDelay: 2000, // delay between chunks
     startTime: null,
     totalPausedTime: 0,
     pauseStartTimestamp: null,
