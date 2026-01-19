@@ -540,28 +540,41 @@ Game.typewriter = {
 
         // Calculate Shift Offset
         // Target: "Alice" (Start of text)
-        // We need the screen coordinate of the very first character.
-        // Since currentP contains all text, we can use a range to find position of char 0.
         let startX = 0, startY = 0;
-        if (this.currentP && this.currentP.firstChild) {
-            const range = document.createRange();
-            range.setStart(this.currentP.firstChild, 0);
-            range.setEnd(this.currentP.firstChild, 1);
-            const rect = range.getBoundingClientRect();
-            startX = rect.left;
-            startY = rect.top + (rect.height / 2); // Center of line
+        try {
+            if (this.currentP && this.currentP.firstChild) {
+                const range = document.createRange();
+                range.setStart(this.currentP.firstChild, 0);
+                range.setEnd(this.currentP.firstChild, 1);
+                const rect = range.getBoundingClientRect();
+                startX = rect.left;
+                startY = rect.top + (rect.height / 2);
+            }
+        } catch (e) {
+            console.warn("[Game] Failed to get range rect for startX:", e);
         }
 
-        const firstGaze = validData[0];
+        // Fallback
+        if ((startX === 0 && startY === 0) && this.currentP) {
+            const pRect = this.currentP.getBoundingClientRect();
+            startX = pRect.left + 10;
+            startY = pRect.top + 15;
+            console.log("[Game] Used fallback rect.");
+        }
+
+        console.log(`[Game] Text Target: (${startX}, ${startY})`);
+
+        const firstGaze = validData.find(d => d.x > 0 && d.y > 0) || validData[0];
         const offsetX = startX - firstGaze.x;
         const offsetY = startY - firstGaze.y;
 
         console.log(`[Game] Animation Offset: dx=${offsetX}, dy=${offsetY}`);
 
         // Prepare Animation Data
-        // Shift all points
+        // Shift all points and Compress Time (10% duration for 10x speed)
+        const baseTime = validData[0].t;
         const animData = validData.map(d => ({
-            t: d.t,
+            t: baseTime + (d.t - baseTime) * 0.1,
             x: d.x + offsetX,
             y: d.y + offsetY
         }));
