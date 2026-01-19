@@ -409,7 +409,7 @@ Game.typewriter = {
 
             // Schedule the pause and RETURN. 
             // The next character will be printed in the *next* tick call.
-            this.timer = setTimeout(() => this.tick(), 800);
+            this.timer = setTimeout(() => this.tick(), 3000);
             return;
         }
 
