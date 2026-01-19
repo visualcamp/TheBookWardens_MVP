@@ -263,7 +263,7 @@ Game.typewriter = {
 
     // Speed and WPM
     baseSpeed: 30, // ms delay
-    chunkDelay: 2000, // delay between chunks
+    chunkDelay: 1000, // delay between chunks
     startTime: null,
     totalPausedTime: 0,
     pauseStartTimestamp: null,
@@ -409,16 +409,14 @@ Game.typewriter = {
             this.charIndex++; // Skip the slash
 
             // Skip any immediate space after slash so the pause is felt BEFORE the next word starts
+            // We do NOT add extra spaces to the DOM here, because we already added 'separator' above.
             while (this.charIndex < this.currentText.length && this.currentText[this.charIndex] === ' ') {
                 this.charIndex++;
-                // Manually add space to DOM so spacing is preserved, but we won't spend a tick printing it
-                const space = document.createTextNode(" ");
-                this.currentP.insertBefore(space, this.cursorBlob);
             }
 
             // Schedule the pause and RETURN. 
             // The next character (the start of the real word) will be printed in the *next* tick call.
-            const delay = this.chunkDelay || 2000;
+            const delay = this.chunkDelay || 1000;
             console.log(`[Game] Chunk Pause: ${delay}ms`);
             this.timer = setTimeout(() => this.tick(), delay);
             return;
