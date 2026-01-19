@@ -105,13 +105,19 @@ export class GazeDataManager {
             isValleyX,
             // Original raw fixation from SDK if present
             sdkFixationX: gazeInfo.fixationX,
-            sdkFixationY: gazeInfo.fixationY
+            sdkFixationY: gazeInfo.fixationY,
+            // Context data (LineIndex, CharIndex)
+            ...(this.context || {})
         };
 
         this.data.push(entry);
 
         // Debug Log (Every ~1 sec aka 60 frames)
         if (this.data.length % 60 === 0) console.log("[GazeData] Count:", this.data.length, "Latest:", entry);
+    }
+
+    setContext(ctx) {
+        this.context = { ...this.context, ...ctx };
     }
 
     getFixations() {
@@ -126,6 +132,7 @@ export class GazeDataManager {
         this.data = [];
         this.buffer = [];
         this.firstTimestamp = null;
+        this.context = {};
     }
 
     exportCSV() {
@@ -135,7 +142,7 @@ export class GazeDataManager {
         }
 
         // CSV Header
-        let csv = "RelativeTimestamp_ms,RawX,RawY,SmoothX,SmoothY,VelX,VelY,Type\n";
+        let csv = "RelativeTimestamp_ms,RawX,RawY,SmoothX,SmoothY,VelX,VelY,Type,LineIndex,CharIndex\n";
 
         // Rows
         this.data.forEach(d => {
@@ -146,7 +153,9 @@ export class GazeDataManager {
                 d.gy !== undefined ? d.gy.toFixed(2) : "",
                 d.vx !== undefined ? d.vx.toFixed(4) : "",
                 d.vy !== undefined ? d.vy.toFixed(4) : "",
-                d.type
+                d.type,
+                d.lineIndex !== undefined ? d.lineIndex : "",
+                d.charIndex !== undefined ? d.charIndex : ""
             ];
             csv += row.join(",") + "\n";
         });

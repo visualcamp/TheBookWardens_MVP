@@ -439,6 +439,14 @@ Game.typewriter = {
 
             this.timer = setTimeout(() => this.tick(), nextDelay);
         }
+
+        // Update Gaze Context in Real-time
+        if (window.gazeDataManager) {
+            window.gazeDataManager.setContext({
+                lineIndex: this.currentParaIndex,
+                charIndex: this.charIndex
+            });
+        }
     },
 
     showVillainQuiz() {
