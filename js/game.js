@@ -397,6 +397,7 @@ Game.typewriter = {
         // Advance character
         let char = this.currentText[this.charIndex];
 
+        let isChunkEnd = false;
         if (char === '/') {
             isChunkEnd = true;
             this.currentLineIndex = (this.currentLineIndex || 0) + 1;
