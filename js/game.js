@@ -182,7 +182,7 @@ const Game = {
         // Stop owl tracking and start reading
         this.state.isOwlTracker = false;
         this.switchScreen("screen-read");
-        this.startReadingSession();
+        // this.startReadingSession(); // Removed duplicate call, switchScreen handles it
     },
 
     // --- 2. Reading Rift (Original Logic kept for reference, overlaid below) ---
