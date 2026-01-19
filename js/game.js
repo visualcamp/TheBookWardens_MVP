@@ -339,6 +339,7 @@ Game.typewriter = {
         }
 
         this.currentText = this.paragraphs[this.currentParaIndex];
+        this.currentLineIndex = 0;
         this.charIndex = 0;
 
         if (this.pauseStartTimestamp) {
@@ -396,10 +397,10 @@ Game.typewriter = {
         // Advance character
         let char = this.currentText[this.charIndex];
 
-        // Skip '/' delimiter but trigger pause logic
         let isChunkEnd = false;
         if (char === '/') {
             isChunkEnd = true;
+            this.currentLineIndex = (this.currentLineIndex || 0) + 1;
             this.charIndex++;
             if (this.charIndex < this.currentText.length) {
                 char = this.currentText[this.charIndex];
@@ -452,7 +453,7 @@ Game.typewriter = {
         // Update Gaze Context in Real-time
         if (window.gazeDataManager) {
             window.gazeDataManager.setContext({
-                lineIndex: Game.typewriter.currentParaIndex !== undefined ? Game.typewriter.currentParaIndex : 0,
+                lineIndex: Game.typewriter.currentLineIndex || 0,
                 charIndex: this.charIndex
             });
         }
