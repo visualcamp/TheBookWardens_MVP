@@ -277,6 +277,7 @@ Game.typewriter = {
         this.startTime = null;
         this.totalPausedTime = 0;
         Game.state.ink = 0; // Reset Ink
+        Game.hasExported = false; // Reset export flag
         Game.updateUI();
 
         const el = document.getElementById("book-content");
@@ -507,16 +508,17 @@ Game.typewriter = {
         console.log("[Game] openQuizModal called");
 
         // Export Gaze Data as CSV (User Requirement: Output when villain dialogue appears)
-        if (window.gazeDataManager) {
+        // Prevent double export: check if we just exported
+        if (window.gazeDataManager && !this.hasExported) {
             console.log("Exporting Gaze CSV...");
             window.gazeDataManager.exportCSV();
+            this.hasExported = true; // Set flag
         }
 
         // Safety check for quiz index
         if (this.currentParaIndex === undefined) this.currentParaIndex = 0;
 
         const modal = document.getElementById("villain-modal");
-        const quizContainer = document.getElementById("quiz-container");
         const rewardContainer = document.getElementById("reward-container");
 
         // Show Quiz immediately

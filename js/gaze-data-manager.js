@@ -10,6 +10,7 @@ export class GazeDataManager {
         // 5-tap kernel approx for Gaussian
         this.KERNEL = [0.05, 0.25, 0.4, 0.25, 0.05];
         this.firstTimestamp = null;
+        this.context = {}; // Initialize context
     }
 
     /**
