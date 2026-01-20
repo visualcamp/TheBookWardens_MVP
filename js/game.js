@@ -972,33 +972,28 @@ Game.typewriter = {
         const lineGroups = {};
 
         // 2. Pre-calculation: Min/Max X per line
-        // BUG FIX: Use SDK Fixation coordinate if available to match user request
+        // Revert to using 'gx' for simple trace
         validData.forEach(d => {
             const idx = d.detectedLineIndex;
-            // Use sdkFixationX if Fixation type, else gx
-            const val = (d.type === 'Fixation' && d.sdkFixationX) ? d.sdkFixationX : d.gx;
+            const val = d.gx;
 
             if (!lineGroups[idx]) lineGroups[idx] = { minX: 99999, maxX: -99999 };
             if (val < lineGroups[idx].minX) lineGroups[idx].minX = val;
             if (val > lineGroups[idx].maxX) lineGroups[idx].maxX = val;
         });
 
-        // 3. Build Replay Stream (Frame-by-Frame)
+        // 3. Build Replay Stream (Simple Dot)
         const replayData = [];
         let virtualTime = 0;
         let lastRawT = validData[0].t;
         let lastLineIdx = validData[0].detectedLineIndex;
 
-        // Visual State
-        let inFixation = false;
-        let fixAnchor = { x: 0, y: 0, startTime: 0 };
-        let lastFixX = -999; // To check coordinate stability
-
         validData.forEach((d, i) => {
-            // A. Time Compression
+            // A. Time Compression (Keep this feature)
             if (i > 0) {
                 const rawDelta = d.t - lastRawT;
                 let effectiveDelta = rawDelta;
+                // If Line Changed, clamp delay to 50ms
                 if (d.detectedLineIndex !== lastLineIdx) {
                     if (rawDelta > 50) effectiveDelta = 50;
                 }
@@ -1011,8 +1006,8 @@ Game.typewriter = {
             const idx = d.detectedLineIndex;
             const visualIdx = idx - 1;
 
-            // PRIORITY: Use SDK Fixation Coordinate
-            const valX = (d.type === 'Fixation' && d.sdkFixationX) ? d.sdkFixationX : d.gx;
+            // Use gx for simple gaze replay
+            const valX = d.gx;
             let Dx = 0, Dy = 0;
 
             if (visualIdx >= 0 && visualIdx < visualLines.length) {
@@ -1029,46 +1024,14 @@ Game.typewriter = {
                 return;
             }
 
-            // C. Fixation Logic (Strict SDK Trust)
-            const isFixation = (d.type === 'Fixation' || d.type === 0);
-            let renderX = Dx;
-            let renderY = Dy;
-            let radius = 10;
-            let drawType = isFixation ? 'Fixation' : 'Saccade';
-
-            if (isFixation) {
-                // User Request: Trust SDK 100%. No custom algorithms.
-                // If the SDK says it's a fixation, we treat it as part of the current fixation sequence 
-                // IF we are already in one. We don't check coordinate distance.
-
-                // However, to show the expanding animation, we still need to know when a "visual" fixation starts.
-                // Simple Logic: If previous frame was NOT fixation, START.
-                // If previous frame WAS fixation, CONTINUE.
-
-                if (!inFixation) {
-                    inFixation = true;
-                    fixAnchor = { x: Dx, y: Dy, startTime: virtualTime };
-                }
-
-                // Always anchor to the start of this continuous fixation sequence
-                renderX = fixAnchor.x;
-                renderY = fixAnchor.y;
-
-                // Radius Bonus
-                const dur = virtualTime - fixAnchor.startTime;
-                radius = 10 + (dur * 0.05);
-                if (radius > 45) radius = 45;
-
-            } else {
-                inFixation = false;
-            }
-
+            // C. Simple Visualization (No Fixation Logic)
+            // Fixation or Saccade, just show simple dot
             replayData.push({
                 t: virtualTime,
-                x: renderX,
-                y: renderY,
-                r: radius,
-                type: drawType
+                x: Dx,
+                y: Dy,
+                r: 10, // Fixed radius
+                type: d.type
             });
         });
 
