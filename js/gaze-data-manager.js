@@ -393,8 +393,8 @@ export class GazeDataManager {
         const posMaxima = []; // X Maxima (Line End Candidates)
         const velMinima = []; // Vx Minima (Max Left-Speed Candidates)
 
-        // Window modified: 30 -> 15 samples (~250ms) to better catch peaks
-        const winPos = 15;
+        // Window modified: 15 -> 10 samples (~160ms) to better catch subtle peaks
+        const winPos = 10;
         const winVel = 5; // Velocity peak is sharp
 
         // Loop through data (skipping edges for window)
@@ -449,8 +449,8 @@ export class GazeDataManager {
             const pMax = posMaxima[i];
 
             // 1. Find nearest Velocity Minima shortly AFTER this Maxima
-            // Return sweep usually happens 0~600ms (increased from 400) after fixation on line end.
-            const searchWindowMs = 600;
+            // Return sweep usually happens 0~1200ms (increased) to account for pauses.
+            const searchWindowMs = 1200;
             const matchingVel = velMinima.find(v =>
                 v.t > pMax.t && v.t < pMax.t + searchWindowMs
             );
