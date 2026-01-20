@@ -226,6 +226,141 @@ export class GazeDataManager {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+
+        // Also export chart image
+        this.exportChartImage(deviceType);
+    }
+
+    async exportChartImage(deviceType) {
+        if (typeof Chart === 'undefined') {
+            console.warn("Chart.js is not loaded. Skipping chart export.");
+            return;
+        }
+
+        const width = 1200;
+        const heightPerChart = 300;
+        const charts = ['RawX', 'RawY', 'SmoothX', 'SmoothY', 'VelX', 'VelY', 'LineIndex', 'CharIndex', 'AlgoLineIndex'];
+        const totalHeight = heightPerChart * charts.length;
+
+        // Create a single large canvas to draw everything on
+        const mainCanvas = document.createElement('canvas');
+        mainCanvas.width = width;
+        mainCanvas.height = totalHeight;
+        const ctx = mainCanvas.getContext('2d');
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, width, totalHeight);
+
+        // Prepare Data
+        const times = this.data.map(d => d.t);
+        const datasets = {
+            RawX: this.data.map(d => d.x),
+            RawY: this.data.map(d => d.y),
+            SmoothX: this.data.map(d => d.gx),
+            SmoothY: this.data.map(d => d.gy),
+            VelX: this.data.map(d => d.vx),
+            VelY: this.data.map(d => d.vy),
+            LineIndex: this.data.map(d => d.lineIndex || 0),
+            CharIndex: this.data.map(d => d.charIndex || 0),
+            AlgoLineIndex: this.data.map(d => d.detectedLineIndex || null)
+        };
+
+        // Extrema Points
+        const lineStarts = [];
+        const posMaxs = [];
+        const posMaxLasts = [];
+
+        this.data.forEach(d => {
+            if (d.extrema === 'LineStart') lineStarts.push({ x: d.t, y: d.gx });
+            if (d.extrema === 'PosMax') posMaxs.push({ x: d.t, y: d.gx });
+            if (d.extrema === 'PosMax(Last)') posMaxLasts.push({ x: d.t, y: d.gx });
+        });
+
+        // Loop through each chart type and draw to a temp canvas
+        for (let i = 0; i < charts.length; i++) {
+            const chartName = charts[i];
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = heightPerChart;
+
+            const chartConfig = {
+                type: 'line',
+                data: {
+                    labels: times,
+                    datasets: [{
+                        label: chartName,
+                        data: datasets[chartName],
+                        borderColor: '#2196F3',
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: false,
+                    animation: false,
+                    plugins: {
+                        title: { display: true, text: chartName },
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { display: (i === charts.length - 1) }, // Only show X axis on last chart
+                        y: { beginAtZero: false } // Auto scale
+                    }
+                }
+            };
+
+            // Add Extrema to SmoothX
+            if (chartName === 'SmoothX') {
+                chartConfig.data.datasets.push({
+                    label: 'Extrema: LineStart',
+                    data: lineStarts,
+                    type: 'scatter',
+                    backgroundColor: 'blue',
+                    pointRadius: 5,
+                    parsing: { xAxisKey: 'x', yAxisKey: 'y' } // Use explicit keys for scatter
+                });
+                chartConfig.data.datasets.push({
+                    label: 'Extrema: PosMax',
+                    data: posMaxs,
+                    type: 'scatter',
+                    backgroundColor: 'orange',
+                    pointRadius: 5,
+                    parsing: { xAxisKey: 'x', yAxisKey: 'y' }
+                });
+                chartConfig.data.datasets.push({
+                    label: 'Extrema: PosMax(Last)',
+                    data: posMaxLasts,
+                    type: 'scatter',
+                    backgroundColor: 'red',
+                    pointRadius: 6,
+                    parsing: { xAxisKey: 'x', yAxisKey: 'y' }
+                });
+                chartConfig.options.plugins.legend = { display: true };
+            }
+
+            // Render Chart on Temp Canvas
+            // Note: Chart.js renders asynchronously usually, but with animation:false it might be sync enough for image capture??
+            // Actually, we need to wait for it.
+
+            await new Promise(resolve => {
+                const chart = new Chart(tempCanvas, chartConfig);
+                setTimeout(() => {
+                    // Draw temp canvas onto main canvas
+                    ctx.drawImage(tempCanvas, 0, i * heightPerChart);
+                    chart.destroy();
+                    resolve();
+                }, 100); // Small delay to ensure render
+            });
+        }
+
+        // Download Main Canvas
+        const link = document.createElement('a');
+        link.download = `${deviceType}_gaze_chart_${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+        link.href = mainCanvas.toDataURL('image/png');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 
     // --- Line Detection Algorithm V3 (Interpolation + Velocity Check) ---
