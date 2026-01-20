@@ -302,7 +302,7 @@ export class GazeDataManager {
         // We will mark PosMax and LineStart within the loop below as we confirm them.
 
         // ---------------------------------------------------------
-        // Step 3. Validate Lines using Velocity
+        // Step 4. Validate Lines using Velocity
         // ---------------------------------------------------------
         const validLines = [];
         let lineCounter = 1;
@@ -338,16 +338,23 @@ export class GazeDataManager {
                     }
                 }
 
+                // Validate 1: Is start point after the previous line?
                 if (prevMinIdx > lastLineEnd) {
-                    validLines.push({
-                        startIdx: prevMinIdx,
-                        endIdx: pMax.index,
-                        lineNum: lineCounter++
-                    });
+                    // Validate 2: Duration Check (Too short reading is noise)
+                    const duration = this.data[pMax.index].t - this.data[prevMinIdx].t;
+                    const MIN_DURATION = 150; // ms (Shortest line reading time)
 
-                    // Mark Extrema for CSV
-                    this.data[prevMinIdx].extrema = "LineStart"; // Visual: Valley Bottom
-                    this.data[pMax.index].extrema = "PosMax";    // Visual: Peak
+                    if (duration > MIN_DURATION) {
+                        validLines.push({
+                            startIdx: prevMinIdx,
+                            endIdx: pMax.index,
+                            lineNum: lineCounter++
+                        });
+
+                        // Mark Extrema for CSV
+                        this.data[prevMinIdx].extrema = "LineStart"; // Visual: Valley Bottom
+                        this.data[pMax.index].extrema = "PosMax";    // Visual: Peak
+                    }
                 }
             }
         }
@@ -355,55 +362,62 @@ export class GazeDataManager {
         // ---------------------------------------------------------
         // Step 3-1. Handle Last Line (which has NO Return Sweep)
         // ---------------------------------------------------------
-        // Logic: Check remaining PosMaxima that were NOT used in validLines.
-        // If there is a orphaned PosMax at the end that forms a valid line width with a preceding Min, add it.
 
         const lastDetectedEndInfo = (validLines.length > 0) ? validLines[validLines.length - 1] : null;
         const lastUsedEndIdx = lastDetectedEndInfo ? lastDetectedEndInfo.endIdx : -1;
 
-        // Find potential Last Line Maxima: Must be after the last detected line
-        // and NOT already processed (though our loop above pushes sequentially, so just checking index > lastUsedEndIdx is enough)
+        // Improved Logic: Find the Global Maxima in the remaining data (after lastUsedEndIdx)
+        // instead of just looking at the very last local extrema (which could be noise).
 
-        // We iterate backwards from the last PosMax to find the best candidate for the final line end.
-        let finalMaxCand = null;
-        for (let i = posMaxima.length - 1; i >= 0; i--) {
-            if (posMaxima[i].index > lastUsedEndIdx) {
-                finalMaxCand = posMaxima[i];
-                break; // Take the very last maxima available
-            }
-        }
+        // Define search range for the last line peak
+        const remainingStart = (lastUsedEndIdx === -1) ? 0 : lastUsedEndIdx + 1;
 
-        if (finalMaxCand) {
-            // Check if this Maxima forms a valid line logic
-            // Start of line: Find absolute min in interval [lastUsedEndIdx+1 ... finalMaxCand]
-            let prevMinIdx = 0;
-            let minVal = 9999;
-            const searchStart = (lastUsedEndIdx === -1) ? 0 : lastUsedEndIdx + 1;
+        if (remainingStart < this.data.length) {
+            let bestMaxObj = null;
+            let maxVal = -9999;
 
-            // Search range limited to reasonable past (e.g., 5 seconds = ~300 samples) to avoid picking start of game as line start
-            const searchLimit = Math.max(searchStart, finalMaxCand.index - 300);
-
-            for (let k = finalMaxCand.index; k >= searchLimit; k--) {
-                const val = this.data[k].gx;
-                if (val !== null && val < minVal) {
-                    minVal = val;
-                    prevMinIdx = k;
+            // Search among detected posMaxima that are in the remaining range
+            for (let i = 0; i < posMaxima.length; i++) {
+                if (posMaxima[i].index > remainingStart) {
+                    if (posMaxima[i].value > maxVal) {
+                        maxVal = posMaxima[i].value;
+                        bestMaxObj = posMaxima[i];
+                    }
                 }
             }
 
-            // Validate: Width > Threshold (80px)
-            const width = finalMaxCand.value - minVal;
-            const AMP_THRESHOLD = 80;
+            if (bestMaxObj) {
+                // Find Start of this potential last line
+                let prevMinIdx = 0;
+                let minVal = 9999;
 
-            if (width > AMP_THRESHOLD) {
-                validLines.push({
-                    startIdx: prevMinIdx,
-                    endIdx: finalMaxCand.index,
-                    lineNum: lineCounter++
-                });
-                // Mark this final max as detected for completeness
-                this.data[prevMinIdx].extrema = "LineStart"; // Visual: Valley Bottom
-                this.data[finalMaxCand.index].extrema = "PosMax(Last)";
+                // Search range limited to reasonable past (e.g., 5 seconds = ~300 samples)
+                const searchLimit = Math.max(remainingStart, bestMaxObj.index - 300);
+
+                for (let k = bestMaxObj.index; k >= searchLimit; k--) {
+                    const val = this.data[k].gx;
+                    if (val !== null && val < minVal) {
+                        minVal = val;
+                        prevMinIdx = k;
+                    }
+                }
+
+                // Validate: Width > Threshold (80px) AND Duration
+                const width = bestMaxObj.value - minVal;
+                const duration = this.data[bestMaxObj.index].t - this.data[prevMinIdx].t;
+                const AMP_THRESHOLD = 80;
+                const MIN_DURATION = 150;
+
+                if (width > AMP_THRESHOLD && duration > MIN_DURATION) {
+                    validLines.push({
+                        startIdx: prevMinIdx,
+                        endIdx: bestMaxObj.index,
+                        lineNum: lineCounter++
+                    });
+                    // Mark this final max as detected for completeness
+                    this.data[prevMinIdx].extrema = "LineStart";
+                    this.data[bestMaxObj.index].extrema = "PosMax(Last)";
+                }
             }
         }
 
