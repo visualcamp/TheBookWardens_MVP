@@ -219,21 +219,65 @@ export class GazeDataManager {
             y1[i] = sumY / wSum;
         }
 
+        // Determine valid time window (Start of text ~ End of text + 2s)
+        let tStart = -1, tEnd = -1;
+        for (let i = 0; i < this.data.length; i++) {
+            if (this.data[i].lineIndex !== undefined && this.data[i].lineIndex !== null) {
+                if (tStart === -1) tStart = this.data[i].t;
+                tEnd = this.data[i].t;
+            }
+        }
+        if (tEnd !== -1) tEnd += 2000;
+
         // 2. Find Extremes (Maxima & Minima) on smoothed X
-        const maxima = [];
-        const minima = [];
+        let rawMaxima = [];
+        let rawMinima = [];
         const win = 10;
 
         for (let i = win; i < x1.length - win; i++) {
+            // Check time window
+            const t = this.data[i].t;
+            if (tStart !== -1 && (t < tStart || t > tEnd)) continue;
+
             let isMax = true;
             let isMin = true;
             for (let j = 1; j <= win; j++) {
                 if (x1[i] <= x1[i - j] || x1[i] <= x1[i + j]) isMax = false;
                 if (x1[i] >= x1[i - j] || x1[i] >= x1[i + j]) isMin = false;
             }
-            if (isMax) maxima.push({ index: i, value: x1[i], t: this.data[i].t, y: y1[i] });
-            if (isMin) minima.push({ index: i, value: x1[i], t: this.data[i].t, y: y1[i] });
+            if (isMax) rawMaxima.push({ index: i, value: x1[i], t: t, y: y1[i] });
+            if (isMin) rawMinima.push({ index: i, value: x1[i], t: t, y: y1[i] });
         }
+
+        // Filter Extremes: Non-Maximum Suppression (Merge close peaks)
+        const MERGE_WIN_MS = 150;
+
+        const filterPeaks = (peaks, isFindMax) => {
+            if (peaks.length === 0) return [];
+            const result = [];
+            let currentBest = peaks[0];
+
+            for (let k = 1; k < peaks.length; k++) {
+                const p = peaks[k];
+                if (p.t - currentBest.t < MERGE_WIN_MS) {
+                    // Overlap: Keep the better one
+                    if (isFindMax) {
+                        if (p.value > currentBest.value) currentBest = p;
+                    } else {
+                        if (p.value < currentBest.value) currentBest = p;
+                    }
+                } else {
+                    // No overlap: Push currentBest and start new
+                    result.push(currentBest);
+                    currentBest = p;
+                }
+            }
+            result.push(currentBest);
+            return result;
+        };
+
+        const maxima = filterPeaks(rawMaxima, true);
+        const minima = filterPeaks(rawMinima, false);
 
         // Mark Extrema in Data for CSV
         for (let i = 0; i < this.data.length; i++) delete this.data[i].extrema; // Reset
