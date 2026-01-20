@@ -143,7 +143,7 @@ export class GazeDataManager {
         }
 
         // CSV Header
-        let csv = "RelativeTimestamp_ms,RawX,RawY,SmoothX,SmoothY,VelX,VelY,Type,LineIndex,CharIndex,AlgoLineIndex\n";
+        let csv = "RelativeTimestamp_ms,RawX,RawY,SmoothX,SmoothY,VelX,VelY,Type,LineIndex,CharIndex,AlgoLineIndex,Extrema\n";
 
         // Rows
         this.data.forEach(d => {
@@ -157,7 +157,8 @@ export class GazeDataManager {
                 d.type,
                 (d.lineIndex !== undefined && d.lineIndex !== null) ? d.lineIndex : "",
                 (d.charIndex !== undefined && d.charIndex !== null) ? d.charIndex : "",
-                (d.detectedLineIndex !== undefined) ? d.detectedLineIndex : ""
+                (d.detectedLineIndex !== undefined) ? d.detectedLineIndex : "",
+                (d.extrema !== undefined) ? d.extrema : ""
             ];
             csv += row.join(",") + "\n";
         });
@@ -233,6 +234,11 @@ export class GazeDataManager {
             if (isMax) maxima.push({ index: i, value: x1[i], t: this.data[i].t, y: y1[i] });
             if (isMin) minima.push({ index: i, value: x1[i], t: this.data[i].t, y: y1[i] });
         }
+
+        // Mark Extrema in Data for CSV
+        for (let i = 0; i < this.data.length; i++) delete this.data[i].extrema; // Reset
+        maxima.forEach(m => this.data[m.index].extrema = "Max");
+        minima.forEach(m => this.data[m.index].extrema = "Min");
 
         // 3. Advanced Validation (Return Sweep & Reading)
         const validLines = []; // Stores { startIdx, endIdx, lineNum }
@@ -312,7 +318,11 @@ export class GazeDataManager {
             // Correct the lineNum if we capped (though slicing array handles it implicitly)
             // line.lineNum is already set sequentially 1..N
             for (let k = line.startIdx; k <= line.endIdx; k++) {
-                this.data[k].detectedLineIndex = line.lineNum;
+                // BUG FIX: Only mark if text was actually present (lineIndex is not null)
+                // This prevents "future reading" or phantom lines before text appears.
+                if (this.data[k].lineIndex !== undefined && this.data[k].lineIndex !== null) {
+                    this.data[k].detectedLineIndex = line.lineNum;
+                }
             }
         });
 
