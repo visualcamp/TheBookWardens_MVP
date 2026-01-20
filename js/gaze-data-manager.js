@@ -183,17 +183,61 @@ export class GazeDataManager {
         link.click();
         document.body.removeChild(link);
     }
-    // --- Line Detection Algorithm (Mobile / Typewriter) ---
+
+    // --- Line Detection Algorithm V3 (Interpolation + Velocity Check) ---
     detectLinesMobile() {
         if (this.data.length < 10) return 0;
 
-        // 1. Gaussian Smoothing (Sigma = 3) for X and Y
+        // ---------------------------------------------------------
+        // Step 1. Data Interpolation (Fill Gaps)
+        // ---------------------------------------------------------
+        // Linear interpolation for missing/NaN x, y values
+        for (let i = 0; i < this.data.length; i++) {
+            const curr = this.data[i];
+            // Treat 0,0 or NaN as missing. SeeSo SDK might return 0 or NaN.
+            const isMissing = isNaN(curr.x) || isNaN(curr.y) || (curr.x === 0 && curr.y === 0);
+
+            if (isMissing) {
+                // Find prev valid
+                let prevIdx = i - 1;
+                while (prevIdx >= 0) {
+                    const p = this.data[prevIdx];
+                    if (!isNaN(p.x) && !isNaN(p.y) && (p.x !== 0 || p.y !== 0)) break;
+                    prevIdx--;
+                }
+
+                // Find next valid
+                let nextIdx = i + 1;
+                while (nextIdx < this.data.length) {
+                    const n = this.data[nextIdx];
+                    if (!isNaN(n.x) && !isNaN(n.y) && (n.x !== 0 || n.y !== 0)) break;
+                    nextIdx++;
+                }
+
+                if (prevIdx >= 0 && nextIdx < this.data.length) {
+                    const p = this.data[prevIdx];
+                    const n = this.data[nextIdx];
+                    const ratio = (curr.t - p.t) / (n.t - p.t);
+                    curr.x = p.x + (n.x - p.x) * ratio;
+                    curr.y = p.y + (n.y - p.y) * ratio;
+                } else if (prevIdx >= 0) {
+                    curr.x = this.data[prevIdx].x;
+                    curr.y = this.data[prevIdx].y;
+                } else if (nextIdx < this.data.length) {
+                    curr.x = this.data[nextIdx].x;
+                    curr.y = this.data[nextIdx].y;
+                }
+            }
+        }
+
+        // ---------------------------------------------------------
+        // Step 2. Gaussian Smoothing & Velocity Calculation
+        // ---------------------------------------------------------
         const sigma = 3;
         const radius = Math.ceil(3 * sigma);
         const kernelSize = 2 * radius + 1;
         const kernel = new Float32Array(kernelSize);
         let sumK = 0;
-
         for (let i = 0; i < kernelSize; i++) {
             const x = i - radius;
             const val = Math.exp(-(x * x) / (2 * sigma * sigma));
@@ -203,23 +247,28 @@ export class GazeDataManager {
         for (let i = 0; i < kernelSize; i++) kernel[i] /= sumK;
 
         const x1 = new Float32Array(this.data.length);
-        const y1 = new Float32Array(this.data.length);
+        const vx = new Float32Array(this.data.length);
 
+        // Apply Smoothing to X
         for (let i = 0; i < this.data.length; i++) {
-            let sumX = 0, sumY = 0, wSum = 0;
+            let sumX = 0, wSum = 0;
             for (let k = 0; k < kernelSize; k++) {
                 const idx = i + (k - radius);
                 if (idx >= 0 && idx < this.data.length) {
                     sumX += this.data[idx].x * kernel[k];
-                    sumY += this.data[idx].y * kernel[k];
                     wSum += kernel[k];
                 }
             }
             x1[i] = sumX / wSum;
-            y1[i] = sumY / wSum;
+
+            // Calculate Vx (after smoothing)
+            if (i > 0 && (this.data[i].t - this.data[i - 1].t) > 0) {
+                // px/ms
+                vx[i] = (x1[i] - x1[i - 1]) / (this.data[i].t - this.data[i - 1].t);
+            }
         }
 
-        // Determine valid time window (Start of text ~ End of text + 2s)
+        // Time Window Logic (Start Text - End Text + 2s)
         let tStart = -1, tEnd = -1;
         for (let i = 0; i < this.data.length; i++) {
             if (this.data[i].lineIndex !== undefined && this.data[i].lineIndex !== null) {
@@ -229,117 +278,100 @@ export class GazeDataManager {
         }
         if (tEnd !== -1) tEnd += 2000;
 
-        // 2. Find Extremes (Maxima & Minima) on smoothed X
-        let rawMaxima = [];
-        let rawMinima = [];
-        const win = 10;
+        // ---------------------------------------------------------
+        // Step 3. Find Extremes (Wide Window)
+        // ---------------------------------------------------------
+        const posMaxima = []; // X Maxima (Line End Candidates)
+        const velMinima = []; // Vx Minima (Max Left-Speed Candidates)
 
-        for (let i = win; i < x1.length - win; i++) {
-            // Check time window
+        // Window expanded x3 -> 30 samples (~500ms at 60hz)
+        const winPos = 30;
+        const winVel = 5; // Velocity peak is sharp
+
+        for (let i = winPos; i < x1.length - winPos; i++) {
+            // Check Time Window
             const t = this.data[i].t;
             if (tStart !== -1 && (t < tStart || t > tEnd)) continue;
 
+            // A. Position Maxima
             let isMax = true;
-            let isMin = true;
-            for (let j = 1; j <= win; j++) {
+            for (let j = 1; j <= winPos; j++) {
                 if (x1[i] <= x1[i - j] || x1[i] <= x1[i + j]) isMax = false;
-                if (x1[i] >= x1[i - j] || x1[i] >= x1[i + j]) isMin = false;
             }
-            if (isMax) rawMaxima.push({ index: i, value: x1[i], t: t, y: y1[i] });
-            if (isMin) rawMinima.push({ index: i, value: x1[i], t: t, y: y1[i] });
+            if (isMax) posMaxima.push({ index: i, value: x1[i], t: t });
         }
 
-        // Filter Extremes: Non-Maximum Suppression (Merge close peaks)
-        const MERGE_WIN_MS = 150;
+        // B. Velocity Minima (Negative Peak = Fast Left Move)
+        for (let i = winVel; i < vx.length - winVel; i++) {
+            const t = this.data[i].t;
+            if (tStart !== -1 && (t < tStart || t > tEnd)) continue;
 
-        const filterPeaks = (peaks, isFindMax) => {
-            if (peaks.length === 0) return [];
-            const result = [];
-            let currentBest = peaks[0];
-
-            for (let k = 1; k < peaks.length; k++) {
-                const p = peaks[k];
-                if (p.t - currentBest.t < MERGE_WIN_MS) {
-                    // Overlap: Keep the better one
-                    if (isFindMax) {
-                        if (p.value > currentBest.value) currentBest = p;
-                    } else {
-                        if (p.value < currentBest.value) currentBest = p;
-                    }
-                } else {
-                    // No overlap: Push currentBest and start new
-                    result.push(currentBest);
-                    currentBest = p;
-                }
+            let isVelMin = true;
+            for (let j = 1; j <= winVel; j++) {
+                if (vx[i] >= vx[i - j] || vx[i] >= vx[i + j]) isVelMin = false;
             }
-            result.push(currentBest);
-            return result;
-        };
+            // Must be significantly negative (e.g. < -0.1 px/ms)
+            // Typical saccade speed > 0.1~0.5 px/ms depending on distance.
+            if (isVelMin && vx[i] < -0.1) {
+                velMinima.push({ index: i, value: vx[i], t: t });
+            }
+        }
 
-        const maxima = filterPeaks(rawMaxima, true);
-        const minima = filterPeaks(rawMinima, false);
+        // Mark Extrema for Debug/CSV
+        for (let i = 0; i < this.data.length; i++) delete this.data[i].extrema;
+        posMaxima.forEach(m => this.data[m.index].extrema = "PosMax");
+        velMinima.forEach(m => this.data[m.index].extrema = "VelMin");
 
-        // Mark Extrema in Data for CSV
-        for (let i = 0; i < this.data.length; i++) delete this.data[i].extrema; // Reset
-        maxima.forEach(m => this.data[m.index].extrema = "Max");
-        minima.forEach(m => this.data[m.index].extrema = "Min");
-
-        // 3. Advanced Validation (Return Sweep & Reading)
-        const validLines = []; // Stores { startIdx, endIdx, lineNum }
-        const AMP_THRESHOLD = 80; // Min line width (px) - Increased from 50 to 80
-        const READING_MIN_DURATION = 200; // Min time to read a line (ms)
-
+        // ---------------------------------------------------------
+        // Step 4. Validate Lines using Velocity
+        // ---------------------------------------------------------
+        const validLines = [];
         let lineCounter = 1;
 
-        // Iterate through all Maxima (Potential end of lines)
-        for (let i = 0; i < maxima.length; i++) {
-            const currentPeak = maxima[i];
+        // Strategy: Maxima -> Look for close Velocity Minima -> Confirm Return Sweep
+        for (let i = 0; i < posMaxima.length; i++) {
+            const pMax = posMaxima[i];
 
-            // A. Find the immediate next Minima (End of Return Sweep / Start of next line)
-            let nextValley = null;
-            for (let j = 0; j < minima.length; j++) {
-                if (minima[j].index > currentPeak.index) {
-                    nextValley = minima[j];
-                    break;
+            // 1. Find nearest Velocity Minima shortly AFTER this Maxima
+            // Return sweep usually happens 0~400ms after fixation on line end.
+            const searchWindowMs = 400;
+            const matchingVel = velMinima.find(v =>
+                v.t > pMax.t && v.t < pMax.t + searchWindowMs
+            );
+
+            if (matchingVel) {
+                // Return Sweep Detected!
+                // Start of line: Find local minima preceding this max
+                // (Looking backwards from pMax until data goes up or hits previous line limit)
+                let prevMinIdx = 0;
+                let minVal = 9999;
+
+                // Define lower bound for search
+                const lastLineEnd = (validLines.length > 0) ? validLines[validLines.length - 1].endIdx : 0;
+                const searchLimit = Math.max(0, pMax.index - 200); // Don't search back too far (e.g. 200 samples ~ 3-6 sec)
+                const finalLimit = Math.max(lastLineEnd + 1, searchLimit);
+
+                // Simple Min-Finding (absolute min in the interval [lastLineEnd ... pMax])
+                for (let k = pMax.index; k >= finalLimit; k--) {
+                    if (x1[k] < minVal) {
+                        minVal = x1[k];
+                        prevMinIdx = k;
+                    }
+                }
+
+                if (prevMinIdx > lastLineEnd) {
+                    validLines.push({
+                        startIdx: prevMinIdx,
+                        endIdx: pMax.index,
+                        lineNum: lineCounter++
+                    });
                 }
             }
-
-            // B. Find the preceding Minima (Start of THIS line)
-            let prevValley = null;
-            for (let j = minima.length - 1; j >= 0; j--) {
-                if (minima[j].index < currentPeak.index) {
-                    prevValley = minima[j];
-                    break;
-                }
-            }
-
-            if (!prevValley || !nextValley) continue;
-
-            // Check 1: Amplitude (Width of sweep or line width)
-            // Return Sweep Amplitude: Peak(Right) - NextValley(Left) > Threshold
-            const sweepAmp = currentPeak.value - nextValley.value;
-            if (sweepAmp < AMP_THRESHOLD) continue;
-
-            // REMOVED: Check 2: Return Sweep Velocity
-            // REMOVED: Check 3: Y-Trend
-
-            // Check 4: Reading Duration (PrevValley -> Peak)
-            const readDuration = currentPeak.t - prevValley.t;
-            if (readDuration < READING_MIN_DURATION) continue;
-
-            // Valid Line Detected: From PrevValley to CurrentPeak
-            validLines.push({
-                startIdx: prevValley.index,
-                endIdx: currentPeak.index,
-                lineNum: lineCounter++
-            });
         }
 
-        // Limit detected lines to actual total lines + 1 (if available)
-        // Find max line index from data context
+        // Cap lines
         let maxActualLines = 999;
         if (this.data.length > 0) {
-            // Check the last few data points for context lineIndex
             for (let k = this.data.length - 1; k >= 0; k--) {
                 if (this.data[k].lineIndex !== undefined && this.data[k].lineIndex !== null) {
                     maxActualLines = this.data[k].lineIndex + 1;
@@ -347,23 +379,13 @@ export class GazeDataManager {
                 }
             }
         }
+        if (validLines.length > maxActualLines) validLines.length = maxActualLines;
 
-        // Cap the validLines array
-        if (validLines.length > maxActualLines) {
-            console.log(`[GazeDataManager] Capping detected lines from ${validLines.length} to ${maxActualLines}`);
-            validLines.length = maxActualLines;
-        }
-
-        // 4. Mark Data for CSV
-        // Reset old markings
+        // Mark Data
         for (let i = 0; i < this.data.length; i++) delete this.data[i].detectedLineIndex;
-
         validLines.forEach(line => {
-            // Correct the lineNum if we capped (though slicing array handles it implicitly)
-            // line.lineNum is already set sequentially 1..N
             for (let k = line.startIdx; k <= line.endIdx; k++) {
-                // BUG FIX: Only mark if text was actually present (lineIndex is not null)
-                // This prevents "future reading" or phantom lines before text appears.
+                // Check if text existed
                 if (this.data[k].lineIndex !== undefined && this.data[k].lineIndex !== null) {
                     this.data[k].detectedLineIndex = line.lineNum;
                 }
@@ -371,92 +393,7 @@ export class GazeDataManager {
         });
 
         const count = validLines.length;
-        console.log(`[GazeDataManager] Advanced Line Detection: Found ${count} lines.`, validLines);
-        return count;
-    }
-
-    detectLinesMobile_Legacy_Unused() {
-        if (this.data.length < 10) return 0;
-
-        // 1. Gaussian Smoothing (Sigma = 3)
-        // Kernel generation: size = 6*sigma + 1 = 19
-        const sigma = 3;
-        const radius = Math.ceil(3 * sigma);
-        const kernelSize = 2 * radius + 1;
-        const kernel = new Float32Array(kernelSize);
-        let sumK = 0;
-
-        for (let i = 0; i < kernelSize; i++) {
-            const x = i - radius;
-            const val = Math.exp(-(x * x) / (2 * sigma * sigma));
-            kernel[i] = val;
-            sumK += val;
-        }
-        // Normalize
-        for (let i = 0; i < kernelSize; i++) kernel[i] /= sumK;
-
-        // Apply Convolution to X
-        const x1 = new Float32Array(this.data.length);
-        for (let i = 0; i < this.data.length; i++) {
-            let sum = 0;
-            let wSum = 0;
-            for (let k = 0; k < kernelSize; k++) {
-                const idx = i + (k - radius);
-                if (idx >= 0 && idx < this.data.length) {
-                    sum += this.data[idx].x * kernel[k];
-                    wSum += kernel[k];
-                }
-            }
-            x1[i] = sum / wSum;
-        }
-
-        // 2. Find Extremes
-        const maxima = [];
-        const minima = [];
-        const win = 10;
-        for (let i = win; i < x1.length - win; i++) {
-            let isMax = true;
-            let isMin = true;
-            for (let j = 1; j <= win; j++) {
-                if (x1[i] <= x1[i - j] || x1[i] <= x1[i + j]) isMax = false;
-                if (x1[i] >= x1[i - j] || x1[i] >= x1[i + j]) isMin = false;
-            }
-            if (isMax) maxima.push({ index: i, value: x1[i], t: this.data[i].t });
-            if (isMin) minima.push({ index: i, value: x1[i], t: this.data[i].t });
-        }
-
-        // 3. Regularity Assessment
-        const validPeaks = [];
-        const AMP_THRESHOLD = 50;
-        const TIME_THRESHOLD = 500;
-
-        for (let i = 0; i < maxima.length; i++) {
-            const max = maxima[i];
-            let prevMin = null;
-            // Find most recent preceding min
-            for (let j = minima.length - 1; j >= 0; j--) {
-                if (minima[j].t < max.t) {
-                    prevMin = minima[j];
-                    break;
-                }
-            }
-
-            if (prevMin) {
-                const amp = max.value - prevMin.value;
-                const duration = max.t - prevMin.t;
-
-                if (amp > AMP_THRESHOLD && duration > 200) {
-                    const lastValid = validPeaks[validPeaks.length - 1];
-                    // Ensure not duplicate of same line scan (or too close)
-                    if (!lastValid || (max.t - lastValid.t) > TIME_THRESHOLD) {
-                        validPeaks.push(max);
-                    }
-                }
-            }
-        }
-
-        const count = validPeaks.length;
-        console.log(`[GazeDataManager] Line Detection: Found ${count} lines.`, validPeaks);
+        console.log(`[GazeDataManager] V3 Line Detection: Found ${count} lines.`, validLines);
         return count;
     }
 }
