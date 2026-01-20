@@ -238,9 +238,10 @@ export class GazeDataManager {
         }
 
         const width = 1200;
-        const heightPerChart = 300;
+        const heightPerChart = 400;
+        const gap = 50;
         const charts = ['RawX', 'RawY', 'SmoothX', 'SmoothY', 'VelX', 'VelY', 'LineIndex', 'CharIndex', 'AlgoLineIndex'];
-        const totalHeight = heightPerChart * charts.length;
+        const totalHeight = (heightPerChart + gap) * charts.length;
 
         // Create a single large canvas to draw everything on
         const mainCanvas = document.createElement('canvas');
@@ -299,6 +300,7 @@ export class GazeDataManager {
                 options: {
                     responsive: false,
                     animation: false,
+                    layout: { padding: { left: 20, right: 40, top: 20, bottom: 20 } },
                     plugins: {
                         title: { display: true, text: chartName },
                         legend: { display: false }
@@ -347,7 +349,7 @@ export class GazeDataManager {
                 const chart = new Chart(tempCanvas, chartConfig);
                 setTimeout(() => {
                     // Draw temp canvas onto main canvas
-                    ctx.drawImage(tempCanvas, 0, i * heightPerChart);
+                    ctx.drawImage(tempCanvas, 0, i * (heightPerChart + gap));
                     chart.destroy();
                     resolve();
                 }, 100); // Small delay to ensure render
@@ -482,7 +484,7 @@ export class GazeDataManager {
 
                     // Validate 2: Duration Check (Too short reading is noise)
                     const duration = this.data[pMax.index].t - this.data[prevMinIdx].t;
-                    const MIN_DURATION = 1000; // ms (Stricter threshold: 1s)
+                    const MIN_DURATION = 500; // ms (Stricter threshold: 0.5s)
 
                     if (width > AMP_THRESHOLD && duration > MIN_DURATION) {
                         validLines.push({
@@ -560,7 +562,7 @@ export class GazeDataManager {
                 const width = bestMaxObj.value - minVal;
                 const duration = this.data[bestMaxObj.index].t - this.data[prevMinIdx].t;
                 const AMP_THRESHOLD = 100;
-                const MIN_DURATION = 1000;
+                const MIN_DURATION = 500;
 
                 if (width > AMP_THRESHOLD && duration > MIN_DURATION) {
                     validLines.push({
