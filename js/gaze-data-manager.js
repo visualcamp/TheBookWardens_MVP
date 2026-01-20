@@ -30,37 +30,8 @@ export class GazeDataManager {
         const x = gazeInfo.x;
         const y = gazeInfo.y;
 
-        // Ensure valid numbers
-        if (typeof x !== 'number' || typeof y !== 'number') return;
-
-        // 1. Gaussian Smoothing (x, y -> gx, gy)
-        this.buffer.push({ x, y });
-        if (this.buffer.length > 5) this.buffer.shift();
-
-        let gx = x, gy = y;
-        if (this.buffer.length === 5) {
-            let sumX = 0, sumY = 0, sumK = 0;
-            for (let i = 0; i < 5; i++) {
-                sumX += this.buffer[i].x * this.KERNEL[i];
-                sumY += this.buffer[i].y * this.KERNEL[i];
-                sumK += this.KERNEL[i];
-            }
-            gx = sumX / sumK;
-            gy = sumY / sumK;
-        }
-
-        // 2. Velocity Calculation (vx, vy & gvx, gvy)
-        let vx = 0, vy = 0, gvx = 0, gvy = 0;
-        const last = this.data[this.data.length - 1];
-        if (last) {
-            const dt = t - last.t;
-            if (dt > 0) {
-                vx = (x - last.x) / dt;
-                vy = (y - last.y) / dt;
-                gvx = (gx - last.gx) / dt;
-                gvy = (gy - last.gy) / dt;
-            }
-        }
+        // Ensure valid numbers (NaN or non-numbers check)
+        // Store as RAW, even if NaN or 0,0. Preprocessing will handle gaps.
 
         // 3. Eye Movement Classification
         // 0: Fixation, 2: Saccade, Others: Unknown
@@ -68,42 +39,15 @@ export class GazeDataManager {
         if (gazeInfo.eyemovementState === 0) type = 'Fixation';
         else if (gazeInfo.eyemovementState === 2) type = 'Saccade';
 
-        // --- Fallback: Velocity-based Identification (IVT) ---
-        // If SDK returns Unknown or doesn't support state, use velocity threshold.
-        // Threshold: e.g., 0.5 px/ms (approx 30 deg/sec depending on geometry, but pixels are easier here)
-        // Adjust threshold as needed.
-        if (type === 'Unknown') {
-            const v = Math.sqrt(vx * vx + vy * vy);
-            // Simple threshold: if velocity is very low, it's a fixation.
-            // Note: v is in pixels / ms. 
-            // 0.5 px/ms = 500 px/sec. 
-            if (v < 0.5) type = 'Fixation';
-            else type = 'Saccade';
-        }
-
-        // 4. Extremes (Simple placeholder logic)
-        // Ideally needs a window to check if current point is peak/valley compared to neighbors
-        let isPeakX = false;
-        let isValleyX = false;
-        if (this.data.length >= 2) {
-            const prev = this.data[this.data.length - 1];
-            const prev2 = this.data[this.data.length - 2];
-            // Simple check: if direction changed? 
-            // Or strictly local maxima/minima? 
-            // Current point isn't peak until we see the "next" point go down.
-            // So we actually detect peaks for the *previous* point here, or delay processing.
-            // For now, leaving as placeholder or naive check against immediate history.
-        }
+        // We will calculate velocity in post-processing to refine type if needed.
 
         const entry = {
             t,
             x, y,
-            gx, gy,
-            vx, vy,
-            gvx, gvy,
+            // Pre-allocate fields for post-processing
+            gx: null, gy: null,
+            vx: null, vy: null,
             type,
-            isPeakX,
-            isValleyX,
             // Original raw fixation from SDK if present
             sdkFixationX: gazeInfo.fixationX,
             sdkFixationY: gazeInfo.fixationY,
@@ -115,6 +59,103 @@ export class GazeDataManager {
 
         // Debug Log (Every ~1 sec aka 60 frames)
         if (this.data.length % 60 === 0) console.log("[GazeData] Count:", this.data.length, "Latest:", entry);
+    }
+
+    /**
+     * Post-processing: Interpolation -> Smoothing -> Velocity
+     * Called before Line Detection or CSV Export
+     */
+    preprocessData() {
+        if (this.data.length < 2) return;
+
+        // 1. Interpolation (Fill Gaps / NaN / 0,0)
+        for (let i = 0; i < this.data.length; i++) {
+            const curr = this.data[i];
+            const isMissing = isNaN(curr.x) || isNaN(curr.y) || (curr.x === 0 && curr.y === 0) || typeof curr.x !== 'number';
+
+            if (isMissing) {
+                // Find prev valid
+                let prevIdx = i - 1;
+                while (prevIdx >= 0) {
+                    const p = this.data[prevIdx];
+                    if (typeof p.x === 'number' && !isNaN(p.x) && !isNaN(p.y) && (p.x !== 0 || p.y !== 0)) break;
+                    prevIdx--;
+                }
+
+                // Find next valid
+                let nextIdx = i + 1;
+                while (nextIdx < this.data.length) {
+                    const n = this.data[nextIdx];
+                    if (typeof n.x === 'number' && !isNaN(n.x) && !isNaN(n.y) && (n.x !== 0 || n.y !== 0)) break;
+                    nextIdx++;
+                }
+
+                if (prevIdx >= 0 && nextIdx < this.data.length) {
+                    const p = this.data[prevIdx];
+                    const n = this.data[nextIdx];
+                    const ratio = (curr.t - p.t) / (n.t - p.t);
+                    curr.x = p.x + (n.x - p.x) * ratio;
+                    curr.y = p.y + (n.y - p.y) * ratio;
+                } else if (prevIdx >= 0) {
+                    curr.x = this.data[prevIdx].x;
+                    curr.y = this.data[prevIdx].y;
+                } else if (nextIdx < this.data.length) {
+                    curr.x = this.data[nextIdx].x;
+                    curr.y = this.data[nextIdx].y;
+                }
+            }
+        }
+
+        // 2. Gaussian Smoothing (Sigma=3)
+        // Kernel: size = 6*3 + 1 = 19
+        const sigma = 3;
+        const radius = Math.ceil(3 * sigma);
+        const kernelSize = 2 * radius + 1;
+        const kernel = new Float32Array(kernelSize);
+        let sumK = 0;
+        for (let i = 0; i < kernelSize; i++) {
+            const x = i - radius;
+            const val = Math.exp(-(x * x) / (2 * sigma * sigma));
+            kernel[i] = val;
+            sumK += val;
+        }
+        for (let i = 0; i < kernelSize; i++) kernel[i] /= sumK;
+
+        // Apply Smoothing to X and Y
+        // We can write directly to data[i].gx, data[i].gy
+        // But need to read from raw x/y.
+        // To avoid boundary issues, handle edges carefully or just clamp.
+        for (let i = 0; i < this.data.length; i++) {
+            let sumX = 0, sumY = 0, wSum = 0;
+            for (let k = 0; k < kernelSize; k++) {
+                const idx = i + (k - radius);
+                if (idx >= 0 && idx < this.data.length) {
+                    sumX += this.data[idx].x * kernel[k];
+                    sumY += this.data[idx].y * kernel[k];
+                    wSum += kernel[k];
+                }
+            }
+            this.data[i].gx = sumX / wSum;
+            this.data[i].gy = sumY / wSum;
+        }
+
+        // 3. Velocity Calculation (Based on Smoothed Data)
+        // Simple finite difference: v[i] = (p[i] - p[i-1]) /dt
+        for (let i = 0; i < this.data.length; i++) {
+            if (i === 0) {
+                this.data[i].vx = 0;
+                this.data[i].vy = 0;
+            } else {
+                const dt = this.data[i].t - this.data[i - 1].t;
+                if (dt > 0) {
+                    this.data[i].vx = (this.data[i].gx - this.data[i - 1].gx) / dt; // px/ms
+                    this.data[i].vy = (this.data[i].gy - this.data[i - 1].gy) / dt;
+                } else {
+                    this.data[i].vx = 0;
+                    this.data[i].vy = 0;
+                }
+            }
+        }
     }
 
     setContext(ctx) {
@@ -150,10 +191,10 @@ export class GazeDataManager {
             const row = [
                 d.t,
                 d.x, d.y,
-                d.gx !== undefined ? d.gx.toFixed(2) : "",
-                d.gy !== undefined ? d.gy.toFixed(2) : "",
-                d.vx !== undefined ? d.vx.toFixed(4) : "",
-                d.vy !== undefined ? d.vy.toFixed(4) : "",
+                d.gx !== undefined && d.gx !== null ? d.gx.toFixed(2) : "",
+                d.gy !== undefined && d.gy !== null ? d.gy.toFixed(2) : "",
+                d.vx !== undefined && d.vx !== null ? d.vx.toFixed(4) : "",
+                d.vy !== undefined && d.vy !== null ? d.vy.toFixed(4) : "",
                 d.type,
                 (d.lineIndex !== undefined && d.lineIndex !== null) ? d.lineIndex : "",
                 (d.charIndex !== undefined && d.charIndex !== null) ? d.charIndex : "",
@@ -189,86 +230,14 @@ export class GazeDataManager {
         if (this.data.length < 10) return 0;
 
         // ---------------------------------------------------------
-        // Step 1. Data Interpolation (Fill Gaps)
+        // Step 0. Preprocessing (Interpolation, Smoothing, Velocity)
         // ---------------------------------------------------------
-        // Linear interpolation for missing/NaN x, y values
-        for (let i = 0; i < this.data.length; i++) {
-            const curr = this.data[i];
-            // Treat 0,0 or NaN as missing. SeeSo SDK might return 0 or NaN.
-            const isMissing = isNaN(curr.x) || isNaN(curr.y) || (curr.x === 0 && curr.y === 0);
-
-            if (isMissing) {
-                // Find prev valid
-                let prevIdx = i - 1;
-                while (prevIdx >= 0) {
-                    const p = this.data[prevIdx];
-                    if (!isNaN(p.x) && !isNaN(p.y) && (p.x !== 0 || p.y !== 0)) break;
-                    prevIdx--;
-                }
-
-                // Find next valid
-                let nextIdx = i + 1;
-                while (nextIdx < this.data.length) {
-                    const n = this.data[nextIdx];
-                    if (!isNaN(n.x) && !isNaN(n.y) && (n.x !== 0 || n.y !== 0)) break;
-                    nextIdx++;
-                }
-
-                if (prevIdx >= 0 && nextIdx < this.data.length) {
-                    const p = this.data[prevIdx];
-                    const n = this.data[nextIdx];
-                    const ratio = (curr.t - p.t) / (n.t - p.t);
-                    curr.x = p.x + (n.x - p.x) * ratio;
-                    curr.y = p.y + (n.y - p.y) * ratio;
-                } else if (prevIdx >= 0) {
-                    curr.x = this.data[prevIdx].x;
-                    curr.y = this.data[prevIdx].y;
-                } else if (nextIdx < this.data.length) {
-                    curr.x = this.data[nextIdx].x;
-                    curr.y = this.data[nextIdx].y;
-                }
-            }
-        }
+        // Ensure data fields (gx, vx) are populated
+        this.preprocessData();
 
         // ---------------------------------------------------------
-        // Step 2. Gaussian Smoothing & Velocity Calculation
+        // Step 1. Setup Time Window (Start Text - End Text + 2s)
         // ---------------------------------------------------------
-        const sigma = 3;
-        const radius = Math.ceil(3 * sigma);
-        const kernelSize = 2 * radius + 1;
-        const kernel = new Float32Array(kernelSize);
-        let sumK = 0;
-        for (let i = 0; i < kernelSize; i++) {
-            const x = i - radius;
-            const val = Math.exp(-(x * x) / (2 * sigma * sigma));
-            kernel[i] = val;
-            sumK += val;
-        }
-        for (let i = 0; i < kernelSize; i++) kernel[i] /= sumK;
-
-        const x1 = new Float32Array(this.data.length);
-        const vx = new Float32Array(this.data.length);
-
-        // Apply Smoothing to X
-        for (let i = 0; i < this.data.length; i++) {
-            let sumX = 0, wSum = 0;
-            for (let k = 0; k < kernelSize; k++) {
-                const idx = i + (k - radius);
-                if (idx >= 0 && idx < this.data.length) {
-                    sumX += this.data[idx].x * kernel[k];
-                    wSum += kernel[k];
-                }
-            }
-            x1[i] = sumX / wSum;
-
-            // Calculate Vx (after smoothing)
-            if (i > 0 && (this.data[i].t - this.data[i - 1].t) > 0) {
-                // px/ms
-                vx[i] = (x1[i] - x1[i - 1]) / (this.data[i].t - this.data[i - 1].t);
-            }
-        }
-
-        // Time Window Logic (Start Text - End Text + 2s)
         let tStart = -1, tEnd = -1;
         for (let i = 0; i < this.data.length; i++) {
             if (this.data[i].lineIndex !== undefined && this.data[i].lineIndex !== null) {
@@ -279,7 +248,7 @@ export class GazeDataManager {
         if (tEnd !== -1) tEnd += 2000;
 
         // ---------------------------------------------------------
-        // Step 3. Find Extremes (Wide Window)
+        // Step 2. Find Extremes (Wide Window)
         // ---------------------------------------------------------
         const posMaxima = []; // X Maxima (Line End Candidates)
         const velMinima = []; // Vx Minima (Max Left-Speed Candidates)
@@ -288,32 +257,36 @@ export class GazeDataManager {
         const winPos = 30;
         const winVel = 5; // Velocity peak is sharp
 
-        for (let i = winPos; i < x1.length - winPos; i++) {
+        // Loop through data (skipping edges for window)
+        for (let i = winPos; i < this.data.length - winPos; i++) {
             // Check Time Window
             const t = this.data[i].t;
             if (tStart !== -1 && (t < tStart || t > tEnd)) continue;
 
+            // Use Pre-calculated Smoothed Data (gx) and Velocity (vx)
+            const xVal = this.data[i].gx;
+            const vxVal = this.data[i].vx;
+
+            if (xVal === null || xVal === undefined) continue;
+
             // A. Position Maxima
             let isMax = true;
             for (let j = 1; j <= winPos; j++) {
-                if (x1[i] <= x1[i - j] || x1[i] <= x1[i + j]) isMax = false;
+                if (xVal <= this.data[i - j].gx || xVal <= this.data[i + j].gx) isMax = false;
             }
-            if (isMax) posMaxima.push({ index: i, value: x1[i], t: t });
-        }
+            if (isMax) posMaxima.push({ index: i, value: xVal, t: t });
 
-        // B. Velocity Minima (Negative Peak = Fast Left Move)
-        for (let i = winVel; i < vx.length - winVel; i++) {
-            const t = this.data[i].t;
-            if (tStart !== -1 && (t < tStart || t > tEnd)) continue;
+            // B. Velocity Minima (Negative Peak = Fast Left Move)
+            // Skip check if too close to edge for velocity win
+            if (i < winVel || i >= this.data.length - winVel) continue;
 
             let isVelMin = true;
             for (let j = 1; j <= winVel; j++) {
-                if (vx[i] >= vx[i - j] || vx[i] >= vx[i + j]) isVelMin = false;
+                if (vxVal >= this.data[i - j].vx || vxVal >= this.data[i + j].vx) isVelMin = false;
             }
             // Must be significantly negative (e.g. < -0.1 px/ms)
-            // Typical saccade speed > 0.1~0.5 px/ms depending on distance.
-            if (isVelMin && vx[i] < -0.1) {
-                velMinima.push({ index: i, value: vx[i], t: t });
+            if (isVelMin && vxVal < -0.1) {
+                velMinima.push({ index: i, value: vxVal, t: t });
             }
         }
 
@@ -323,7 +296,7 @@ export class GazeDataManager {
         velMinima.forEach(m => this.data[m.index].extrema = "VelMin");
 
         // ---------------------------------------------------------
-        // Step 4. Validate Lines using Velocity
+        // Step 3. Validate Lines using Velocity
         // ---------------------------------------------------------
         const validLines = [];
         let lineCounter = 1;
@@ -341,20 +314,20 @@ export class GazeDataManager {
 
             if (matchingVel) {
                 // Return Sweep Detected!
-                // Start of line: Find local minima preceding this max
-                // (Looking backwards from pMax until data goes up or hits previous line limit)
+                // Start of line: Find local minima preceding this max (Smoothed X)
                 let prevMinIdx = 0;
                 let minVal = 9999;
 
                 // Define lower bound for search
                 const lastLineEnd = (validLines.length > 0) ? validLines[validLines.length - 1].endIdx : 0;
-                const searchLimit = Math.max(0, pMax.index - 200); // Don't search back too far (e.g. 200 samples ~ 3-6 sec)
+                const searchLimit = Math.max(0, pMax.index - 200);
                 const finalLimit = Math.max(lastLineEnd + 1, searchLimit);
 
-                // Simple Min-Finding (absolute min in the interval [lastLineEnd ... pMax])
+                // Simple Min-Finding
                 for (let k = pMax.index; k >= finalLimit; k--) {
-                    if (x1[k] < minVal) {
-                        minVal = x1[k];
+                    const val = this.data[k].gx;
+                    if (val !== null && val < minVal) {
+                        minVal = val;
                         prevMinIdx = k;
                     }
                 }
