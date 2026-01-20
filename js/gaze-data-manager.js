@@ -237,15 +237,15 @@ export class GazeDataManager {
             return;
         }
 
-        // Configuration matching Matplotlib 5x2 grid
+        // Configuration: 2x2 grid for requested 4 charts
         const cols = 2;
-        const rows = 5;
+        const rows = 2;
         const chartWidth = 1000;
         const chartHeight = 400;
         const totalWidth = chartWidth * cols;
         const totalHeight = chartHeight * rows;
 
-        const charts = ['RawX', 'RawY', 'SmoothX', 'SmoothY', 'VelX', 'VelY', 'LineIndex', 'CharIndex', 'AlgoLineIndex'];
+        const charts = ['SmoothX', 'SmoothY', 'LineIndex', 'AlgoLineIndex'];
 
         // Create a single large canvas to draw everything on
         const mainCanvas = document.createElement('canvas');

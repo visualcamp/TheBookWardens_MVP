@@ -481,8 +481,8 @@ Game.typewriter = {
                     }
                 }
 
-                // 4. Proceed to Visuals
-                this.showVillainQuiz();
+                // 4. Proceed to Gaze Replay
+                this.startGazeReplay();
             }, 3000);
         } else {
             // Speed Logic
@@ -911,6 +911,153 @@ Game.typewriter = {
     },
 
     // --- Gaze Feedback Logic ---
+    // --- Gaze Replay Logic ---
+    startGazeReplay() {
+        console.log("[Game] Starting Gaze Replay...");
+        const rawData = window.gazeDataManager.getAllData();
+        const validData = rawData.filter(d => d.detectedLineIndex !== undefined && d.detectedLineIndex !== null);
+
+        if (validData.length === 0) {
+            console.warn("No valid gaze data for replay.");
+            this.showVillainQuiz();
+            return;
+        }
+
+        const visualLines = this.getVisualLines(this.currentP);
+
+        const replayData = [];
+        const startTime = validData[0].t;
+        const lineGroups = {};
+
+        // Find Min/Max SmoothX for each line
+        validData.forEach(d => {
+            const idx = d.detectedLineIndex;
+            if (!lineGroups[idx]) lineGroups[idx] = { minX: 99999, maxX: -99999 };
+            if (d.gx < lineGroups[idx].minX) lineGroups[idx].minX = d.gx;
+            if (d.gx > lineGroups[idx].maxX) lineGroups[idx].maxX = d.gx;
+        });
+
+        // Map to Display Coordinates
+        validData.forEach(d => {
+            const idx = d.detectedLineIndex;
+            const visualIdx = idx - 1; // 1-based AlgoLineIndex to 0-based Visual Lines
+            if (visualIdx >= 0 && visualIdx < visualLines.length) {
+                const vLine = visualLines[visualIdx];
+                const gInfo = lineGroups[idx];
+
+                let normX = 0;
+                if (gInfo.maxX > gInfo.minX) {
+                    normX = (d.gx - gInfo.minX) / (gInfo.maxX - gInfo.minX);
+                }
+                normX = Math.max(0, Math.min(1, normX));
+
+                const Dx = vLine.left + normX * (vLine.right - vLine.left);
+                const Dy = vLine.top + (vLine.bottom - vLine.top) / 2;
+
+                replayData.push({
+                    t: d.t - startTime,
+                    Dx: Dx,
+                    Dy: Dy
+                });
+            }
+        });
+
+        if (replayData.length === 0) {
+            console.warn("Replay data empty after mapping.");
+            this.showVillainQuiz();
+            return;
+        }
+
+        // Create Overlay
+        const overlay = document.createElement('canvas');
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.pointerEvents = 'none';
+        overlay.style.zIndex = '9999';
+        document.body.appendChild(overlay);
+
+        overlay.width = window.innerWidth;
+        overlay.height = window.innerHeight;
+
+        const ctx = overlay.getContext('2d');
+        const totalDuration = replayData[replayData.length - 1].t;
+        let startAnimTime = null;
+
+        const animate = (timestamp) => {
+            if (!startAnimTime) startAnimTime = timestamp;
+            const progress = timestamp - startAnimTime;
+
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+            let pt = null;
+            for (let i = 0; i < replayData.length; i++) {
+                if (replayData[i].t > progress) {
+                    pt = replayData[i > 0 ? i - 1 : 0];
+                    break;
+                }
+            }
+            if (!pt && progress >= totalDuration) pt = replayData[replayData.length - 1];
+
+            if (pt) {
+                ctx.beginPath();
+                ctx.arc(pt.Dx, pt.Dy, 10, 0, 2 * Math.PI);
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.5)';
+                ctx.fill();
+            }
+
+            if (progress < totalDuration) {
+                requestAnimationFrame(animate);
+            } else {
+                setTimeout(() => {
+                    if (document.body.contains(overlay)) document.body.removeChild(overlay);
+                    this.showVillainQuiz();
+                }, 2000);
+            }
+        };
+        requestAnimationFrame(animate);
+    },
+
+    getVisualLines(container) {
+        if (!container) return [];
+        const range = document.createRange();
+        range.selectNodeContents(container);
+        const rects = range.getClientRects();
+        const lines = [];
+        let currentLineY = -1;
+        let currentLineRects = [];
+
+        for (let i = 0; i < rects.length; i++) {
+            const r = rects[i];
+            // Group rects on the same visual line (allow 5px variance)
+            if (Math.abs(r.top - currentLineY) > 5) {
+                if (currentLineRects.length > 0) {
+                    lines.push({
+                        top: currentLineRects[0].top,
+                        bottom: currentLineRects[0].bottom,
+                        left: Math.min(...currentLineRects.map(rx => rx.left)),
+                        right: Math.max(...currentLineRects.map(rx => rx.right))
+                    });
+                }
+                currentLineRects = [r];
+                currentLineY = r.top;
+            } else {
+                currentLineRects.push(r);
+            }
+        }
+        if (currentLineRects.length > 0) {
+            lines.push({
+                top: currentLineRects[0].top,
+                bottom: currentLineRects[0].bottom,
+                left: Math.min(...currentLineRects.map(rx => rx.left)),
+                right: Math.max(...currentLineRects.map(rx => rx.right))
+            });
+        }
+        return lines;
+    },
+
     hideDebugVisuals() {
         if (this.debugEl100) this.debugEl100.style.display = "none";
         if (this.debugEl300) this.debugEl300.style.display = "none";
