@@ -962,6 +962,12 @@ Game.typewriter = {
         const rawData = window.gazeDataManager.getAllData();
         const validData = rawData.filter(d => d.detectedLineIndex !== undefined && d.detectedLineIndex !== null);
 
+        // Find minimum detected line index for auto-alignment
+        let minLineIdx = 9999;
+        validData.forEach(d => {
+            if (d.detectedLineIndex < minLineIdx) minLineIdx = d.detectedLineIndex;
+        });
+
         if (validData.length === 0) {
             console.warn("No valid gaze data for replay.");
             this.showVillainQuiz();
@@ -1005,7 +1011,8 @@ Game.typewriter = {
 
             // B. Visual Mapping
             const idx = d.detectedLineIndex;
-            const visualIdx = idx - 1;
+            // Align start of data to start of visual lines
+            const visualIdx = idx - minLineIdx;
 
             // Use gx for simple gaze replay
             const valX = d.gx;
