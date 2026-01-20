@@ -967,12 +967,9 @@ Game.typewriter = {
         }
 
         const visualLines = this.getVisualLines(this.currentP);
-
-        const replayData = [];
-        const startTime = validData[0].t;
         const lineGroups = {};
 
-        // Find Min/Max SmoothX for each line
+        // 1. Min/Max X per line
         validData.forEach(d => {
             const idx = d.detectedLineIndex;
             if (!lineGroups[idx]) lineGroups[idx] = { minX: 99999, maxX: -99999 };
@@ -980,39 +977,92 @@ Game.typewriter = {
             if (d.gx > lineGroups[idx].maxX) lineGroups[idx].maxX = d.gx;
         });
 
-        // Map to Display Coordinates
-        validData.forEach(d => {
+        // 2. Build Replay Data (Timestamp Compression + Fixation Anchoring)
+        const replayData = [];
+        let virtualTime = 0;
+        let lastRawT = validData[0].t;
+        let lastLineIdx = validData[0].detectedLineIndex;
+
+        // Fixation Tracking
+        let inFixation = false;
+        let fixAnchor = { x: 0, y: 0, startTime: 0 };
+
+        validData.forEach((d, i) => {
+            // A. Time Compression
+            if (i > 0) {
+                const rawDelta = d.t - lastRawT;
+                let effectiveDelta = rawDelta;
+
+                // If Line Changed (or Return Sweep), clamp delay
+                if (d.detectedLineIndex !== lastLineIdx) {
+                    // Force immediate transition (max 50ms)
+                    if (rawDelta > 50) effectiveDelta = 50;
+                }
+                // Optional: Clamp very long pauses within line too?
+                // For now, let's stick to line transition as per request.
+                // But user said "waits a long time... then moves". 
+                // Let's cap any delta at 100ms to speed up overall replay? 
+                // User requirement: "timestamp를 조절해서 개행시점에 바로 넘어가도록" -> Target Line Change.
+
+                virtualTime += effectiveDelta;
+            }
+            lastRawT = d.t;
+            lastLineIdx = d.detectedLineIndex;
+
+            // B. Coordinate Mapping
             const idx = d.detectedLineIndex;
-            const visualIdx = idx - 1; // 1-based AlgoLineIndex to 0-based Visual Lines
+            const visualIdx = idx - 1;
+            let Dx = 0, Dy = 0;
+
             if (visualIdx >= 0 && visualIdx < visualLines.length) {
                 const vLine = visualLines[visualIdx];
                 const gInfo = lineGroups[idx];
-
                 let normX = 0;
                 if (gInfo.maxX > gInfo.minX) {
                     normX = (d.gx - gInfo.minX) / (gInfo.maxX - gInfo.minX);
                 }
                 normX = Math.max(0, Math.min(1, normX));
-
-                const Dx = vLine.left + normX * (vLine.right - vLine.left);
-                // Visual adjustment: Move up to match text center better (bbox includes descent)
-                const Dy = vLine.top + (vLine.bottom - vLine.top) * 0.35;
-
-                replayData.push({
-                    t: d.t - startTime,
-                    Dx: Dx,
-                    Dy: Dy
-                });
+                Dx = vLine.left + normX * (vLine.right - vLine.left);
+                Dy = vLine.top + (vLine.bottom - vLine.top) * 0.35;
             }
+
+            // C. Fixation Logic (Anchor & Type)
+            const isFixation = (d.type === 'Fixation');
+            let renderX = Dx;
+            let renderY = Dy;
+            let radiusBonus = 0;
+
+            if (isFixation) {
+                if (!inFixation) {
+                    // Start of new fixation
+                    inFixation = true;
+                    fixAnchor = { x: Dx, y: Dy, startTime: virtualTime };
+                }
+                // Lock coords to anchor
+                renderX = fixAnchor.x;
+                renderY = fixAnchor.y;
+
+                // Radius grows with time (0.05px per ms of fixation)
+                radiusBonus = (virtualTime - fixAnchor.startTime) * 0.05;
+            } else {
+                inFixation = false;
+            }
+
+            replayData.push({
+                t: virtualTime,
+                x: renderX,
+                y: renderY,
+                r: 10 + radiusBonus, // Base radius 10
+                type: d.type
+            });
         });
 
         if (replayData.length === 0) {
-            console.warn("Replay data empty after mapping.");
             this.showVillainQuiz();
             return;
         }
 
-        // Create Overlay
+        // 3. Render Loop
         const overlay = document.createElement('canvas');
         overlay.style.position = 'fixed';
         overlay.style.top = '0';
@@ -1036,7 +1086,9 @@ Game.typewriter = {
 
             ctx.clearRect(0, 0, overlay.width, overlay.height);
 
+            // Find current point
             let pt = null;
+            // Simple linear search is okay for small N
             for (let i = 0; i < replayData.length; i++) {
                 if (replayData[i].t > progress) {
                     pt = replayData[i > 0 ? i - 1 : 0];
@@ -1047,18 +1099,28 @@ Game.typewriter = {
 
             if (pt) {
                 ctx.beginPath();
-                ctx.arc(pt.Dx, pt.Dy, 10, 0, 2 * Math.PI);
+                // Draw Circle
+                ctx.arc(pt.x, pt.y, pt.r, 0, 2 * Math.PI);
+
+                // Green for all, maybe darker border?
                 ctx.fillStyle = 'rgba(0, 255, 0, 0.5)';
                 ctx.fill();
+
+                // Optional: Add stroke for better visibility of expanding circle
+                if (pt.type === 'Fixation') {
+                    ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
             }
 
-            if (progress < totalDuration) {
+            if (progress < totalDuration + 500) { // +500ms buffer at end
                 requestAnimationFrame(animate);
             } else {
                 setTimeout(() => {
                     if (document.body.contains(overlay)) document.body.removeChild(overlay);
                     this.showVillainQuiz();
-                }, 2000);
+                }, 500); // Quick exit after done
             }
         };
         requestAnimationFrame(animate);
