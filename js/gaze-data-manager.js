@@ -380,262 +380,152 @@ export class GazeDataManager {
     }
 
     // --- Line Detection Algorithm V3 (Interpolation + Velocity Check) ---
+    // --- Line Detection Algorithm V4 (Trend Line & Pattern Match) ---
     detectLinesMobile() {
         if (this.data.length < 10) return 0;
 
         // ---------------------------------------------------------
-        // Step 0. Preprocessing (Interpolation, Smoothing, Velocity)
+        // Step 0. Preprocessing (Interpolation, Smoothing)
         // ---------------------------------------------------------
-        // Ensure data fields (gx, vx) are populated
         this.preprocessData();
 
         // ---------------------------------------------------------
-        // Step 1. Setup Time Window (Start Text - End Text + 2s)
+        // Step 1. Find All Extrema (Valleys & Peaks)
         // ---------------------------------------------------------
-        let tStart = -1, tEnd = -1;
-        for (let i = 0; i < this.data.length; i++) {
-            if (this.data[i].lineIndex !== undefined && this.data[i].lineIndex !== null) {
-                if (tStart === -1) tStart = this.data[i].t;
-                tEnd = this.data[i].t;
+        const win = 10; // Window size ~160ms
+        const candidates = []; // { type: 'Valley'|'Peak', index, t, val }
+
+        for (let i = win; i < this.data.length - win; i++) {
+            const currVal = this.data[i].gx; // Use Smoothed X (RawX with Gaussian)
+            if (currVal === null || currVal === undefined) continue;
+
+            // Check Valley (Local Min)
+            let isMin = true;
+            for (let j = 1; j <= win; j++) {
+                if (currVal >= this.data[i - j].gx || currVal >= this.data[i + j].gx) {
+                    isMin = false; break;
+                }
             }
-        }
-        if (tEnd !== -1) tEnd += 2000;
+            if (isMin) candidates.push({ type: 'Valley', index: i, t: this.data[i].t, val: currVal });
 
-        // ---------------------------------------------------------
-        // Step 2. Find Extremes (Wide Window)
-        // ---------------------------------------------------------
-        const posMaxima = []; // X Maxima (Line End Candidates)
-        const velMinima = []; // Vx Minima (Max Left-Speed Candidates)
-
-        // Window modified: 15 -> 10 samples (~160ms) to better catch subtle peaks
-        const winPos = 10;
-        const winVel = 5; // Velocity peak is sharp
-
-        // Loop through data (skipping edges for window)
-        for (let i = winPos; i < this.data.length - winPos; i++) {
-            // Check Time Window
-            const t = this.data[i].t;
-            if (tStart !== -1 && (t < tStart || t > tEnd)) continue;
-
-            // Use Pre-calculated Smoothed Data (gx) and Velocity (vx)
-            const xVal = this.data[i].gx;
-            const vxVal = this.data[i].vx;
-
-            if (xVal === null || xVal === undefined) continue;
-
-            // A. Position Maxima
+            // Check Peak (Local Max)
             let isMax = true;
-            for (let j = 1; j <= winPos; j++) {
-                if (xVal <= this.data[i - j].gx || xVal <= this.data[i + j].gx) isMax = false;
+            for (let j = 1; j <= win; j++) {
+                if (currVal <= this.data[i - j].gx || currVal <= this.data[i + j].gx) {
+                    isMax = false; break;
+                }
             }
-            if (isMax) posMaxima.push({ index: i, value: xVal, t: t });
-
-            // B. Velocity Minima (Negative Peak = Fast Left Move)
-            // Skip check if too close to edge for velocity win
-            if (i < winVel || i >= this.data.length - winVel) continue;
-
-            let isVelMin = true;
-            for (let j = 1; j <= winVel; j++) {
-                if (vxVal >= this.data[i - j].vx || vxVal >= this.data[i + j].vx) isVelMin = false;
-            }
-            // Must be significantly negative (e.g. < -0.1 px/ms)
-            if (isVelMin && vxVal < -0.1) {
-                velMinima.push({ index: i, value: vxVal, t: t });
-            }
+            if (isMax) candidates.push({ type: 'Peak', index: i, t: this.data[i].t, val: currVal });
         }
 
-        // Mark Extrema for Debug/CSV
-        // Reset markings logic:
-        // 1. PosMax: Line End (Orange)
-        // 2. LineStart: Line Start (Blue - replaces VelMin for visual clarity)
-        for (let i = 0; i < this.data.length; i++) delete this.data[i].extrema;
-
-        // We will mark PosMax and LineStart within the loop below as we confirm them.
+        if (candidates.length < 2) return 0;
 
         // ---------------------------------------------------------
-        // Step 4. Validate Lines using Velocity
+        // Step 2 & 3. Calculate Trend Lines (Top 3 Avg)
+        // ---------------------------------------------------------
+        // Filter Peaks and Valleys
+        const allPeaks = candidates.filter(c => c.type === 'Peak').map(c => c.val);
+        const allValleys = candidates.filter(c => c.type === 'Valley').map(c => c.val);
+
+        if (allPeaks.length === 0 || allValleys.length === 0) return 0;
+
+        // Get Top 3 Peaks (Descending)
+        allPeaks.sort((a, b) => b - a);
+        const top3Peaks = allPeaks.slice(0, 3);
+        const peakTrend = top3Peaks.reduce((sum, v) => sum + v, 0) / top3Peaks.length;
+
+        // Get Bottom 3 Valleys (Ascending)
+        allValleys.sort((a, b) => a - b);
+        const bottom3Valleys = allValleys.slice(0, 3);
+        const valleyTrend = bottom3Valleys.reduce((sum, v) => sum + v, 0) / bottom3Valleys.length;
+
+        // ---------------------------------------------------------
+        // Step 4. Calculate Reference Distance
+        // ---------------------------------------------------------
+        const trendDistance = peakTrend - valleyTrend;
+        // Safety check: if distance is too small (e.g. noise), avoid faulty detection
+        if (trendDistance < 50) {
+            console.warn("[LineDetection V4] Trend distance too small:", trendDistance);
+            return 0;
+        }
+
+        console.log(`[LineDetection V4] PeakTrend: ${peakTrend.toFixed(1)}, ValleyTrend: ${valleyTrend.toFixed(1)}, Dist: ${trendDistance.toFixed(1)}`);
+
+        // ---------------------------------------------------------
+        // Step 5, 6, 7. Validate Line Segments
         // ---------------------------------------------------------
         const validLines = [];
         let lineCounter = 1;
 
-        // Strategy: Maxima -> Look for close Velocity Minima -> Confirm Return Sweep
-        for (let i = 0; i < posMaxima.length; i++) {
-            const pMax = posMaxima[i];
+        // We assume a line starts with a Valley and ends with a Peak.
+        // Process extrema in temporal order.
 
-            // 1. Find nearest Velocity Minima shortly AFTER this Maxima
-            // Return sweep usually happens 0~1200ms (increased) to account for pauses.
-            const searchWindowMs = 1200;
-            const matchingVel = velMinima.find(v =>
-                v.t > pMax.t && v.t < pMax.t + searchWindowMs
-            );
+        let lastValley = null;
 
-            if (matchingVel) {
-                // Return Sweep Detected!
-                // Start of line: Find local minima preceding this max (Smoothed X)
-                let prevMinIdx = 0;
-                let minVal = 9999;
+        for (let k = 0; k < candidates.length; k++) {
+            const item = candidates[k];
 
-                // Define lower bound for search
-                const lastLineEnd = (validLines.length > 0) ? validLines[validLines.length - 1].endIdx : 0;
-                const searchLimit = Math.max(0, pMax.index - 200);
-                const finalLimit = Math.max(lastLineEnd + 1, searchLimit);
+            if (item.type === 'Valley') {
+                // Potential Line Start
+                lastValley = item;
+            } else if (item.type === 'Peak') {
+                // Potential Line End
+                if (lastValley) {
+                    // Check logic
+                    const timeDiff = item.t - lastValley.t;
+                    const distDiff = item.val - lastValley.val;
 
-                // Simple Min-Finding
-                for (let k = pMax.index; k >= finalLimit; k--) {
-                    const val = this.data[k].gx;
-                    if (val !== null && val < minVal) {
-                        minVal = val;
-                        prevMinIdx = k;
-                    }
-                }
+                    // Condition 5: Time > 500ms
+                    const isTimeValid = timeDiff >= 500;
 
-                // Validate 1: Is start point after the previous line?
-                if (prevMinIdx > lastLineEnd) {
-                    // Check Width (PosMax - MinVal) using SmoothX (gx)
-                    // Note: minVal is already found above from gx
-                    const width = this.data[pMax.index].gx - minVal;
-                    const AMP_THRESHOLD = 100; // 100px threshold
+                    // Condition 6: Distance > 50% of Trend Distance
+                    const isDistValid = distDiff >= (trendDistance * 0.5);
 
-                    // Validate 2: Duration Check (Too short reading is noise)
-                    const duration = this.data[pMax.index].t - this.data[prevMinIdx].t;
-                    const MIN_DURATION = 500; // ms (Stricter threshold: 0.5s)
-
-                    if (width > AMP_THRESHOLD && duration > MIN_DURATION) {
+                    if (isTimeValid && isDistValid) {
+                        // Found a valid line!
                         validLines.push({
-                            startIdx: prevMinIdx,
-                            endIdx: pMax.index,
+                            startIdx: lastValley.index,
+                            endIdx: item.index,
                             lineNum: lineCounter++
                         });
 
-                        // Mark Extrema for CSV
-                        this.data[prevMinIdx].extrema = "LineStart"; // Visual: Valley Bottom
-                        this.data[pMax.index].extrema = "PosMax";    // Visual: Peak
+                        // Mark Extrema for Visualization
+                        this.data[lastValley.index].extrema = 'LineStart';
+                        this.data[item.index].extrema = 'PosMax';
+
+                        // Reset lastValley to prevent reusing same start for multiple peaks (unless nested logic required)
+                        // Typically one valley starts one line.
+                        lastValley = null;
                     }
                 }
             }
         }
 
         // ---------------------------------------------------------
-        // Step 3-1. Handle Last Line (which has NO Return Sweep)
+        // Step 8. Count Lines & Finalize
         // ---------------------------------------------------------
 
-        const lastDetectedEndInfo = (validLines.length > 0) ? validLines[validLines.length - 1] : null;
-        const lastUsedEndIdx = lastDetectedEndInfo ? lastDetectedEndInfo.endIdx : -1;
-
-        // Constraint: Search for Last Line ONLY AFTER the text display logic has finished showing the last line (if possible to know)
-        // Or simply after the last 'lineIndex' appeared in data.
-        let lastTextIndex = 0;
-        for (let i = this.data.length - 1; i >= 0; i--) {
-            if (this.data[i].lineIndex !== undefined && this.data[i].lineIndex !== null && this.data[i].lineIndex !== "") {
-                lastTextIndex = i;
-                break;
-            }
-        }
-
-        // Search Start must be after the last detected line AND ideally closer to where text actually finished.
-        // But simply: strictly after last detected line.
-        // AND to avoid detecting the previous line as the last line again, ensure we look sufficiently forward.
-
-        // Let's use max of (last detected line end, lastTextIndex - some buffer) ??
-        // Actually, the user requirement says: "Recognize after Last LineIndex is exposed + 2 sec check"
-        // So we should look for peaks that occur *around or after* lastTextIndex.
-
-        const remainingStart = Math.max(lastUsedEndIdx + 1, lastTextIndex - 300); // 300 samples ~ 5 sec buffer before end
-
-        if (remainingStart < this.data.length) {
-            let bestMaxObj = null;
-            let maxVal = -9999;
-
-            // Search among detected posMaxima that are in the remaining range
-            for (let i = 0; i < posMaxima.length; i++) {
-                if (posMaxima[i].index > remainingStart) {
-                    if (posMaxima[i].value > maxVal) {
-                        maxVal = posMaxima[i].value;
-                        bestMaxObj = posMaxima[i];
-                    }
-                }
-            }
-
-            if (bestMaxObj) {
-                // Find Start of this potential last line (Global Min in previous window)
-                let prevMinIdx = 0;
-                let minVal = 9999;
-
-                // Deep Search: Look back up to 5 seconds (300 samples) or until last Used Line
-                const searchLimit = Math.max((lastUsedEndIdx + 1), bestMaxObj.index - 300);
-
-                for (let k = bestMaxObj.index; k >= searchLimit; k--) {
-                    const val = this.data[k].gx;
-                    if (val !== null && val < minVal) {
-                        minVal = val;
-                        prevMinIdx = k;
-                    }
-                }
-
-                // Validate: Width > Threshold (100px) AND Duration
-                const width = bestMaxObj.value - minVal;
-                const duration = this.data[bestMaxObj.index].t - this.data[prevMinIdx].t;
-                const AMP_THRESHOLD = 100;
-                const MIN_DURATION = 500;
-
-                if (width > AMP_THRESHOLD && duration > MIN_DURATION) {
-                    validLines.push({
-                        startIdx: prevMinIdx,
-                        endIdx: bestMaxObj.index,
-                        lineNum: lineCounter++
-                    });
-                    // Mark this final max as detected for completeness
-                    this.data[prevMinIdx].extrema = "LineStart";
-                    this.data[bestMaxObj.index].extrema = "PosMax(Last)";
-                }
-            }
-        }
-
-        // Cap lines
-        let maxActualLines = 999;
-        if (this.data.length > 0) {
-            for (let k = this.data.length - 1; k >= 0; k--) {
-                if (this.data[k].lineIndex !== undefined && this.data[k].lineIndex !== null) {
-                    maxActualLines = this.data[k].lineIndex + 1;
-                    break;
-                }
-            }
-        }
-        if (validLines.length > maxActualLines) validLines.length = maxActualLines;
-
-        // Mark Data
+        // Reset markings first
         for (let i = 0; i < this.data.length; i++) delete this.data[i].detectedLineIndex;
+
+        // Mark Detected Lines on Data Points
         validLines.forEach(line => {
             for (let k = line.startIdx; k <= line.endIdx; k++) {
-                // Check if text existed
-                if (this.data[k].lineIndex !== undefined && this.data[k].lineIndex !== null) {
-                    this.data[k].detectedLineIndex = line.lineNum;
-                }
+                this.data[k].detectedLineIndex = line.lineNum;
             }
         });
 
         const count = validLines.length;
-        console.log(`[GazeDataManager] V3 Line Detection: Found ${count} lines.`, validLines);
+        console.log(`[GazeDataManager] V4 Line Detection: Found ${count} lines.`, validLines);
 
-        // USER REQUEST: Display Text Extrema in Console
-        const extremaPoints = [];
+        // Debug output
+        const extremaDebug = [];
         this.data.forEach((d, i) => {
             if (d.extrema) {
-                extremaPoints.push({
-                    index: i,
-                    t: d.t,
-                    gx: d.gx !== null ? parseFloat(d.gx.toFixed(2)) : null,
-                    extremaType: d.extrema
-                });
+                extremaDebug.push({ i, t: d.t, val: d.gx.toFixed(1), type: d.extrema });
             }
         });
-        console.log("========== TEXT EXTREMA POINTS ==========");
-        if (extremaPoints.length > 0) {
-            console.table(extremaPoints);
-        } else {
-            console.log("No extrema points detected.");
-        }
-        console.log("=========================================");
+        if (extremaDebug.length > 0) console.table(extremaDebug);
 
         return count;
     }

@@ -515,7 +515,7 @@ Game.typewriter = {
         // Store
         if (!this.lineYData) this.lineYData = [];
         this.lineYData.push({ lineIndex: index, y: y });
-        // console.log(`[Game] Recorded Line ${index} at Y=${y}`); // Less noise
+        console.log(`[Game] Recorded Line ${index} at Y=${y}`); // Less noise
 
         // Visualize
         const el = document.getElementById("book-content");
