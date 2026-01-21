@@ -3,6 +3,8 @@
  * Gaze Data Management
  * Stores and processes raw gaze data into structured format with Gaussian smoothing and velocity calculation.
  */
+import { detectVelXSpikes } from "./velx-spike-detector.js";
+
 export class GazeDataManager {
     constructor() {
         this.data = []; // { t, x, y, gx, gy, vx, vy, gvx, gvy, type ... }
@@ -405,302 +407,79 @@ export class GazeDataManager {
         document.body.removeChild(link);
     }
 
-    // --- Line Detection Algorithm V5.3 (Detailed Artifact Removal) ---
+    // --- Line Detection Algorithm (MAD-based) ---
     detectLinesMobile() {
         if (this.data.length < 10) return 0;
+        this.preprocessData(); // Ensure velX is calculated
 
-        // ---------------------------------------------------------
-        // Step 0. Preprocessing
-        // ---------------------------------------------------------
-        this.preprocessData();
+        // Prepare samples for MAD detector
+        const samples = this.data.map(d => ({
+            ts_ms: d.t,
+            velX: d.vx
+        }));
 
-        // ---------------------------------------------------------
-        // Step 1. Find All Extrema (Candidates)
-        // ---------------------------------------------------------
-        const win = 10;
-        let candidates = []; // { type: 'Valley'|'Peak', index, t, val, valid: true }
+        // Detect Spikes using MAD
+        // Using k=6 based on user preference/demo
+        const { threshold, spikeIntervals } = detectVelXSpikes(samples, { k: 6, gapMs: 120, expandOneSample: true });
 
-        for (let i = win; i < this.data.length - win; i++) {
-            const currVal = this.data[i].gx;
-            const t = this.data[i].t;
-            if (currVal === null || currVal === undefined) continue;
-
-            // Check Valley (Local Min)
-            let isMin = true;
-            for (let j = 1; j <= win; j++) {
-                if (currVal >= this.data[i - j].gx || currVal >= this.data[i + j].gx) {
-                    isMin = false; break;
+        // Identify Return Sweeps (Large Negative Velocity)
+        // We filter spikes where the mean velocity is negative
+        const returnSweeps = spikeIntervals.filter(interval => {
+            let sum = 0;
+            let count = 0;
+            for (let i = interval.startIndex; i <= interval.endIndex; i++) {
+                if (i >= 0 && i < samples.length) {
+                    sum += samples[i].velX;
+                    count++;
                 }
             }
-            if (isMin) {
-                candidates.push({ type: 'Valley', index: i, t, val: currVal, valid: true });
-                this.data[i].extrema = "Valley(Ignored)";
-            }
-
-            // Check Peak (Local Max)
-            let isMax = true;
-            for (let j = 1; j <= win; j++) {
-                if (currVal <= this.data[i - j].gx || currVal <= this.data[i + j].gx) {
-                    isMax = false; break;
-                }
-            }
-            if (isMax) {
-                candidates.push({ type: 'Peak', index: i, t, val: currVal, valid: true });
-                this.data[i].extrema = "Peak(Ignored)";
-            }
-        }
-
-        if (candidates.length < 2) return 0;
-
-        // ---------------------------------------------------------
-        // Step 1.2. Best Peak Selection (Fix Premature Max)
-        // ---------------------------------------------------------
-        // Problem: A single line can have multiple local peaks (jitter).
-        // V -> P1 -> P2 -> V.
-        // We must select the HIGHEST Peak between two Valleys to represent the true line end.
-
-        const filteredCandidates = [];
-        let currentSegment = []; // To store [V, P, P..., V] context or just Ps
-
-        // We iterate and reconstruct list. 
-        // Strategy: Keep all Valleys. For Peaks between Valleys, pick max.
-
-        if (candidates.length > 0) {
-            // Push first item (usually Valley, but if Peak start, just push)
-            filteredCandidates.push(candidates[0]);
-
-            for (let i = 1; i < candidates.length; i++) {
-                const prev = candidates[i - 1];
-                const curr = candidates[i];
-
-                if (curr.type === 'Valley') {
-                    // End of a segment.
-                    // Process any accumulated Peaks in 'currentSegment' if we have buffering logic?
-                    // Simpler approach: Look back at the sequence of Peaks since last Valley
-                    // Actually, let's do a 2-pass or smart loop.
-
-                    // Let's use a simpler approach: 
-                    // We only want to filter Peaks. Valleys are anchors.
-                    // Since we just pushed everything to 'candidates', let's filter 'candidates' in place or new array.
-                }
-            }
-        }
-
-        // Reset and do robust Filter:
-        const bestCandidates = [];
-        let peaksBuffer = [];
-
-        for (let i = 0; i < candidates.length; i++) {
-            const c = candidates[i];
-
-            if (c.type === 'Valley') {
-                // Determine best peak from buffer if any
-                if (peaksBuffer.length > 0) {
-                    // Find max
-                    let bestP = peaksBuffer[0];
-                    for (let p of peaksBuffer) {
-                        if (p.val > bestP.val) bestP = p;
-                    }
-                    // Mark others as ignore
-                    for (let p of peaksBuffer) {
-                        if (p !== bestP) {
-                            // Update the ORIGINAL reference in this.data if needed? 
-                            // We already marked them Peak(Ignored) or Valid.
-                            // Wait, Step 1 marked them "Peak(Ignored)" initially? No, we marked valid ones as valid.
-                            // Let's update status.
-                            p.valid = false;
-                            // We need to update this.data text to 'Peak(Ignored)' if it was 'Peak'?
-                            // Actually Step 1 marked them "Peak(Ignored)" and pushed to candidates.
-                            // The 'candidates' list implies potential validity.
-                            // If we drop it here, it stays "Peak(Ignored)".
-                            // If we keep it, we will mark it Valid later.
-                        } else {
-                            // This one is chosen.
-                            bestCandidates.push(bestP);
-                        }
-                    }
-                    peaksBuffer = [];
-                }
-
-                // Push this Valley
-                bestCandidates.push(c);
-
-            } else {
-                // Peak
-                peaksBuffer.push(c);
-            }
-        }
-
-        // Handle trailing peaks (after last valley)
-        if (peaksBuffer.length > 0) {
-            let bestP = peaksBuffer[0];
-            for (let p of peaksBuffer) {
-                if (p.val > bestP.val) bestP = p;
-            }
-            for (let p of peaksBuffer) {
-                if (p !== bestP) p.valid = false;
-                else bestCandidates.push(bestP);
-            }
-        }
-
-        // ---------------------------------------------------------
-        // Step 1.3. Exclude Last 2 Extrema (User Rule)
-        // ---------------------------------------------------------
-        // "Exclude the last two extrema values." (likely end artifacts)
-        if (bestCandidates.length >= 2) {
-            // Simply remove them. They remain tagged as 'Ignored' (or revert to it) in the data.
-            bestCandidates.pop();
-            bestCandidates.pop();
-        }
-
-        candidates = bestCandidates;
-
-        if (candidates.length < 2) return 0;
-
-        // ---------------------------------------------------------
-        // Step 1.5. Last Line Filtering - SKIPPED
-        // ---------------------------------------------------------
-
-        if (candidates.length < 2) return 0;
-
-        // ---------------------------------------------------------
-        // Step 2 & 3. Calculate Trend Lines (from Valid Patterns)
-        // ---------------------------------------------------------
-        const allPeaks = candidates.filter(c => c.type === 'Peak').map(c => c.val);
-        const allValleys = candidates.filter(c => c.type === 'Valley').map(c => c.val);
-
-        if (allPeaks.length === 0 || allValleys.length === 0) return 0;
-
-        allPeaks.sort((a, b) => b - a);
-        const top3Peaks = allPeaks.slice(0, 3);
-        const peakTrend = top3Peaks.reduce((sum, v) => sum + v, 0) / top3Peaks.length;
-
-        allValleys.sort((a, b) => a - b);
-        const bottom3Valleys = allValleys.slice(0, 3);
-        const valleyTrend = bottom3Valleys.reduce((sum, v) => sum + v, 0) / bottom3Valleys.length;
-
-        // Step 4. Trend Distance
-        const trendDistance = peakTrend - valleyTrend;
-        const distThreshold = trendDistance * 0.5;
-
-        // Safety
-        if (trendDistance < 50) return 0;
-
-        // ---------------------------------------------------------
-        // Step 8. Filter Reading Segments by Distance
-        // ---------------------------------------------------------
-        // Rule: Valley -> Peak distance must be >= 50% Trend Distance.
-        // If fail, discard BOTH Valley and Peak.
-
-        for (let i = 0; i < candidates.length - 1; i++) {
-            if (candidates[i].type === 'Valley' && candidates[i + 1].type === 'Peak') {
-                const cv = candidates[i];
-                const cp = candidates[i + 1];
-                const dx = cp.val - cv.val;
-
-                if (dx < distThreshold) {
-                    cv.valid = false;
-                    cp.valid = false;
-                }
-            }
-        }
-
-        // ---------------------------------------------------------
-        // Step 9. Filter Reading Segments by Time
-        // ---------------------------------------------------------
-        // Rule: Valley -> Peak time difference must be >= 500ms.
-        // If fail, discard BOTH Valley and Peak.
-
-        // Re-evaluate valid candidates after Step 8
-        let step9Candidates = candidates.filter(c => c.valid);
-
-        for (let i = 0; i < step9Candidates.length - 1; i++) {
-            if (step9Candidates[i].type === 'Valley' && step9Candidates[i + 1].type === 'Peak') {
-                const cv = step9Candidates[i];
-                const cp = step9Candidates[i + 1];
-                const dt = cp.t - cv.t;
-
-                if (dt < 500) {
-                    cv.valid = false;
-                    cp.valid = false;
-                }
-            }
-        }
-
-        // ---------------------------------------------------------
-        // Step 10. Rescue Missing Peak (Last Line Only)
-        // ---------------------------------------------------------
-        // Logic: Simply find valid candidates. Check the LAST one.
-        // If it is a Valley, and the one before it was a Peak (i.e. valid history),
-        // scan after this Valley for a new Peak and insert it.
-
-        // Note: 'finalCandidates' needs to be derived from 'candidates' first
-        let finalCandidates = candidates.filter(c => c.valid);
-
-        if (finalCandidates.length > 1) {
-            const lastCand = finalCandidates[finalCandidates.length - 1];
-            const prevCand = finalCandidates[finalCandidates.length - 2];
-
-            // Condition: Last item is Valley AND Previous item was a Peak
-            if (lastCand.type === 'Valley' && prevCand.type === 'Peak') {
-
-                // Search for a new Peak after this last Valley
-                let maxVal = -9999;
-                let maxIdx = -1;
-                let maxT = 0;
-
-                // Search from Last Valley index to End of Data
-                for (let k = lastCand.index + 1; k < this.data.length; k++) {
-                    if (this.data[k].gx > maxVal) {
-                        maxVal = this.data[k].gx;
-                        maxIdx = k;
-                        maxT = this.data[k].t;
-                    }
-                }
-
-                if (maxIdx !== -1) {
-                    console.log(`[GazeDataManager] Rescued Last Peak at T:${maxT}`);
-                    finalCandidates.push({ type: 'Peak', index: maxIdx, t: maxT, val: maxVal, valid: true });
-                }
-            }
-        }
-
-
-        // ---------------------------------------------------------
-        // Step 11. Finalize (Count Valid Lines)
-        // ---------------------------------------------------------
-        // 'finalCandidates' is already updated with rescued peaks
-
-        const validLines = [];
-
-        // Reconstruct lines: V -> P
-        let lineCounter = 1;
-        for (let i = 0; i < finalCandidates.length - 1; i++) {
-            if (finalCandidates[i].type === 'Valley' && finalCandidates[i + 1].type === 'Peak') {
-                validLines.push({
-                    startIdx: finalCandidates[i].index,
-                    endIdx: finalCandidates[i + 1].index,
-                    lineNum: lineCounter++
-                });
-            }
-        }
-
-        // Reset Detected Line Index (but keep Extrema tags for debugging/export)
-        for (let i = 0; i < this.data.length; i++) delete this.data[i].detectedLineIndex;
-
-        // Apply Valid Tags (Overwriting 'Ignored')
-        validLines.forEach(line => {
-            this.data[line.startIdx].extrema = "LineStart";
-            this.data[line.endIdx].extrema = "PosMax";
-
-            for (let k = line.startIdx; k <= line.endIdx; k++) {
-                this.data[k].detectedLineIndex = line.lineNum;
-            }
+            const meanVel = count > 0 ? sum / count : 0;
+            return meanVel < 0; // Moving Left
         });
 
-        const count = validLines.length;
-        console.log(`[GazeDataManager V4.3] Found ${count} lines. (TrendDist: ${trendDistance.toFixed(0)})`, validLines);
+        // Sort by time
+        returnSweeps.sort((a, b) => a.start_ms - b.start_ms);
 
-        return count;
+        // Reset existing detection
+        for (let i = 0; i < this.data.length; i++) {
+            delete this.data[i].detectedLineIndex;
+            delete this.data[i].extrema;
+        }
+
+        let lineNum = 1;
+        let lastEndIdx = 0;
+
+        const markLine = (start, end, num) => {
+            if (end <= start) return;
+            for (let k = start; k < end; k++) {
+                this.data[k].detectedLineIndex = num;
+            }
+            if (this.data[start]) this.data[start].extrema = "LineStart";
+            if (this.data[end - 1]) this.data[end - 1].extrema = "PosMax";
+        };
+
+        for (const sweep of returnSweeps) {
+            // Found a sweep. The segment BEFORE this sweep is a line.
+            // Sweep starts at sweep.startIndex.
+            const lineEndIdx = sweep.startIndex;
+
+            // Heuristic section length check (e.g. > 100ms or 5 samples)
+            if (lineEndIdx - lastEndIdx > 5) {
+                markLine(lastEndIdx, lineEndIdx, lineNum);
+                lineNum++;
+            }
+
+            // Next line starts after sweep
+            lastEndIdx = sweep.endIndex + 1;
+        }
+
+        // Process final segment
+        if (this.data.length - lastEndIdx > 5) {
+            markLine(lastEndIdx, this.data.length, lineNum);
+        }
+
+        console.log(`[GazeDataManager] MAD Line Detection: Found ${lineNum} lines from ${spikeIntervals.length} spikes (${returnSweeps.length} sweeps). Threshold: ${threshold.toFixed(4)}`);
+
+        return lineNum;
     }
 }
