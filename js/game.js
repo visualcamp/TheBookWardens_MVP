@@ -484,29 +484,39 @@ Game.typewriter = {
 
             this.pauseStartTimestamp = Date.now();
 
+            // --- CAPTURE END TIME IMMEDIATELY ---
+            if (window.gazeDataManager) {
+                const allData = window.gazeDataManager.getAllData();
+                if (allData.length > 0) {
+                    this.typingEndGazeTime = allData[allData.length - 1].t;
+                    console.log(`[Game] Typing Finished Immediately. Sync Gaze T: ${this.typingEndGazeTime}ms`);
+                } else {
+                    this.typingEndGazeTime = 0; // Should not happen if data flowing
+                }
+            }
+
             if (this.currentP.contains(this.cursorBlob)) {
                 this.currentP.removeChild(this.cursorBlob);
             }
 
             // User Requirement: End recording 3 seconds after last character
-            console.log("[Game] Text finished. Waiting 3s for final gaze data...");
+            // But detection only uses data up to +2000ms.
+            console.log("[Game] Text finished. Waiting 3s (but will use data up to +2s)...");
             setTimeout(() => {
                 let detectedLines = 0;
                 if (window.gazeDataManager) {
-                    // Capture End Time
-                    if (Game.typewriter.typingEndGazeTime === null) {
-                        const allData = window.gazeDataManager.getAllData();
-                        if (allData.length > 0) {
-                            Game.typewriter.typingEndGazeTime = allData[allData.length - 1].t;
-                            console.log(`[Game] Typing Ended. Sync Gaze T: ${Game.typewriter.typingEndGazeTime}ms`);
-                        }
-                    }
-
-                    // Strict Timestamp Range: Start ~ End + 2000ms
+                    // Strict Timestamp Range: Start ~ (Captured End + 2000ms)
                     const tStart = Game.typewriter.typingStartGazeTime !== null ? Game.typewriter.typingStartGazeTime : 0;
-                    const tEnd = (Game.typewriter.typingEndGazeTime !== null ? Game.typewriter.typingEndGazeTime : (window.gazeDataManager.getAllData().length > 0 ? window.gazeDataManager.getAllData().pop().t : 0)) + 2000;
 
-                    console.log(`[Game] Processing Gaze Data for Range: ${tStart}ms ~ ${tEnd}ms`);
+                    // Use the captured end time. If 0/null, fallback to current - 1000.
+                    let baseEnd = Game.typewriter.typingEndGazeTime;
+                    if (!baseEnd) {
+                        const allData = window.gazeDataManager.getAllData();
+                        baseEnd = allData.length > 0 ? allData[allData.length - 1].t - 1000 : 0;
+                    }
+                    const tEnd = baseEnd + 2000;
+
+                    console.log(`[Game] Processing Gaze Data for Range: ${tStart}ms ~ ${tEnd}ms (End Base: ${baseEnd})`);
 
                     // 1. Line Detection Algorithm
                     detectedLines = window.gazeDataManager.detectLinesMobile(tStart, tEnd);

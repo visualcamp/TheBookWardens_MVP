@@ -263,9 +263,10 @@ export class GazeDataManager {
         const cols = 1;
         const rows = 4;
         const chartWidth = 1000;
-        const chartHeight = 300;
+        const chartHeight = 350; // Increased height to prevent overlap
+        const padding = 20; // Padding between charts
         const totalWidth = chartWidth * cols;
-        const totalHeight = chartHeight * rows;
+        const totalHeight = (chartHeight + padding) * rows;
 
         const chartTypes = ['RawData', 'SmoothedData', 'Velocity', 'LineIndices'];
 
@@ -343,21 +344,32 @@ export class GazeDataManager {
         // Loop through each chart type
         for (let i = 0; i < chartTypes.length; i++) {
             const chartName = chartTypes[i];
-            const yOffset = i * chartHeight;
+            const yOffset = i * (chartHeight + padding); // Include padding
 
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = chartWidth;
             tempCanvas.height = chartHeight;
+
+            // Explicitly Fill White Background on Temp Canvas
+            const tCtx = tempCanvas.getContext('2d');
+            tCtx.fillStyle = 'white';
+            tCtx.fillRect(0, 0, chartWidth, chartHeight);
 
             let configData = { labels: times, datasets: [] };
             let options = {
                 responsive: false,
                 animation: false,
                 plugins: {
-                    title: { display: true, text: chartName },
-                    legend: { display: true }
+                    title: { display: true, text: chartName, font: { size: 16 } },
+                    legend: { display: true, position: 'top' }
                 },
-                scales: { x: { display: true }, y: { beginAtZero: false } }
+                layout: {
+                    padding: { left: 10, right: 10, top: 10, bottom: 10 }
+                },
+                scales: {
+                    x: { display: true, ticks: { maxTicksLimit: 20 } },
+                    y: { beginAtZero: false }
+                }
             };
 
             // Build Datasets per Chart Type
