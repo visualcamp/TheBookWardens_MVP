@@ -405,7 +405,7 @@ export class GazeDataManager {
         document.body.removeChild(link);
     }
 
-    // --- Line Detection Algorithm V5.1 (Last Peak Rescue Only) ---
+    // --- Line Detection Algorithm V5.2 (Best Peak Selection) ---
     detectLinesMobile() {
         if (this.data.length < 10) return 0;
 
@@ -453,10 +453,103 @@ export class GazeDataManager {
         if (candidates.length < 2) return 0;
 
         // ---------------------------------------------------------
-        // Step 1.5. Last Line Filtering - SKIPPED (User Request)
+        // Step 1.2. Best Peak Selection (Fix Premature Max)
         // ---------------------------------------------------------
-        // Skipping filtering candidates based on lastTextTime.
-        // candidates remain as is.
+        // Problem: A single line can have multiple local peaks (jitter).
+        // V -> P1 -> P2 -> V.
+        // We must select the HIGHEST Peak between two Valleys to represent the true line end.
+
+        const filteredCandidates = [];
+        let currentSegment = []; // To store [V, P, P..., V] context or just Ps
+
+        // We iterate and reconstruct list. 
+        // Strategy: Keep all Valleys. For Peaks between Valleys, pick max.
+
+        if (candidates.length > 0) {
+            // Push first item (usually Valley, but if Peak start, just push)
+            filteredCandidates.push(candidates[0]);
+
+            for (let i = 1; i < candidates.length; i++) {
+                const prev = candidates[i - 1];
+                const curr = candidates[i];
+
+                if (curr.type === 'Valley') {
+                    // End of a segment.
+                    // Process any accumulated Peaks in 'currentSegment' if we have buffering logic?
+                    // Simpler approach: Look back at the sequence of Peaks since last Valley
+                    // Actually, let's do a 2-pass or smart loop.
+
+                    // Let's use a simpler approach: 
+                    // We only want to filter Peaks. Valleys are anchors.
+                    // Since we just pushed everything to 'candidates', let's filter 'candidates' in place or new array.
+                }
+            }
+        }
+
+        // Reset and do robust Filter:
+        const bestCandidates = [];
+        let peaksBuffer = [];
+
+        for (let i = 0; i < candidates.length; i++) {
+            const c = candidates[i];
+
+            if (c.type === 'Valley') {
+                // Determine best peak from buffer if any
+                if (peaksBuffer.length > 0) {
+                    // Find max
+                    let bestP = peaksBuffer[0];
+                    for (let p of peaksBuffer) {
+                        if (p.val > bestP.val) bestP = p;
+                    }
+                    // Mark others as ignore
+                    for (let p of peaksBuffer) {
+                        if (p !== bestP) {
+                            // Update the ORIGINAL reference in this.data if needed? 
+                            // We already marked them Peak(Ignored) or Valid.
+                            // Wait, Step 1 marked them "Peak(Ignored)" initially? No, we marked valid ones as valid.
+                            // Let's update status.
+                            p.valid = false;
+                            // We need to update this.data text to 'Peak(Ignored)' if it was 'Peak'?
+                            // Actually Step 1 marked them "Peak(Ignored)" and pushed to candidates.
+                            // The 'candidates' list implies potential validity.
+                            // If we drop it here, it stays "Peak(Ignored)".
+                            // If we keep it, we will mark it Valid later.
+                        } else {
+                            // This one is chosen.
+                            bestCandidates.push(bestP);
+                        }
+                    }
+                    peaksBuffer = [];
+                }
+
+                // Push this Valley
+                bestCandidates.push(c);
+
+            } else {
+                // Peak
+                peaksBuffer.push(c);
+            }
+        }
+
+        // Handle trailing peaks (after last valley)
+        if (peaksBuffer.length > 0) {
+            let bestP = peaksBuffer[0];
+            for (let p of peaksBuffer) {
+                if (p.val > bestP.val) bestP = p;
+            }
+            for (let p of peaksBuffer) {
+                if (p !== bestP) p.valid = false;
+                else bestCandidates.push(bestP);
+            }
+        }
+
+        candidates = bestCandidates;
+
+        if (candidates.length < 2) return 0;
+
+        // ---------------------------------------------------------
+        // Step 1.5. Last Line Filtering - SKIPPED
+        // ---------------------------------------------------------
 
         if (candidates.length < 2) return 0;
 
