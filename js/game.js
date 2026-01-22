@@ -448,14 +448,15 @@ Game.typewriter = {
                 }
             }
 
-            const charNode = document.createTextNode(char);
-            this.currentP.insertBefore(charNode, this.cursorBlob);
+            const charSpan = document.createElement("span");
+            charSpan.textContent = char;
+            this.currentP.insertBefore(charSpan, this.cursorBlob);
 
             if (char === ' ') this.wordCount++;
 
             this.charIndex++;
 
-            // --- 30-Char Window Logic ---
+            // --- 30-Char Window Logic (Visibility) ---
             this.manageTextWindow(30);
             // -----------------------------
         }
@@ -604,39 +605,21 @@ Game.typewriter = {
     manageTextWindow(limit) {
         if (!this.currentP) return;
 
-        // Gather text nodes
-        const textNodes = [];
-        let totalLength = 0;
+        // Gather span nodes (We assume chars are wrapped in spans now)
+        // Exclude cursor
+        const spans = Array.from(this.currentP.querySelectorAll('span:not(.cursor)'));
+        const total = spans.length;
 
-        // Convert NodeList to Array to safely manipulate
-        const childNodes = Array.from(this.currentP.childNodes);
+        if (total > limit) {
+            const hideCount = total - limit;
 
-        childNodes.forEach(node => {
-            if (node.nodeType === Node.TEXT_NODE) {
-                textNodes.push(node);
-                totalLength += node.nodeValue.length;
-            }
-        });
-
-        if (totalLength > limit) {
-            let toRemove = totalLength - limit;
-
-            for (let i = 0; i < textNodes.length; i++) {
-                const node = textNodes[i];
-                const len = node.nodeValue.length;
-
-                if (len <= toRemove) {
-                    // Remove entire node
-                    this.currentP.removeChild(node);
-                    toRemove -= len;
-                } else {
-                    // Truncate node
-                    node.nodeValue = node.nodeValue.substring(toRemove);
-                    toRemove = 0;
-                    break; // Done
+            // Hide older characters to create "Ticker" effect while maintaining layout
+            for (let i = 0; i < hideCount; i++) {
+                // Optimize: Check if already hidden to avoid redraw? 
+                // style access is fast enough usually.
+                if (spans[i].style.visibility !== "hidden") {
+                    spans[i].style.visibility = "hidden";
                 }
-
-                if (toRemove <= 0) break;
             }
         }
     },
