@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gaze Data Debug Tool & Visualizer</title>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        .container {
+            border: 1px solid #ccc;
+            padding: 2rem;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        .upload-area {
+            margin: 2rem 0;
+            border: 2px dashed #aaa;
+            padding: 2rem;
+            text-align: center;
+            border-radius: 8px;
+            background: #fff;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .upload-area:hover {
+            background: #f0f8ff;
+            border-color: #007bff;
+        }
+
+        #log {
+            white-space: pre-wrap;
+            background: #333;
+            color: #0f0;
+            padding: 1rem;
+            border-radius: 4px;
+            font-family: monospace;
+            min-height: 100px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 2rem;
+        }
+
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* Chart Layout */
+        #charts-container {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .chart-wrapper {
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        canvas {
+            width: 100% !important;
+            height: 300px !important;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>Gaze Data Reprocessor & Visualizer</h1>
+        <p>Select a CSV file (timestamp, rawX, rawY) to re-run detection (k=3.5).<br>
+            This will auto-download the detection CSV and display 4 analysis charts below.</p>
+
+        <div class="upload-area" id="dropZone">
+            <p>Drag & Drop CSV file here or click to upload</p>
+            <input type="file" id="fileInput" accept=".csv,.txt" style="display: none;">
+            <button class="btn" onclick="document.getElementById('fileInput').click()">Select File</button>
+        </div>
+
+        <div id="log">Ready. Waiting for file...</div>
+
+        <div id="charts-container">
+            <!-- Charts will be injected here -->
+        </div>
+    </div>
+
+    <script>
+        // --- 1. Core Algorithms (Inlined from velx-spike-detector.js) ---
+
+        function median(arr) {
+            const a = arr.filter(Number.isFinite).slice().sort((x, y) => x - y);
+            const n = a.length;
+            if (n === 0) return NaN;
+            const mid = Math.floor(n / 2);
+            return n % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
+        }
+
+        function mad(arr, med) {
+            return median(arr.filter(Number.isFinite).map(v => Math.abs(v - med)));
+        }
+
+        function detectVelXSpikes(samples, { k = 3.5, gapMs = 120, expandOneSample = true } = {}) {
+            const ts = samples.map(s => Number(s.ts_ms));
+            const velX = samples.map(s => Number(s.velX));
+            const absVel = velX.map(v => Math.abs(v));
+
+            const med = median(absVel);
+            let m = mad(absVel, med);
+            let scale = 1.4826 * m;
+
+            if (!Number.isFinite(scale) || scale < 1e-12) {
+                const finite = absVel.filter(Number.isFinite);
+                const mean = finite.reduce((a, b) => a + b, 0) / Math.max(1, finite.length);
+                const varr = finite.reduce((a, v) => { const d = v - mean; return a + d * d; }, 0) / Math.max(1, finite.length - 1);
+                const std = Math.sqrt(varr);
+                scale = std > 1e-12 ? std : 1.0;
+            }
+
+            const threshold = med + k * scale;
+            const spikeMask = absVel.map(v => Number.isFinite(v) && v > threshold);
+
+            const idx = [];
+            for (let i = 0; i < spikeMask.length; i++) if (spikeMask[i]) idx.push(i);
+
+            let segments = [];
+            if (idx.length) {
+                let s = idx[0], p = idx[0];
+                for (let j = 1; j < idx.length; j++) {
+                    const i = idx[j];
+                    if (i === p + 1) p = i;
+                    else { segments.push([s, p]); s = i; p = i; }
+                }
+                segments.push([s, p]);
+            }
+
+            if (expandOneSample) {
+                segments = segments.map(([a, b]) => [Math.max(0, a - 1), Math.min(samples.length - 1, b + 1)]);
+            }
+
+            const timeSegments = segments.map(([a, b]) => [ts[a], ts[b], a, b]);
+            const merged = [];
+            for (const seg of timeSegments) {
+                if (!merged.length) merged.push(seg.slice());
+                else {
+                    const last = merged[merged.length - 1];
+                    if (seg[0] - last[1] <= gapMs) { last[1] = seg[1]; last[3] = seg[3]; }
+                    else merged.push(seg.slice());
+                }
+            }
+
+            const spikeIntervals = merged.map(([start_ms, end_ms, aIdx, bIdx]) => {
+                let peak = 0;
+                for (let i = aIdx; i <= bIdx; i++) peak = Math.max(peak, Math.abs(velX[i]) || 0);
+                return { start_ms, end_ms, duration_ms: end_ms - start_ms, peakAbsVelX: peak, startIndex: aIdx, endIndex: bIdx };
+            });
+
+            return { threshold, spikeIntervals, spikeMask };
+        }
+
+        // --- 2. Logic (Ported from GazeDataManager & debug-reprocess.mjs) ---
+
+        function log(msg) {
+            const el = document.getElementById('log');
+            el.innerText += msg + "\n";
+            el.scrollTop = el.scrollHeight;
+            console.log(msg);
+        }
+
+        function processFile(file) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const content = e.target.result;
+                log(`File loaded. Size: ${content.length} bytes.`);
+                runAlgo(content, file.name);
+            };
+            reader.readAsText(file);
+        }
+
+        function runAlgo(rawContent, filename) {
+            log("Parsing CSV...");
+            const lines = rawContent.split(/\r?\n/).filter(line => line.trim() !== '');
+            const data = [];
+            let firstTimestamp = null;
+            let ignoredLines = 0;
+
+            // Column Mapping (Default)
+            let colMap = { t: 0, x: 1, y: 2, lineIndex: -1 };
+            let startRow = 0;
+
+            // 1. Detect Delimiter
+            let delimiter = ',';
+            if (lines.length > 0) {
+                const firstLine = lines[0];
+                const commaCount = (firstLine.match(/,/g) || []).length;
+                const tabCount = (firstLine.match(/\t/g) || []).length;
+                if (tabCount > commaCount) delimiter = '\t';
+            }
+
+            // 1. Check for Header
+            if (lines.length > 0) {
+                const firstLine = lines[0].trim();
+                const parts = firstLine.split(delimiter).map(s => s.trim().toLowerCase());
+
+                // Heuristic: If first token is not a number, assume header
+                if (isNaN(parseFloat(parts[0]))) {
+                    log("Header detected. Mapping columns...");
+                    colMap = { t: -1, x: -1, y: -1, lineIndex: -1 };
+
+                    parts.forEach((p, i) => {
+                        if (p.includes('time') || p === 't') colMap.t = i;
+                        else if (p.includes('rawx') || p === 'x') colMap.x = i;
+                        else if (p.includes('rawy') || p === 'y') colMap.y = i;
+                        else if (p.includes('lineindex') || p === 'line' || p === 'answer') colMap.lineIndex = i;
+                    });
+
+                    // Fallbacks if header parsing failed for core fields
+                    if (colMap.t === -1) colMap.t = 0;
+                    if (colMap.x === -1) colMap.x = 1;
+                    if (colMap.y === -1) colMap.y = 2;
+
+                    log(`Mapped: T=${colMap.t}, X=${colMap.x}, Y=${colMap.y}, LineIndex=${colMap.lineIndex}`);
+                    startRow = 1;
+                } else {
+                    // Check if it really is tab separated but we missed it?
+                    if (lines[0].includes('\t')) delimiter = '\t';
+                    log(`No Header detected. Using default indices. Delimiter: ${delimiter === '\t' ? 'TAB' : 'COMMA'}`);
+                }
+            }
+
+            let lastValidLineIndex = null;
+            for (let i = startRow; i < lines.length; i++) {
+                const line = lines[i];
+                // CRITICAL FIX: Use the actually detected delimiter!
+                const parts = line.split(delimiter).map(s => s.trim());
+
+                if (parts.length < 3) {
+                    ignoredLines++;
+                    continue;
+                }
+
+                const t_raw = parseFloat(parts[colMap.t]);
+                const x = parseFloat(parts[colMap.x]);
+                const y = parseFloat(parts[colMap.y]);
+
+                // Parse optional LineIndex with Carry-Forward
+                let lIdx = null;
+                if (colMap.lineIndex !== -1 && parts[colMap.lineIndex] !== undefined) {
+                    const rawVal = parts[colMap.lineIndex];
+                    if (rawVal !== "" && rawVal !== undefined && rawVal !== null && rawVal !== "null") {
+                        const parsed = parseFloat(rawVal);
+                        if (Number.isFinite(parsed)) lIdx = parsed;
+                        else lIdx = rawVal;
+
+                        // Update persisted value
+                        lastValidLineIndex = lIdx;
+                    } else {
+                        // If empty, use the last valid one
+                        lIdx = lastValidLineIndex;
+                    }
+                } else if (lastValidLineIndex !== null) {
+                    // If column missing but we have history, use history
+                    lIdx = lastValidLineIndex;
+                }
+
+                if (isNaN(t_raw)) continue;
+
+                if (firstTimestamp === null) firstTimestamp = t_raw;
+
+                let t = t_raw;
+
+                data.push({
+                    t,
+                    x: isNaN(x) ? null : x,
+                    y: isNaN(y) ? null : y,
+                    gx: null, gy: null,
+                    vx: null, vy: null,
+                    type: 'Unknown',
+                    lineIndex: lIdx,
+                    detectedLineIndex: undefined,
+                    extrema: undefined,
+                    isReturnSweep: false
+                });
+            }
+
+            log(`Loaded ${data.length} valid samples. (Ignored ${ignoredLines} lines)`);
+
+
+            console.log("----------------------------------------------");
+
+            if (data.length < 10) {
+                log("Error: Not enough data points.");
+                return;
+            }
+
+            log("Preprocessing: Interpolation, Smoothing (Sigma=3), Velocity...");
+            preprocessData(data);
+
+            log("Running Line Detection (MAD, k=3.5)...");
+            detectLinesMobile(data);
+
+            log("Generating CSV...");
+            exportCSV(data, filename);
+
+            log("Rendering Charts...");
+            setTimeout(() => renderCharts(data), 100);
+        }
+
+        function preprocessData(geoData) {
+            // 1. Interpolation
+            for (let i = 0; i < geoData.length; i++) {
+                const curr = geoData[i];
+                const isMissing = curr.x === null || curr.y === null || (curr.x === 0 && curr.y === 0) || isNaN(curr.x);
+                if (isMissing) {
+                    let prevIdx = i - 1;
+                    while (prevIdx >= 0) {
+                        const p = geoData[prevIdx];
+                        if (p.x !== null && !isNaN(p.x) && (p.x !== 0 || p.y !== 0)) break;
+                        prevIdx--;
+                    }
+                    let nextIdx = i + 1;
+                    while (nextIdx < geoData.length) {
+                        const n = geoData[nextIdx];
+                        if (n.x !== null && !isNaN(n.x) && (n.x !== 0 || n.y !== 0)) break;
+                        nextIdx++;
+                    }
+                    if (prevIdx >= 0 && nextIdx < geoData.length) {
+                        const p = geoData[prevIdx];
+                        const n = geoData[nextIdx];
+                        const ratio = (curr.t - p.t) / (n.t - p.t);
+                        curr.x = p.x + (n.x - p.x) * ratio;
+                        curr.y = p.y + (n.y - p.y) * ratio;
+                    } else if (prevIdx >= 0) {
+                        curr.x = geoData[prevIdx].x;
+                        curr.y = geoData[prevIdx].y;
+                    } else if (nextIdx < geoData.length) {
+                        curr.x = geoData[nextIdx].x;
+                        curr.y = geoData[nextIdx].y;
+                    }
+                }
+            }
+
+            // 2. Smoothing
+            const sigma = 3;
+            const radius = Math.ceil(3 * sigma);
+            const kernelSize = 2 * radius + 1;
+            const kernel = new Float32Array(kernelSize);
+            let sumK = 0;
+            for (let i = 0; i < kernelSize; i++) {
+                const x = i - radius;
+                const val = Math.exp(-(x * x) / (2 * sigma * sigma));
+                kernel[i] = val;
+                sumK += val;
+            }
+            for (let i = 0; i < kernelSize; i++) kernel[i] /= sumK;
+
+            for (let i = 0; i < geoData.length; i++) {
+                let sumX = 0, sumY = 0, wSum = 0;
+                for (let k = 0; k < kernelSize; k++) {
+                    const idx = i + (k - radius);
+                    if (idx >= 0 && idx < geoData.length) {
+                        if (geoData[idx].x !== null) {
+                            sumX += geoData[idx].x * kernel[k];
+                            sumY += geoData[idx].y * kernel[k];
+                            wSum += kernel[k];
+                        }
+                    }
+                }
+                if (wSum > 0) {
+                    geoData[i].gx = sumX / wSum;
+                    geoData[i].gy = sumY / wSum;
+                } else {
+                    geoData[i].gx = geoData[i].x;
+                    geoData[i].gy = geoData[i].y;
+                }
+            }
+
+            // 3. Velocity
+            for (let i = 0; i < geoData.length; i++) {
+                if (i === 0) {
+                    geoData[i].vx = 0;
+                    geoData[i].vy = 0;
+                } else {
+                    const dt = geoData[i].t - geoData[i - 1].t;
+                    if (dt > 0) {
+                        geoData[i].vx = (geoData[i].gx - geoData[i - 1].gx) / dt;
+                        geoData[i].vy = (geoData[i].gy - geoData[i - 1].gy) / dt;
+                    } else {
+                        geoData[i].vx = 0;
+                        geoData[i].vy = 0;
+                    }
+                }
+            }
+        }
+
+        function detectLinesMobile(geoData) {
+            if (geoData.length < 10) return;
+
+            // Use all data
+            const samples = geoData.map(d => ({ ts_ms: d.t, velX: d.vx }));
+
+            // *** K = 3.5 ***
+            const { threshold, spikeIntervals } = detectVelXSpikes(samples, { k: 3.5, gapMs: 120, expandOneSample: true });
+
+            const returnSweeps = spikeIntervals.filter(interval => {
+                let sum = 0;
+                let count = 0;
+                for (let i = interval.startIndex; i <= interval.endIndex; i++) {
+                    if (i >= 0 && i < samples.length) {
+                        sum += samples[i].velX;
+                        count++;
+                    }
+                }
+                const meanVel = count > 0 ? sum / count : 0;
+                return meanVel < 0;
+            });
+
+            returnSweeps.sort((a, b) => a.start_ms - b.start_ms);
+
+            let lineNum = 1;
+            let lastEndRelIdx = 0;
+
+            const markLine = (relStart, relEnd, num) => {
+                if (relEnd <= relStart) return;
+                for (let k = relStart; k < relEnd; k++) {
+                    if (geoData[k]) geoData[k].detectedLineIndex = num;
+                }
+                if (geoData[relStart]) geoData[relStart].extrema = "LineStart";
+                if (geoData[relEnd - 1]) geoData[relEnd - 1].extrema = "PosMax";
+            };
+
+            for (const sweep of returnSweeps) {
+                const lineEndRelIdx = sweep.startIndex;
+                if (lineEndRelIdx - lastEndRelIdx > 5) {
+                    markLine(lastEndRelIdx, lineEndRelIdx, lineNum);
+                    lineNum++;
+                }
+                lastEndRelIdx = sweep.endIndex + 1;
+                for (let k = sweep.startIndex; k <= sweep.endIndex; k++) {
+                    if (geoData[k]) geoData[k].isReturnSweep = true;
+                }
+            }
+
+            if (samples.length - lastEndRelIdx > 5) {
+                markLine(lastEndRelIdx, samples.length, lineNum);
+            }
+
+            log(`Detection Complete: Found ${lineNum} lines.`);
+        }
+
+        function exportCSV(data, originalFilename) {
+            let csvHeader = "RelativeTimestamp_ms,RawX,RawY,SmoothX,SmoothY,VelX,VelY,Type,ReturnSweep,LineIndex,CharIndex,AlgoLineIndex,Extrema\n";
+            let csvContent = csvHeader;
+
+            data.forEach(d => {
+                const row = [
+                    d.t,
+                    d.x !== null ? d.x : "",
+                    d.y !== null ? d.y : "",
+                    d.gx !== null ? d.gx.toFixed(2) : "",
+                    d.gy !== null ? d.gy.toFixed(2) : "",
+                    d.vx !== null ? d.vx.toFixed(4) : "",
+                    d.vy !== null ? d.vy.toFixed(4) : "",
+                    d.type,
+                    (d.isReturnSweep ? "TRUE" : ""),
+                    (d.lineIndex !== null && d.lineIndex !== undefined) ? d.lineIndex : "",
+                    (d.charIndex !== null && d.charIndex !== undefined) ? d.charIndex : "",
+                    (d.detectedLineIndex !== undefined) ? d.detectedLineIndex : "",
+                    (d.extrema !== undefined) ? d.extrema : ""
+                ];
+                csvContent += row.join(",") + "\n";
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+
+            const newName = originalFilename.replace(/\.(csv|txt)$/i, "") + "_processed_k3.5.csv";
+
+            link.href = url;
+            link.setAttribute("download", newName);
+            link.style.display = "none";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            log(`Triggered download for: ${newName}`);
+        }
+
+        // --- 4. Chart Rendering ---
+
+        let algoCharts = [];
+
+        function renderCharts(data) {
+            const container = document.getElementById('charts-container');
+            container.innerHTML = ''; // Clear previous
+
+            // Destroy previous Chart instances if re-running
+            algoCharts.forEach(c => c.destroy());
+            algoCharts = [];
+
+            // Common Axis: RelativeTimestamp_ms
+            const labels = data.map(d => d.t);
+
+            // Prepare Return Sweep Intervals for Plugin
+            const returnSweepIntervals = [];
+            let rStart = null;
+            for (let i = 0; i < data.length; i++) {
+                if (data[i].isReturnSweep) {
+                    if (rStart === null) rStart = data[i].t;
+                } else {
+                    if (rStart !== null) {
+                        returnSweepIntervals.push({ start: rStart, end: data[i - 1].t });
+                        rStart = null;
+                    }
+                }
+            }
+            if (rStart !== null) returnSweepIntervals.push({ start: rStart, end: data[data.length - 1].t });
+
+            const shadingPlugin = {
+                id: 'returnSweepShading',
+                beforeDatasetsDraw(chart) {
+                    const { ctx, chartArea, scales } = chart;
+                    if (!chartArea) return;
+                    const x = scales.x;
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(255, 0, 255, 0.2)'; // Magenta tint for Return Sweeps
+
+                    for (const it of returnSweepIntervals) {
+                        const x0 = x.getPixelForValue(it.start);
+                        const x1 = x.getPixelForValue(it.end);
+                        if (Number.isFinite(x0) && Number.isFinite(x1)) {
+                            ctx.fillRect(Math.min(x0, x1), chartArea.top, Math.abs(x1 - x0), chartArea.bottom - chartArea.top);
+                        }
+                    }
+                    ctx.restore();
+                }
+            };
+
+            const createCanvas = (id, title) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'chart-wrapper';
+                wrapper.innerHTML = `<h3>${title}</h3><canvas id="${id}"></canvas>`;
+                container.appendChild(wrapper);
+                return document.getElementById(id).getContext('2d');
+            };
+
+            // --- Chart 1: RawX, RawY, SmoothY ---
+            const ctx1 = createCanvas('chart1', "Chart 1: Raw X/Y & Smooth Y (with Return Sweeps)");
+            const chart1 = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'RawX', data: data.map(d => d.x), borderColor: '#888', borderWidth: 1, pointRadius: 0 },
+                        { label: 'RawY', data: data.map(d => d.y), borderColor: '#ffcc00', borderWidth: 1, pointRadius: 0 },
+                        { label: 'SmoothY', data: data.map(d => d.gy), borderColor: 'orange', borderWidth: 2, pointRadius: 0 }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { maxTicksLimit: 20 } } } },
+                plugins: [shadingPlugin]
+            });
+            algoCharts.push(chart1);
+
+            // --- Chart 2: SmoothX, Extrema, ReturnSweep ---
+            // Prepare Extrema
+            const lineStarts = data.map(d => d.extrema === 'LineStart' ? d.gx : null);
+            const posMaxs = data.map(d => d.extrema === 'PosMax' ? d.gx : null);
+
+            const ctx2 = createCanvas('chart2', "Chart 2: SmoothX, Extrema & Return Sweeps");
+            const chart2 = new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'SmoothX', data: data.map(d => d.gx), borderColor: 'blue', borderWidth: 1.5, pointRadius: 0 },
+                        {
+                            label: 'LineStart',
+                            data: lineStarts,
+                            type: 'scatter',
+                            backgroundColor: 'green',
+                            pointStyle: 'triangle',
+                            radius: 6,
+                            rotation: 180
+                        },
+                        {
+                            label: 'PosMax',
+                            data: posMaxs,
+                            type: 'scatter',
+                            backgroundColor: 'red',
+                            pointStyle: 'triangle',
+                            radius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { x: { ticks: { maxTicksLimit: 20 } } },
+                    plugins: {
+                        legend: { labels: { usePointStyle: true } }
+                    }
+                },
+                plugins: [shadingPlugin]
+            });
+            algoCharts.push(chart2);
+
+            // --- Chart 3: VelX, VelY ---
+            const ctx3 = createCanvas('chart3', "Chart 3: Velocity X/Y");
+            const chart3 = new Chart(ctx3, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'VelX', data: data.map(d => d.vx), borderColor: 'purple', borderWidth: 1, pointRadius: 0 },
+                        { label: 'VelY', data: data.map(d => d.vy), borderColor: 'brown', borderWidth: 1, pointRadius: 0 }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { maxTicksLimit: 20 } } } }
+            });
+            algoCharts.push(chart3);
+
+            // --- Chart 4: LineIndex, AlgoLineIndex ---
+            // Note: LineIndex might be missing if input doesn't have it
+            const ctx4 = createCanvas('chart4', "Chart 4: Line Indices");
+
+            // Custom Tooltip for Timestamp & LineIndex Text
+            const textPlugin = {
+                id: 'textInfo',
+                afterDraw(chart) {
+                    if (chart.tooltip?._active?.length) {
+                        const { ctx } = chart;
+                        const activePoint = chart.tooltip._active[0];
+                        const idx = activePoint.index;
+                        const d = data[idx];
+
+                        ctx.save();
+                        ctx.font = '14px Arial';
+                        ctx.fillStyle = 'black';
+                        ctx.textAlign = 'right';
+
+                        const text = `Raw T: ${d.t} | Orig Line: ${d.lineIndex !== null ? d.lineIndex : 'N/A'} | Algo Line: ${d.detectedLineIndex !== undefined ? d.detectedLineIndex : 'N/A'}`;
+                        ctx.fillText(text, chart.chartArea.right - 10, chart.chartArea.top + 20);
+                        ctx.restore();
+                    }
+                }
+            };
+
+            const chart4 = new Chart(ctx4, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'LineIndex (Original)',
+                            data: data.map(d => d.lineIndex),
+                            borderColor: 'rgba(0, 255, 255, 0.4)', // Semi-transparent Cyan
+                            backgroundColor: 'rgba(0, 255, 255, 0.4)',
+                            borderWidth: 6, // Thicker
+                            stepped: true,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'AlgoLineIndex (Detected)',
+                            data: data.map(d => d.detectedLineIndex),
+                            borderColor: '#ff00ff', // Vivid Magenta
+                            borderWidth: 2, // Thinner
+                            borderDash: [6, 4], // Clear dash
+                            stepped: true,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { x: { ticks: { maxTicksLimit: 20 } } },
+                    plugins: {
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function (context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y;
+                                    }
+                                    return label;
+                                },
+                                title: function (tooltipItems) {
+                                    const idx = tooltipItems[0].dataIndex;
+                                    const d = data[idx];
+                                    return `Time: ${d.t} | Orig Line: ${d.lineIndex} | Algo Line: ${d.detectedLineIndex}`;
+                                }
+                            }
+                        }
+                    }
+                },
+                plugins: [textPlugin]
+            });
+            algoCharts.push(chart4);
+        }
+
+        // --- 3. UI Events ---
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+
+        dropZone.addEventListener('click', () => fileInput.click()); // Area click triggers input
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                processFile(e.target.files[0]);
+            }
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.background = '#e6f7ff';
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.style.background = '#fff';
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.background = '#fff';
+            if (e.dataTransfer.files.length > 0) {
+                processFile(e.dataTransfer.files[0]);
+            }
+        });
+
+    </script>
+</body>
+
+</html>
