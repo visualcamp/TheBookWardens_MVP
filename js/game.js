@@ -448,17 +448,12 @@ Game.typewriter = {
                 }
             }
 
-            const charSpan = document.createElement("span");
-            charSpan.textContent = char;
-            this.currentP.insertBefore(charSpan, this.cursorBlob);
+            const charNode = document.createTextNode(char);
+            this.currentP.insertBefore(charNode, this.cursorBlob);
 
             if (char === ' ') this.wordCount++;
 
             this.charIndex++;
-
-            // --- 30-Char Window Logic (Visibility) ---
-            this.manageTextWindow(30);
-            // -----------------------------
         }
 
         // 3. Visual Line Detection
@@ -602,27 +597,7 @@ Game.typewriter = {
         // Feature disabled. Reverted to standard typewriter mode.
     },
 
-    manageTextWindow(limit) {
-        if (!this.currentP) return;
 
-        // Gather span nodes (We assume chars are wrapped in spans now)
-        // Exclude cursor
-        const spans = Array.from(this.currentP.querySelectorAll('span:not(.cursor)'));
-        const total = spans.length;
-
-        if (total > limit) {
-            const hideCount = total - limit;
-
-            // Hide older characters to create "Ticker" effect while maintaining layout
-            for (let i = 0; i < hideCount; i++) {
-                // Optimize: Check if already hidden to avoid redraw? 
-                // style access is fast enough usually.
-                if (spans[i].style.visibility !== "hidden") {
-                    spans[i].style.visibility = "hidden";
-                }
-            }
-        }
-    },
 
     showVillainQuiz() {
         console.log("Reading Finished. Visualizing Fixations...");
