@@ -1146,21 +1146,42 @@ Game.typewriter = {
             }
             lastRawT = d.t;
 
-            // B. Calculate Y (Line Average + Offset)
-            // Use the average Y of the current LINE, not the raw Y of the point.
-            // This ensures the green circle stays perfectly flat for the line duration.
-            const lineAvgY = lineAvgYMap[d.detectedLineIndex] || (d.gy || d.y);
-            const Dy = lineAvgY + offsetY;
+            // B. Calculate Y (Target Snap Mode)
+            // Forcefully snap Y to the actual text line Y position.
+            // This prevents "drift" where the green circle sags below the text.
+            const idx = d.detectedLineIndex;
+            const visualIdx = idx - minLineIdx;
+
+            let Dy = 0;
+            // Use Game.lineYData for perfect accuracy
+            if (this.lineYData && this.lineYData[visualIdx]) {
+                // Target Y + Content Offset + User Adjustment (-5px)
+                Dy = this.lineYData[visualIdx].y + contentRect.top - 5;
+            } else {
+                // Fallback: Use Visual Lines calculation
+                // Need to compute visualIdx first (moved up)
+                const visualLines = this.getVisualLines(this.currentP);
+                if (visualIdx >= 0 && visualIdx < visualLines.length) {
+                    const vLine = visualLines[visualIdx];
+                    Dy = vLine.top + (vLine.bottom - vLine.top) * 0.5;
+                } else {
+                    // Extreme fallback
+                    Dy = d.gy || d.y;
+                }
+            }
 
             // C. Calculate X (Normalized to Line Width - Same as before)
             // We need the detected line for X mapping
             let Dx = d.gx || d.x; // Default Raw X
 
             // "Same as before" X logic:
-            const idx = d.detectedLineIndex;
-            // Align start of data to start of visual lines
+            // idx and visualIdx already calculated above.
+
+            // Determine Visual Lines (Moved up in logic flow, but safe to call)
+            // We already called getVisualLines in fallback, but it's cheap (cached results ideally, but DOM read is fast here)
+            // If getVisualLines was called below only, we might need to hoist it or call it again.
+            // Let's ensure visualLines is available.
             const visualLines = this.getVisualLines(this.currentP);
-            const visualIdx = idx - minLineIdx;
 
             // Pre-calculated ranges from previous step (need to restore this logic outside loop if deleted)
             // We need lineGroups logic back if we want normalization.
