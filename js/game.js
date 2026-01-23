@@ -600,138 +600,15 @@ Game.typewriter = {
 
 
     showVillainQuiz() {
-        console.log("Reading Finished. Visualizing Fixations...");
+        console.log("[Game] Transitioning to Villain Quiz...");
 
-        // 1. Draw Fixation Overlay on screen-read
-        // let overlay; // Removed to avoid redeclaration below
-        if (!window.gazeDataManager) {
-            this.openQuizModal();
-            return;
-        }
+        // Ink Calculation
+        const earnedInk = this.currentText ? this.currentText.replace(/\//g, "").length : 50;
+        Game.state.ink = (Game.state.ink || 0) + earnedInk;
+        Game.updateUI();
 
-        const allData = window.gazeDataManager.getAllData();
-        // Filter data starting from t > 3000 (after initial delay)
-        const validData = allData.filter(d => d.t > 3000);
-
-        if (validData.length === 0) {
-            console.warn("[Game] No valid gaze data found (t > 3000).");
-            this.openQuizModal();
-            return;
-        }
-
-        const container = document.getElementById("screen-read");
-
-        // Create full-screen overlay for animation
-        let overlay = document.getElementById("fixation-anim-overlay");
-        if (!overlay) {
-            overlay = document.createElement("div");
-            overlay.id = "fixation-anim-overlay";
-            overlay.style.position = "absolute";
-            overlay.style.top = "0";
-            overlay.style.left = "0";
-            overlay.style.width = "100%";
-            overlay.style.height = "100%";
-            overlay.style.pointerEvents = "none";
-            overlay.style.zIndex = "999";
-            overlay.style.background = "rgba(0,0,0,0.1)";
-            if (container) container.appendChild(overlay);
-        } else {
-            overlay.innerHTML = ""; // Clear previous
-        }
-
-        // Calculate Shift Offset
-        // Target: "Alice" (Start of text)
-        let startX = 0, startY = 0;
-        try {
-            if (this.currentP && this.currentP.firstChild) {
-                const range = document.createRange();
-                range.setStart(this.currentP.firstChild, 0);
-                range.setEnd(this.currentP.firstChild, 1);
-                const rect = range.getBoundingClientRect();
-                startX = rect.left;
-                startY = rect.top + (rect.height / 2);
-            }
-        } catch (e) {
-            console.warn("[Game] Failed to get range rect for startX:", e);
-        }
-
-        // Fallback
-        if ((startX === 0 && startY === 0) && this.currentP) {
-            const pRect = this.currentP.getBoundingClientRect();
-            startX = pRect.left + 10;
-            startY = pRect.top + 15;
-            console.log("[Game] Used fallback rect.");
-        }
-
-        console.log(`[Game] Text Target: (${startX}, ${startY})`);
-
-        const firstGaze = validData.find(d => d.x > 0 && d.y > 0) || validData[0];
-        const offsetX = startX - firstGaze.x;
-        const offsetY = startY - firstGaze.y;
-
-        console.log(`[Game] Animation Offset: dx=${offsetX}, dy=${offsetY}`);
-
-        // Prepare Animation Data
-        // Shift all points and Compress Time (10% duration for 10x speed)
-        const baseTime = validData[0].t;
-        const animData = validData.map(d => ({
-            t: baseTime + (d.t - baseTime) * 0.1,
-            x: d.x + offsetX,
-            y: d.y + offsetY
-        }));
-
-        const startTime = animData[0].t;
-        const endTime = animData[animData.length - 1].t;
-        const duration = endTime - startTime;
-
-        console.log(`[Game] Animation Start: ${startTime}ms, Duration: ${duration}ms`);
-
-        const animStartTs = performance.now();
-
-        const animate = () => {
-            const now = performance.now();
-            const elapsed = now - animStartTs;
-            const currentSimTime = startTime + elapsed; // Simulation time
-
-            // Draw points that are "due" (t <= currentSimTime) and not yet drawn
-            // Optimization: animData should be sorted by t. We keep an index.
-            while (this.animIndex < animData.length && animData[this.animIndex].t <= currentSimTime) {
-                const pt = animData[this.animIndex];
-
-                const dot = document.createElement("div");
-                dot.style.position = "fixed";
-                dot.style.left = (pt.x - 5) + "px"; // r=5 -> width=10, center offset -5
-                dot.style.top = (pt.y - 5) + "px";
-                dot.style.width = "10px";
-                dot.style.height = "10px";
-                dot.style.borderRadius = "50%";
-                dot.style.backgroundColor = "rgba(255, 0, 0, 0.5)"; // Semi-transparent red
-                // dot.style.boxShadow = "0 0 2px rgba(255,0,0,0.5)";
-                overlay.appendChild(dot);
-
-                this.animIndex++;
-            }
-
-            if (this.animIndex < animData.length) {
-                requestAnimationFrame(animate);
-            } else {
-                console.log("[Game] Animation Finished.");
-                // Animation done. Wait 1 sec then show quiz
-                setTimeout(() => {
-                    if (overlay) overlay.remove();
-
-                    // Ink Calculation (Legacy logic moved here)
-                    const earnedInk = this.currentText ? this.currentText.replace(/\//g, "").length : 50;
-                    Game.state.ink = (Game.state.ink || 0) + earnedInk;
-                    Game.updateUI();
-
-                    this.openQuizModal();
-                }, 1000);
-            }
-        };
-
-        this.animIndex = 0;
-        requestAnimationFrame(animate);
+        // Directly open the modal
+        this.openQuizModal();
     },
 
     openQuizModal() {
