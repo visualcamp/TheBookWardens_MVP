@@ -1317,8 +1317,18 @@ Game.toggleGazeDisplay = function () {
 // Override startReadingSession
 Game.startReadingSession = function () {
     console.log("Starting Typewriter Logic...");
-    // Default OFF requested by user
-    // if (typeof window.showGazeDot === "function") window.showGazeDot(999999);
+
+    // --- NEW: Force Gaze Dot OFF by Default ---
+    // User Requirement: "시선포인트 토글버튼이 디폴트가 아예 안 보이는 것이어야 한다... 사용자 데이터를 확실하게 모아야 한다."
+    if (window.setGazeDotState) window.setGazeDotState(false);
+    this.gazeDisplayOn = false;
+    const btn = document.getElementById("btn-toggle-gaze");
+    if (btn) {
+        btn.innerHTML = "👁️ Gaze Point: OFF";
+        btn.style.backgroundColor = "#444";
+        btn.style.border = "1px solid #555";
+    }
+    // ------------------------------------------
 
     const el = document.getElementById("book-content");
     if (el) {
