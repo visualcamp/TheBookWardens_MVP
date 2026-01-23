@@ -1246,22 +1246,39 @@ Game.typewriter = {
             return;
         }
 
+        // DEBUG: Log first replay point
+        if (replayData.length > 0) {
+            console.log("[Replay] First Point:", replayData[0]);
+            console.log("[Replay] Total Points:", replayData.length);
+        } else {
+            console.error("[Replay] NO REPLAY DATA GENERATED!");
+        }
+
         // 4. Render
         const overlay = document.createElement('canvas');
+        overlay.id = "gaze-replay-overlay"; // ID for verification
         overlay.style.position = 'fixed';
         overlay.style.top = '0';
         overlay.style.left = '0';
         overlay.style.width = '100vw';
         overlay.style.height = '100vh';
         overlay.style.pointerEvents = 'none';
-        overlay.style.zIndex = '9999';
+        overlay.style.zIndex = '99999'; // Super high Z
         document.body.appendChild(overlay);
 
         overlay.width = window.innerWidth;
         overlay.height = window.innerHeight;
 
         const ctx = overlay.getContext('2d');
-        const totalDuration = replayData[replayData.length - 1].t;
+
+        // DEBUG: Draw a STATIC Red Test Dot at Center to prove Canvas works
+        ctx.fillStyle = "red";
+        ctx.beginPath();
+        ctx.arc(window.innerWidth / 2, window.innerHeight / 2, 50, 0, Math.PI * 2);
+        ctx.fill();
+        console.log("[Replay] Drawn Red Test Dot at Center");
+
+        const totalDuration = replayData.length > 0 ? replayData[replayData.length - 1].t : 0;
         let startAnimTime = null;
 
         const animate = (timestamp) => {
@@ -1270,45 +1287,48 @@ Game.typewriter = {
 
             ctx.clearRect(0, 0, overlay.width, overlay.height);
 
+            // Redraw Test Dot (Small) in corner to confirm loop running
+            ctx.fillStyle = "red";
+            ctx.fillRect(10, 10, 10, 10);
+
             // Find current point in stream
             let pt = null;
-            // Linear search optimization: start from last index? No, simple linear is fine for <10k points
-            // For smoother replay, we might interpolate between points, but strictly snapping to sample is fine for now.
+            // Linear search
             for (let i = 0; i < replayData.length; i++) {
                 if (replayData[i].t > progress) {
                     pt = replayData[i > 0 ? i - 1 : 0];
                     break;
                 }
             }
-            if (!pt && progress >= totalDuration) pt = replayData[replayData.length - 1];
+            if (!pt && progress >= totalDuration && replayData.length > 0) pt = replayData[replayData.length - 1];
 
             if (pt) {
+                // Determine logic for styles
+                const isFixation = (pt.type === 'Fixation');
+
                 ctx.beginPath();
                 ctx.arc(pt.x, pt.y, pt.r, 0, 2 * Math.PI);
 
-                // Make ALL points visible
-                if (pt.type === 'Fixation') {
-                    ctx.fillStyle = 'rgba(0, 255, 0, 0.6)'; // More opaque green
-                    ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
-                    ctx.lineWidth = 2;
-                    ctx.fill();
-                    ctx.stroke();
+                // Make ALL points visible - High Opacity for Debug
+                if (isFixation) {
+                    ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                    ctx.lineWidth = 3;
                 } else {
-                    // Saccade / Unknown - Make visible!
-                    ctx.fillStyle = 'rgba(0, 200, 0, 0.3)'; // Visible faint green
-                    ctx.strokeStyle = 'rgba(0, 200, 0, 0.4)';
+                    ctx.fillStyle = 'rgba(0, 200, 0, 0.5)';
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
                     ctx.lineWidth = 1;
-                    ctx.fill();
-                    ctx.stroke();
                 }
+                ctx.fill();
+                ctx.stroke();
 
-                // Debug Text on Canvas
-                // ctx.fillStyle = "red";
-                // ctx.font = "12px sans-serif";
-                // ctx.fillText(`T: ${Math.round(progress)}ms | Line: ${pt.lineIndex || '?'}`, pt.x + 25, pt.y);
+                // Draw coordinate text next to dot
+                ctx.fillStyle = "#fff";
+                ctx.font = "14px monospace";
+                ctx.fillText(`(${Math.round(pt.x)}, ${Math.round(pt.y)})`, pt.x + 25, pt.y);
             }
 
-            if (progress < totalDuration + 1000) { // Keep last frame for 1s
+            if (progress < totalDuration + 1000) {
                 requestAnimationFrame(animate);
             } else {
                 setTimeout(() => {
