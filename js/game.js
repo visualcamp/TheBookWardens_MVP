@@ -614,14 +614,6 @@ Game.typewriter = {
     openQuizModal() {
         console.log("[Game] openQuizModal called");
 
-        // Export Gaze Data as CSV (User Requirement: Output when villain dialogue appears)
-        // Prevent double export: check if we just exported
-        if (window.gazeDataManager && !Game.hasExported) {
-            console.log("Exporting Gaze CSV...");
-            window.gazeDataManager.exportCSV();
-            Game.hasExported = true; // Set flag
-        }
-
         // Safety check for quiz index
         if (this.currentParaIndex === undefined) this.currentParaIndex = 0;
 
@@ -883,318 +875,247 @@ Game.typewriter = {
     // --- Gaze Feedback Logic ---
     // --- Gaze Replay Logic ---
     startGazeReplay() {
-        console.log("[Game] Starting Gaze Replay (Direct Stream Mode)...");
+        console.log("[Game] Starting Gaze Replay Logic...");
 
-        // 1. Data Source (SeeSo SDK) with Time Range Filter
-        const { startTime, endTime } = window.gazeDataManager.getCharIndexTimeRange();
-        const tStart = startTime !== null ? startTime : 0;
-        const tEnd = endTime !== null ? endTime : Infinity;
+        try {
+            // 1. Data Source (SeeSo SDK) with Time Range Filter
+            const { startTime, endTime } = window.gazeDataManager.getCharIndexTimeRange();
+            const tStart = startTime !== null ? startTime : 0;
+            const tEnd = endTime !== null ? endTime : Infinity;
 
-        console.log(`[Replay] Filtering Data using CharIndex Range: ${tStart} ~ ${tEnd}ms`);
+            console.log(`[Replay] Filtering Data using CharIndex Range: ${tStart} ~ ${tEnd}ms`);
 
-        const rawData = window.gazeDataManager.getAllData();
-        // Filter by Time Range AND LineIndex
-        const validData = rawData.filter(d =>
-            d.t >= tStart &&
-            d.t <= tEnd &&
-            d.detectedLineIndex !== undefined &&
-            d.detectedLineIndex !== null
-        );
-        console.log(`[Replay] Valid Data Count: ${validData.length}`);
+            const rawData = window.gazeDataManager.getAllData();
+            // Filter by Time Range AND LineIndex
+            const validData = rawData.filter(d =>
+                d.t >= tStart &&
+                d.t <= tEnd &&
+                d.detectedLineIndex !== undefined &&
+                d.detectedLineIndex !== null
+            );
+            console.log(`[Replay] Valid Data Count: ${validData.length}`);
 
-        // Find minimum detected line index for auto-alignment
-        let minLineIdx = 9999;
-        validData.forEach(d => {
-            if (d.detectedLineIndex < minLineIdx) minLineIdx = d.detectedLineIndex;
-        });
+            // Find minimum detected line index for auto-alignment
+            let minLineIdx = 9999;
+            validData.forEach(d => {
+                if (d.detectedLineIndex < minLineIdx) minLineIdx = d.detectedLineIndex;
+            });
 
-        if (validData.length === 0) {
-            console.warn("No valid gaze data for replay (filtered by CharIndex time range).");
-            this.showVillainQuiz();
-            return;
-        }
+            if (validData.length === 0) {
+                console.warn("No valid gaze data for replay. Proceeding to Villain Quiz directly.");
+                this.showVillainQuiz();
+                return;
+            }
 
-        const visualLines = this.getVisualLines(this.currentP);
-        console.log(`[Replay] Visual Lines Count: ${visualLines.length}`);
+            const visualLines = this.getVisualLines(this.currentP);
+            console.log(`[Replay] Visual Lines Count: ${visualLines.length}`);
 
-        const lineGroups = {};
-        // Get content container position for absolute alignment
-        const contentEl = document.getElementById("book-content");
-        const contentRect = contentEl ? contentEl.getBoundingClientRect() : { top: 0 };
+            const lineGroups = {};
+            // Get content container position for absolute alignment
+            const contentEl = document.getElementById("book-content");
+            const contentRect = contentEl ? contentEl.getBoundingClientRect() : { top: 0 };
 
-        // -------------------------------------------------------------
-        // PRE-CALCULATION: X-Axis Min/Max per line (for Normalization)
-        // (Y-axis uses direct Target Snap, so no pre-calc needed for Y)
-        validData.forEach(d => {
-            const idx = d.detectedLineIndex;
-            if (idx !== undefined && idx !== null) {
-                if (!lineGroups[idx]) {
-                    lineGroups[idx] = { minX: Infinity, maxX: -Infinity, count: 0 };
+            // -------------------------------------------------------------
+            // PRE-CALCULATION: X-Axis Min/Max per line (for Normalization)
+            // -------------------------------------------------------------
+            validData.forEach(d => {
+                const idx = d.detectedLineIndex;
+                if (idx !== undefined && idx !== null) {
+                    if (!lineGroups[idx]) {
+                        lineGroups[idx] = { minX: Infinity, maxX: -Infinity, count: 0 };
+                    }
+                    const valX = d.gx || d.x;
+                    if (valX < lineGroups[idx].minX) lineGroups[idx].minX = valX;
+                    if (valX > lineGroups[idx].maxX) lineGroups[idx].maxX = valX;
+                    lineGroups[idx].count++;
                 }
-                const valX = d.gx || d.x;
-                if (valX < lineGroups[idx].minX) lineGroups[idx].minX = valX;
-                if (valX > lineGroups[idx].maxX) lineGroups[idx].maxX = valX;
-                lineGroups[idx].count++;
+            });
+
+            // -------------------------------------------------------------
+            // PRE-CALCULATION: Global Y Offset (Anchor Line 1)
+            // -------------------------------------------------------------
+            let globalYOffset = 0;
+            const firstLineData = validData.find(d => d.detectedLineIndex === minLineIdx && d.avgY !== undefined && d.avgY !== null);
+            let maxLineIdx = minLineIdx;
+            // Also find Max Line Index correctly
+            validData.forEach(d => {
+                if (d.detectedLineIndex > maxLineIdx) maxLineIdx = d.detectedLineIndex;
+            });
+
+            if (firstLineData && this.lineYData && this.lineYData[0]) {
+                const targetY_Line1 = this.lineYData[0].y + contentRect.top;
+                const avgY_Line1 = firstLineData.avgY;
+                globalYOffset = targetY_Line1 - avgY_Line1;
+                console.log(`[Replay] Global Y Offset: ${globalYOffset.toFixed(2)}px`);
+            } else {
+                console.warn("[Replay] Could not calculate Global Y Offset. Defaulting to 0.");
             }
-        });
-        // -------------------------------------------------------------
 
-        // -------------------------------------------------------------
-        // PRE-CALCULATION: Global Y Offset (Anchor Line 1)
-        // -------------------------------------------------------------
-        let globalYOffset = 0;
-        // Find the first valid avgY for the starting line
-        const firstLineData = validData.find(d => d.detectedLineIndex === minLineIdx && d.avgY !== undefined && d.avgY !== null);
+            // 3. Build Replay Stream
+            const replayData = [];
+            let virtualTime = 0;
+            let lastRawT = validData[0].t;
 
-        if (firstLineData && this.lineYData && this.lineYData[0]) {
-            // Target Y: The actual visual Y of the first detected line
-            // Note: lineYData stores offsetTop relative to paragraph. We need screen coordinates.
-            // visualIdx for minLineIdx is 0.
-            const targetY_Line1 = this.lineYData[0].y + contentRect.top;
-            const avgY_Line1 = firstLineData.avgY;
+            // V9.1 Logic State
+            let currentFloorLine = minLineIdx;
+            window._lastSweepState = false;
 
-            // Offset = Where it SHOULD be - Where it IS
-            globalYOffset = targetY_Line1 - avgY_Line1;
-            console.log(`[Replay] Global Y Offset: ${globalYOffset.toFixed(2)}px (Target: ${targetY_Line1}, Avg: ${avgY_Line1})`);
-        } else {
-            console.warn("[Replay] Could not calculate Global Y Offset (Missing First Line Data). Defaulting to 0.");
-        }
-
-        // 3. Build Replay Stream (Continuous Offset)
-        const replayData = [];
-        let virtualTime = 0;
-        let lastRawT = validData[0].t;
-
-        // V9.1 Logic State
-        let currentFloorLine = minLineIdx;
-        window._lastSweepState = false; // Reset sweep state tracker
-
-        validData.forEach((d, i) => {
-            // A. Time Compression (Double Speed)
-            if (i > 0) {
-                const rawDelta = d.t - lastRawT;
-                virtualTime += rawDelta / 3; // 3x Speed requested previously? Or user said "Double"?
-                // Previous code: virtualTime += effectiveDelta / 2;
-                // User Request just now: "녹색원의 x값은 예전과 동일하게 적용한다" (Referring to older logic?)
-                // Actually user said "green circle x is same as before".
-                // User Prompt: "녹색원의 x값은 예전과 동일하게 적용한다." -> This implies mapped X? or raw X? 
-                // "예전과 동일하게" -> Previously we mapped X min/max to line width.
-                // But user also said "줄 바꿈이나 이런 거 없이".
-                // If we don't snap to lines, we can't map X to line width easily (which line width?).
-                // "옵셋 이동된 AvgCoolGazeY_Px 값을 녹색원의 y값으로 한다."
-                // "녹색원의 x값은 예전과 동일하게 적용한다."
-                //
-                // If "Same as before" means "Normalized to Line Width", we MUST knowing which line we are on.
-                // But the user wants "No line break logic" for Y. 
-                // If we treat X as "Raw X", it might not match the text if calibration was bad horizontally.
-                //
-                // Let's interpret "Same as before" for X as: "Use the Smoothed X (Raw)?" 
-                // OR "Keep the Line-based normalization for X"?
-                //
-                // If we keep X normalization, we need the Line Index.
-                // The user said: "Return sweep happened... assume next line". 
-                // So we DO have Line Index from the detection algorithm.
-                // So we CAN use Line Index for X mapping.
-                // BUT for Y, we just use Raw Y + Offset.
-
-                // Let's implement X normalization (Same as before) and Y Raw+Offset.
-            }
-            lastRawT = d.t;
-
-            // B. Calculate Y (Refined Logic V9.1: Sweep-Priority + Time-Constraint)
-            // Priority 1: Return Sweep sets the "Floor" (Minimum Allowed Line)
-            if (d.isReturnSweep && !d._sweepHandled) {
-                // Only increment on the leading edge or once per sweep event?
-                // data.isReturnSweep is usually true for a sequence. We need edge detection.
-                if (!window._lastSweepState) {
-                    currentFloorLine++;
-                    // Clamp to max
-                    if (currentFloorLine > maxLineIdx) currentFloorLine = maxLineIdx;
+            validData.forEach((d, i) => {
+                if (i > 0) {
+                    const rawDelta = d.t - lastRawT;
+                    virtualTime += rawDelta / 3; // 3x Speed
                 }
-                window._lastSweepState = true;
-            } else if (!d.isReturnSweep) {
-                window._lastSweepState = false;
-            }
-            d._sweepHandled = true; // prevent double counting if re-iterated? No, local loop.
+                lastRawT = d.t;
 
-            // Priority 2: Time-Constrained Candidate Selection (Logic V9.0)
-            // BUT constrained by 'currentFloorLine' from Sweep Logic.
+                // Priority 1: Sweep sets Floor
+                if (d.isReturnSweep && !d._sweepHandled) {
+                    if (!window._lastSweepState) {
+                        currentFloorLine++;
+                        if (currentFloorLine > maxLineIdx) currentFloorLine = maxLineIdx;
+                    }
+                    window._lastSweepState = true;
+                } else if (!d.isReturnSweep) {
+                    window._lastSweepState = false;
+                }
+                d._sweepHandled = true;
 
-            const currentGy = (d.gy !== undefined && d.gy !== null) ? d.gy : d.y;
-            const alignedGy = currentGy + globalYOffset;
+                // Priority 2: Time-Constraint
+                const currentGy = (d.gy !== undefined && d.gy !== null) ? d.gy : d.y;
+                const alignedGy = currentGy + globalYOffset;
 
-            const totalDuration = validData[validData.length - 1].t - validData[0].t;
-            let progress = (totalDuration > 0) ? (d.t - validData[0].t) / totalDuration : 0;
-            progress = Math.max(0, Math.min(1.0, progress));
+                const totalDuration = validData[validData.length - 1].t - validData[0].t;
+                let progress = (totalDuration > 0) ? (d.t - validData[0].t) / totalDuration : 0;
+                progress = Math.max(0, Math.min(1.0, progress));
 
-            const totalL = (maxLineIdx - minLineIdx) + 1;
-            let allowedCount = Math.ceil(progress * totalL);
-            if (allowedCount < 1) allowedCount = 1;
+                const totalL = (maxLineIdx - minLineIdx) + 1;
+                let allowedCount = Math.ceil(progress * totalL);
+                if (allowedCount < 1) allowedCount = 1;
 
-            // Effective Range: [currentFloorLine ... TimeAllowedMax]
-            // We ensure currentFloorLine represents the "minimum logic line".
+                let timeAllowedMaxLine = minLineIdx + allowedCount - 1;
+                if (timeAllowedMaxLine < currentFloorLine) timeAllowedMaxLine = currentFloorLine;
 
-            // Map currentFloorLine (detected count) to Visual Index loop
-            // And TimeConstraint extends the UPPER bound.
+                let bestLineIdx = currentFloorLine;
+                let minDiff = Infinity;
 
-            // However, allowedCount is relative to minLineIdx. 
-            // TimeAllowedMaxLine = minLineIdx + allowedCount - 1
-            let timeAllowedMaxLine = minLineIdx + allowedCount - 1;
-
-            // Ensure our Search Range is valid: [Floor, Max(Floor, TimeMax)]
-            // If Sweep pushed us beyond TimeMax, Sweep wins (Floor).
-            if (timeAllowedMaxLine < currentFloorLine) timeAllowedMaxLine = currentFloorLine;
-
-            let bestLineIdx = currentFloorLine;
-            let minDiff = Infinity;
-
-            // Search for closest TargetY in range [currentFloorLine, timeAllowedMaxLine]
-            for (let k = currentFloorLine; k <= timeAllowedMaxLine; k++) {
-                const vIdx = k - minLineIdx;
-                if (this.lineYData && this.lineYData[vIdx]) {
-                    const targetY = this.lineYData[vIdx].y + contentRect.top;
-                    const diff = Math.abs(alignedGy - targetY);
-                    if (diff < minDiff) {
-                        minDiff = diff;
-                        bestLineIdx = k;
+                for (let k = currentFloorLine; k <= timeAllowedMaxLine; k++) {
+                    const vIdx = k - minLineIdx;
+                    if (this.lineYData && this.lineYData[vIdx]) {
+                        const targetY = this.lineYData[vIdx].y + contentRect.top;
+                        const diff = Math.abs(alignedGy - targetY);
+                        if (diff < minDiff) {
+                            minDiff = diff;
+                            bestLineIdx = k;
+                        }
                     }
                 }
-            }
 
-            const bestVIdx = bestLineIdx - minLineIdx;
-            let Dy = alignedGy; // Return to raw/aligned if no match
-            if (this.lineYData && this.lineYData[bestVIdx]) {
-                Dy = this.lineYData[bestVIdx].y + contentRect.top;
-            }
-            // Refine with Offset for perfect centering
-            Dy -= 5;
+                const bestVIdx = bestLineIdx - minLineIdx;
+                let Dy = alignedGy;
+                if (this.lineYData && this.lineYData[bestVIdx]) {
+                    Dy = this.lineYData[bestVIdx].y + contentRect.top;
+                }
+                Dy -= 5;
 
-            // Prepare indices for X calc
-            const idx = d.detectedLineIndex;
-            const visualIdx = idx - minLineIdx;
+                // X Calculation
+                const idx = d.detectedLineIndex;
+                const visualIdx = idx - minLineIdx;
+                let Dx = d.gx || d.x;
 
-            // C. Calculate X (Normalized to Line Width - Same as before)
-            // We need the detected line for X mapping
-            let Dx = d.gx || d.x; // Default Raw X
-
-            // "Same as before" X logic:
-            // idx and visualIdx already calculated above.
-
-            // Determine Visual Lines (Moved up in logic flow, but safe to call)
-            // We already called getVisualLines in fallback, but it's cheap (cached results ideally, but DOM read is fast here)
-            // If getVisualLines was called below only, we might need to hoist it or call it again.
-            // Let's ensure visualLines is available.
-            const visualLines = this.getVisualLines(this.currentP);
-
-            // Pre-calculated ranges from previous step (need to restore this logic outside loop if deleted)
-            // We need lineGroups logic back if we want normalization.
-            // Let's assume we maintain the pre-calc loop.
-
-            // X Mapping Logic
-            if (visualIdx >= 0 && visualIdx < visualLines.length && lineGroups[idx]) {
-                const vLine = visualLines[visualIdx];
-                const gInfo = lineGroups[idx];
-                let normX = 0;
-                // Avoid divide by zero
-                if (gInfo.maxX > gInfo.minX + 1) {
-                    normX = (Dx - gInfo.minX) / (gInfo.maxX - gInfo.minX);
-                } else {
-                    normX = 0.5; // Single point fallback
+                if (visualIdx >= 0 && visualIdx < visualLines.length && lineGroups[idx]) {
+                    const vLine = visualLines[visualIdx];
+                    const gInfo = lineGroups[idx];
+                    let normX = 0;
+                    if (gInfo.maxX > gInfo.minX + 1) {
+                        normX = (Dx - gInfo.minX) / (gInfo.maxX - gInfo.minX);
+                    } else {
+                        normX = 0.5;
+                    }
+                    normX = Math.max(0, Math.min(1, normX));
+                    Dx = vLine.left + normX * (vLine.right - vLine.left);
                 }
 
-                normX = Math.max(0, Math.min(1, normX));
-                Dx = vLine.left + normX * (vLine.right - vLine.left);
-            } else {
-                // Fallback if line detection mismatches visual lines
-                // Dx remains raw (might be off)
-            }
-
-            replayData.push({
-                t: virtualTime,
-                x: Dx,
-                y: Dy,
-                r: 20,
-                type: d.type
+                replayData.push({
+                    t: virtualTime,
+                    x: Dx,
+                    y: Dy,
+                    r: 20,
+                    type: d.type
+                });
             });
-        });
 
-        if (replayData.length === 0) {
-            this.showVillainQuiz();
-            return;
-        }
-
-        // DEBUG: Log first replay point
-        if (replayData.length > 0) {
-            console.log("[Replay] First Point:", replayData[0]);
-            console.log("[Replay] Total Points:", replayData.length);
-        } else {
-            console.error("[Replay] NO REPLAY DATA GENERATED!");
-        }
-
-        // 4. Render
-        const overlay = document.createElement('canvas');
-        overlay.id = "gaze-replay-overlay";
-        overlay.style.position = 'fixed';
-        overlay.style.top = '0';
-        overlay.style.left = '0';
-        overlay.style.width = '100vw';
-        overlay.style.height = '100vh';
-        overlay.style.pointerEvents = 'none';
-        overlay.style.zIndex = '9999'; // High Z, but not excessive
-        document.body.appendChild(overlay);
-
-        overlay.width = window.innerWidth;
-        overlay.height = window.innerHeight;
-
-        const ctx = overlay.getContext('2d');
-        const totalDuration = replayData.length > 0 ? replayData[replayData.length - 1].t : 0;
-        let startAnimTime = null;
-
-        const animate = (timestamp) => {
-            if (!startAnimTime) startAnimTime = timestamp;
-            const progress = timestamp - startAnimTime;
-
-            ctx.clearRect(0, 0, overlay.width, overlay.height);
-
-            // Find current point in stream
-            let pt = null;
-            // Linear search
-            for (let i = 0; i < replayData.length; i++) {
-                if (replayData[i].t > progress) {
-                    pt = replayData[i > 0 ? i - 1 : 0];
-                    break;
-                }
+            if (replayData.length === 0) {
+                console.warn("[Replay] Data processing resulted in empty replay stream.");
+                this.showVillainQuiz();
+                return;
             }
-            if (!pt && progress >= totalDuration && replayData.length > 0) pt = replayData[replayData.length - 1];
 
-            if (pt) {
-                ctx.beginPath();
-                ctx.arc(pt.x, pt.y, pt.r, 0, 2 * Math.PI);
+            // 4. Render
+            const overlay = document.createElement('canvas');
+            overlay.id = "gaze-replay-overlay";
+            overlay.style.position = 'fixed';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100vw';
+            overlay.style.height = '100vh';
+            overlay.style.pointerEvents = 'none';
+            overlay.style.zIndex = '9999';
+            document.body.appendChild(overlay);
 
-                // Make ALL points visible - High Opacity
-                if (pt.type === 'Fixation') {
-                    ctx.fillStyle = 'rgba(0, 255, 0, 0.6)';
-                    ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
-                    ctx.lineWidth = 2;
+            overlay.width = window.innerWidth;
+            overlay.height = window.innerHeight;
+
+            const ctx = overlay.getContext('2d');
+            const totalDuration = replayData.length > 0 ? replayData[replayData.length - 1].t : 0;
+            let startAnimTime = null;
+
+            const animate = (timestamp) => {
+                if (!startAnimTime) startAnimTime = timestamp;
+                const progress = timestamp - startAnimTime;
+
+                ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+                let pt = null;
+                for (let i = 0; i < replayData.length; i++) {
+                    if (replayData[i].t > progress) {
+                        pt = replayData[i > 0 ? i - 1 : 0];
+                        break;
+                    }
+                }
+                if (!pt && progress >= totalDuration && replayData.length > 0) pt = replayData[replayData.length - 1];
+
+                if (pt) {
+                    ctx.beginPath();
+                    ctx.arc(pt.x, pt.y, pt.r, 0, 2 * Math.PI);
+
+                    if (pt.type === 'Fixation') {
+                        ctx.fillStyle = 'rgba(0, 255, 0, 0.6)';
+                        ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+                        ctx.lineWidth = 2;
+                    } else {
+                        ctx.fillStyle = 'rgba(0, 200, 0, 0.3)';
+                        ctx.strokeStyle = 'rgba(0, 200, 0, 0.4)';
+                        ctx.lineWidth = 1;
+                    }
+                    ctx.fill();
+                    ctx.stroke();
+                }
+
+                if (progress < totalDuration + 1000) {
+                    requestAnimationFrame(animate);
                 } else {
-                    ctx.fillStyle = 'rgba(0, 200, 0, 0.3)';
-                    ctx.strokeStyle = 'rgba(0, 200, 0, 0.4)';
-                    ctx.lineWidth = 1;
+                    setTimeout(() => {
+                        if (document.body.contains(overlay)) document.body.removeChild(overlay);
+                        this.showVillainQuiz();
+                    }, 500);
                 }
-                ctx.fill();
-                ctx.stroke();
-            }
+            };
+            requestAnimationFrame(animate);
 
-            if (progress < totalDuration + 1000) {
-                requestAnimationFrame(animate);
-            } else {
-                setTimeout(() => {
-                    if (document.body.contains(overlay)) document.body.removeChild(overlay);
-                    this.showVillainQuiz();
-                }, 500);
-            }
-        };
-        requestAnimationFrame(animate);
+        } catch (err) {
+            console.error("[Replay] Fatal Error:", err);
+            // Emergency fallback to ensure flow continues
+            this.showVillainQuiz();
+        }
     },
 
     getVisualLines(container) {
