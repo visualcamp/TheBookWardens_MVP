@@ -1002,29 +1002,53 @@ Game.typewriter = {
         });
 
         // -------------------------------------------------------------
-        // POST-PROCESSING: Filter out short spikes (< 80ms) in Ry
+        // POST-PROCESSING:
+        // 1. Filter out short spikes (< 800ms) in Ry -> set to null
+        // 2. Linearly Interpolate null gaps in Ry
         // -------------------------------------------------------------
         if (validData.length > 0) {
+            // Step 1: Filter short segments to null
             let segmentStartIdx = 0;
             for (let i = 1; i <= validData.length; i++) {
-                // End of segment condition: End of list OR Ry changed
                 const ryChanged = (i < validData.length) && (validData[i].ry !== validData[i - 1].ry);
                 if (i === validData.length || ryChanged) {
                     const duration = validData[i - 1].t - validData[segmentStartIdx].t;
-                    if (duration < 80) {
-                        // Invalidate this segment
+                    if (duration < 800) { // < 800ms
                         for (let k = segmentStartIdx; k < i; k++) {
                             validData[k].ry = null;
-                            validData[k].rx = null; // Hide X too if Y is invalid
+                            // Rx is PRESERVED
                         }
                         console.log(`[Replay] Filtered out spike of ${duration.toFixed(0)}ms at index ${segmentStartIdx}`);
                     }
                     segmentStartIdx = i;
                 }
             }
+
+            // Step 2: Linear Interpolation for null Ry
+            let lastValidIdx = -1;
+            for (let i = 0; i < validData.length; i++) {
+                if (validData[i].ry !== null) {
+                    if (lastValidIdx !== -1) {
+                        const gapSize = i - lastValidIdx - 1;
+                        if (gapSize > 0) {
+                            const startY = validData[lastValidIdx].ry;
+                            const endY = validData[i].ry;
+                            const startT = validData[lastValidIdx].t;
+                            const endT = validData[i].t;
+                            const span = endT - startT;
+
+                            for (let k = lastValidIdx + 1; k < i; k++) {
+                                const ratio = (validData[k].t - startT) / span;
+                                validData[k].ry = startY + (endY - startY) * ratio;
+                            }
+                        }
+                    }
+                    lastValidIdx = i;
+                }
+            }
         }
 
-        console.log(`[Game] Replay Coords Calculated for ${validData.length} points.`);
+        console.log(`[Game] Replay Coords Calculated & Smoothed for ${validData.length} points.`);
     },
 
     startGazeReplay() {
@@ -1043,8 +1067,7 @@ Game.typewriter = {
                 d.t <= tEnd &&
                 d.detectedLineIndex !== undefined &&
                 d.detectedLineIndex !== null &&
-                d.rx !== undefined &&
-                d.rx !== null // Ensure replay coordinates are valid (not filtered)
+                d.rx !== undefined // Check Rx is present (Ry might be null if edge-case)
             );
             console.log(`[Replay] Valid Data Count with Rx/Ry: ${validData.length}`);
 
@@ -1069,7 +1092,7 @@ Game.typewriter = {
                 replayData.push({
                     t: virtualTime,
                     x: d.rx, // Use pre-calculated Rx
-                    y: d.ry, // Use pre-calculated Ry
+                    y: d.ry, // Use pre-calculated Ry (possibly null if edge gap)
                     r: 20,
                     type: d.type
                 });
@@ -1115,7 +1138,7 @@ Game.typewriter = {
                 }
                 if (!pt && progress >= totalDuration && replayData.length > 0) pt = replayData[replayData.length - 1];
 
-                if (pt) {
+                if (pt && pt.y !== null && pt.y !== undefined) {
                     ctx.beginPath();
                     ctx.arc(pt.x, pt.y, pt.r, 0, 2 * Math.PI);
 
