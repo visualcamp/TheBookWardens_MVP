@@ -226,25 +226,26 @@ function detectLinesMobile(geoData, startTime = 0, endTime = Infinity) {
 
     const validDataSlice = geoData; // Use all for offline process usually
 
+    // 2. Prepare samples using NEGATIVE VELOCITY ONLY
+    // High WPM creates high positive velocity, which inflates MAD and hides return sweeps.
     const samples = validDataSlice.map(d => ({
         ts_ms: d.t,
-        velX: d.vx
+        velX: d.vx < 0 ? d.vx : 0
     }));
 
-    // *** IMPORTANT: Same k value as in updated gaze-data-manager.js ***
+    // 3. Detect Spikes using MAD (Sensitivity k=3.5)
+    // With positive velocities removed, the baseline noise is low.
     const { threshold, spikeIntervals } = detectVelXSpikes(samples, { k: 3.5, gapMs: 120, expandOneSample: true });
 
     const returnSweeps = spikeIntervals.filter(interval => {
-        let sum = 0;
-        let count = 0;
-        for (let i = interval.startIndex; i <= interval.endIndex; i++) {
-            if (i >= 0 && i < samples.length) {
-                sum += samples[i].velX;
-                count++;
-            }
+        // Check Displacement
+        if (validDataSlice[interval.startIndex] && validDataSlice[interval.endIndex]) {
+            const startX = validDataSlice[interval.startIndex].gx;
+            const endX = validDataSlice[interval.endIndex].gx;
+            const displacement = startX - endX;
+            if (displacement < 100) return false;
         }
-        const meanVel = count > 0 ? sum / count : 0;
-        return meanVel < 0;
+        return true;
     });
 
     returnSweeps.sort((a, b) => a.start_ms - b.start_ms);

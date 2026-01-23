@@ -522,28 +522,32 @@ export class GazeDataManager {
         const validDataSlice = this.data.slice(startIndex, endIndex + 1);
         if (validDataSlice.length < 10) return 0;
 
-        // 2. Prepare samples (Velocity Data)
+        // 2. Prepare samples using NEGATIVE VELOCITY ONLY
+        // High WPM creates high positive velocity, which inflates MAD and hides return sweeps.
+        // By zeroing out positive velocity, we treat reading as "silence" and return sweeps as "signal".
         const samples = validDataSlice.map(d => ({
             ts_ms: d.t,
-            velX: d.vx
+            velX: d.vx < 0 ? d.vx : 0
         }));
 
-        // 3. Detect Spikes using MAD (Sensitivity k=5)
-        // Adjusted to 3.5 to be MORE sensitive, catching missed return sweeps
+        // 3. Detect Spikes using MAD (Sensitivity k=3.5)
+        // With positive velocities removed, the baseline noise is low. Revert k to 3.5 to avoid noise.
         const { threshold, spikeIntervals } = detectVelXSpikes(samples, { k: 3.5, gapMs: 120, expandOneSample: true });
 
         // 4. Identify Return Sweeps
         const returnSweeps = spikeIntervals.filter(interval => {
-            let sum = 0;
-            let count = 0;
-            for (let i = interval.startIndex; i <= interval.endIndex; i++) {
-                if (i >= 0 && i < samples.length) {
-                    sum += samples[i].velX;
-                    count++;
-                }
+            // Check Displacement (Distinguish Return Sweep from Regression)
+            // interval.startIndex/endIndex are relative to validDataSlice
+            if (validDataSlice[interval.startIndex] && validDataSlice[interval.endIndex]) {
+                const startX = validDataSlice[interval.startIndex].gx;
+                const endX = validDataSlice[interval.endIndex].gx;
+                const displacement = startX - endX; // Moving Left: Start > End, so Disp > 0
+
+                // Threshold: 100px (Assumes Return Sweep covers significant screen width)
+                if (displacement < 100) return false;
             }
-            const meanVel = count > 0 ? sum / count : 0;
-            return meanVel < 0; // Moving Left
+
+            return true;
         });
 
         // Sort by time
