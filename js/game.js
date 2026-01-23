@@ -945,117 +945,54 @@ Game.typewriter = {
         console.log(`[Replay] Total Lines: ${totalLines}, Segments: ${numSegments}`);
 
         // 4. Algorithm Branching
+        // 4. Algorithm Branching (Strict Case A Only - V12)
         if (numSegments >= totalLines) {
-            // --- Case A: Sweep Count Sufficient (Sequential Assignment) ---
-            console.log("[Replay] Case A: Sufficient Sweeps. Mapping segments to lines sequentially.");
+            console.log("[Replay] Condition Met (Segments >= TotalLines). Applying Case A Logic.");
 
+            // Ry: Sequential Mapping based on Segments
             segments.forEach((seg, segIdx) => {
-                // Map segment index to line index (clamp to max)
                 let targetLineRelIdx = segIdx;
-                if (targetLineRelIdx >= totalLines) targetLineRelIdx = totalLines - 1;
+                if (targetLineRelIdx >= totalLines) targetLineRelIdx = totalLines - 1; // Clamp
 
-                // Absolute Line Index
                 const targetLineIdx = minLineIdx + targetLineRelIdx;
 
-                // Get Target Y
                 let targetY = 0;
                 if (this.lineYData) {
                     const yData = this.lineYData.find(y => y.lineIndex === targetLineIdx) || this.lineYData[targetLineRelIdx];
-                    if (yData) {
-                        targetY = yData.y + contentRect.top;
-                    }
+                    if (yData) targetY = yData.y + contentRect.top;
                 }
 
-                // Assign Ry to all points in this segment (Visual Offset -5)
                 seg.forEach(d => {
-                    d.ry = targetY - 5;
-                    // Rx logic is handled below
+                    d.ry = targetY - 5; // Fixed Offset
                 });
             });
 
-        } else {
-            // --- Case B: Sweep Count Insufficient (Time-Proximity Logic) ---
-            console.log("[Replay] Case B: Insufficient Sweeps. Using Time-Proximity Logic.");
-
-            // Global Offset for Proximity Check
-            let globalYOffset = 0;
-            let sumY0 = 0, countY0 = 0;
+            // Rx: Existing Logic (Only when condition met)
             validData.forEach(d => {
-                if (d.detectedLineIndex === minLineIdx) {
-                    sumY0 += (d.gy !== undefined && d.gy !== null ? d.gy : d.y);
-                    countY0++;
-                }
-            });
-            if (countY0 > 0 && this.lineYData && this.lineYData[0]) {
-                globalYOffset = (this.lineYData[0].y + contentRect.top) - (sumY0 / countY0);
-            }
+                const idx = d.detectedLineIndex;
+                const visualIdx = idx - minLineIdx;
+                let Dx = d.gx || d.x;
 
-            const startTime = validData[0].t;
-            const totalDuration = validData[validData.length - 1].t - startTime;
-
-            validData.forEach(d => {
-                const rawGy = (d.gy !== undefined && d.gy !== null) ? d.gy : d.y;
-                const alignedGy = rawGy + globalYOffset;
-
-                // Time Progress
-                let progress = (totalDuration > 0) ? (d.t - startTime) / totalDuration : 0;
-                progress = Math.max(0, Math.min(1, progress));
-
-                // Allowed Max Line (0 to totalLines-1)
-                // "시간이 지나면 첫 줄, 둘째줄 만 가능성 존재... 마지막엔 모두 존재"
-                let maxAllowedRelIdx = Math.floor(progress * totalLines);
-                if (maxAllowedRelIdx >= totalLines) maxAllowedRelIdx = totalLines - 1;
-
-                // Find best line in range [0, maxAllowedRelIdx]
-                let bestRelIdx = 0;
-                let minDiff = Infinity;
-
-                for (let i = 0; i <= maxAllowedRelIdx; i++) {
-                    const tLineIdx = minLineIdx + i;
-                    // Find Y for this line
-                    const yData = this.lineYData && (this.lineYData.find(y => y.lineIndex === tLineIdx) || this.lineYData[i]);
-                    if (yData) {
-                        const tY = yData.y + contentRect.top;
-                        const diff = Math.abs(alignedGy - tY);
-                        if (diff < minDiff) {
-                            minDiff = diff;
-                            bestRelIdx = i;
-                        }
+                if (visualIdx >= 0 && visualIdx < visualLines.length && lineGroups[idx]) {
+                    const vLine = visualLines[visualIdx];
+                    const gInfo = lineGroups[idx];
+                    let normX = 0;
+                    if (gInfo.maxX > gInfo.minX + 1) {
+                        normX = (Dx - gInfo.minX) / (gInfo.maxX - gInfo.minX);
+                    } else {
+                        normX = 0.5;
                     }
+                    normX = Math.max(0, Math.min(1, normX));
+                    Dx = vLine.left + normX * (vLine.right - vLine.left);
                 }
-
-                // Final Assignment
-                const bestYData = this.lineYData && (this.lineYData.find(y => y.lineIndex === (minLineIdx + bestRelIdx)) || this.lineYData[bestRelIdx]);
-                if (bestYData) {
-                    d.ry = bestYData.y + contentRect.top - 5;
-                } else {
-                    d.ry = alignedGy; // fallback
-                }
+                d.rx = Dx;
             });
+
+        } else {
+            console.warn(`[Replay] Condition NOT Met (Segments ${numSegments} < Lines ${totalLines}). Skipping Replay Calculation.`);
         }
 
-        // 5. Rx Calculation (Existing Logic, applied to all)
-        validData.forEach(d => {
-            const idx = d.detectedLineIndex;
-            const visualIdx = idx - minLineIdx;
-            let Dx = d.gx || d.x;
-
-            if (visualIdx >= 0 && visualIdx < visualLines.length && lineGroups[idx]) {
-                const vLine = visualLines[visualIdx];
-                const gInfo = lineGroups[idx];
-                let normX = 0;
-                if (gInfo.maxX > gInfo.minX + 1) {
-                    normX = (Dx - gInfo.minX) / (gInfo.maxX - gInfo.minX);
-                } else {
-                    normX = 0.5;
-                }
-                normX = Math.max(0, Math.min(1, normX));
-                Dx = vLine.left + normX * (vLine.right - vLine.left);
-            }
-            d.rx = Dx;
-        });
-
-        console.log(`[Replay] V11 Calculation Complete.`);
+        console.log(`[Replay] V12 Calculation Complete.`);
     },
 
     startGazeReplay() {
