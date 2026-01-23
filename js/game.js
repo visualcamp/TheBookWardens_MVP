@@ -1019,6 +1019,10 @@ Game.typewriter = {
 
             console.log("[Replay] Case A: Sequential Mapping (Segments >= Ln)");
             // A. Ry: Sequential Mapping based on Segments
+            let lastValidTargetY = (this.lineYData && this.lineYData.length > 0)
+                ? (this.lineYData[0].y + (contentRect ? contentRect.top : 0))
+                : 0;
+
             segments.forEach((seg, segIdx) => {
                 let targetLineRelIdx = segIdx;
 
@@ -1034,9 +1038,16 @@ Game.typewriter = {
 
                 let targetY = 0;
                 if (this.lineYData) {
-                    const yData = this.lineYData.find(y => y.lineIndex === targetLineIdx) || this.lineYData[targetLineRelIdx];
-                    if (yData) targetY = yData.y + contentRect.top;
+                    // Safety: Ensure index is within bounds for fallback array access
+                    const safeFallbackIdx = Math.min(Math.max(0, targetLineRelIdx), this.lineYData.length - 1);
+                    const yData = this.lineYData.find(y => y.lineIndex === targetLineIdx) || this.lineYData[safeFallbackIdx];
+
+                    if (yData) targetY = yData.y + (contentRect ? contentRect.top : 0);
                 }
+
+                // V18 Fix: Prevent targetY falling to 0 (resulting in -5) if mapping fails
+                if (targetY === 0 && lastValidTargetY !== 0) targetY = lastValidTargetY;
+                if (targetY !== 0) lastValidTargetY = targetY;
 
                 seg.forEach(d => d.ry = targetY - 5);
             });
