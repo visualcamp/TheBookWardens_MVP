@@ -1160,6 +1160,8 @@ Game.typewriter = {
                     t: virtualTime,
                     x: d.rx, // Use pre-calculated Rx
                     y: d.ry, // Use pre-calculated Ry (possibly null if edge gap)
+                    // V18 Vis: Use AvgCoolGazeY (avgY) as the 'SmoothY' visualization requested.
+                    gy: (d.avgY !== undefined && d.avgY !== null) ? d.avgY : d.gy,
                     r: 20,
                     type: d.type
                 });
@@ -1205,21 +1207,35 @@ Game.typewriter = {
                 }
                 if (!pt && progress >= totalDuration && replayData.length > 0) pt = replayData[replayData.length - 1];
 
-                if (pt && pt.y !== null && pt.y !== undefined) {
-                    ctx.beginPath();
-                    ctx.arc(pt.x, pt.y, pt.r, 0, 2 * Math.PI);
-
-                    if (pt.type === 'Fixation') {
-                        ctx.fillStyle = 'rgba(0, 255, 0, 0.6)';
-                        ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+                if (pt) {
+                    // 1. Blue Circle (Diagnostic: ReplayX, SmoothY/AvgY)
+                    if (pt.x !== null && pt.gy !== null && pt.gy !== undefined) {
+                        ctx.beginPath();
+                        ctx.arc(pt.x, pt.gy, pt.r, 0, 2 * Math.PI);
+                        ctx.fillStyle = 'rgba(0, 0, 255, 0.3)';
+                        ctx.strokeStyle = 'rgba(0, 0, 255, 0.6)';
                         ctx.lineWidth = 2;
-                    } else {
-                        ctx.fillStyle = 'rgba(0, 200, 0, 0.3)';
-                        ctx.strokeStyle = 'rgba(0, 200, 0, 0.4)';
-                        ctx.lineWidth = 1;
+                        ctx.fill();
+                        ctx.stroke();
                     }
-                    ctx.fill();
-                    ctx.stroke();
+
+                    // 2. Green Circle (Final Replay: ReplayX, ReplayY)
+                    if (pt.y !== null && pt.y !== undefined) {
+                        ctx.beginPath();
+                        ctx.arc(pt.x, pt.y, pt.r, 0, 2 * Math.PI);
+
+                        if (pt.type === 'Fixation') {
+                            ctx.fillStyle = 'rgba(0, 255, 0, 0.6)';
+                            ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+                            ctx.lineWidth = 2;
+                        } else {
+                            ctx.fillStyle = 'rgba(0, 200, 0, 0.3)';
+                            ctx.strokeStyle = 'rgba(0, 200, 0, 0.4)';
+                            ctx.lineWidth = 1;
+                        }
+                        ctx.fill();
+                        ctx.stroke();
+                    }
                 }
 
                 if (progress < totalDuration + 1000) {
