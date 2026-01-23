@@ -1225,12 +1225,12 @@ Game.typewriter = {
                         ctx.arc(pt.x, pt.y, pt.r, 0, 2 * Math.PI);
 
                         if (pt.type === 'Fixation') {
-                            ctx.fillStyle = 'rgba(0, 255, 0, 0.6)';
-                            ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+                            ctx.fillStyle = 'rgba(0, 255, 0, 0.0)'; // Transparent
+                            ctx.strokeStyle = 'rgba(0, 255, 0, 0.0)';
                             ctx.lineWidth = 2;
                         } else {
-                            ctx.fillStyle = 'rgba(0, 200, 0, 0.3)';
-                            ctx.strokeStyle = 'rgba(0, 200, 0, 0.4)';
+                            ctx.fillStyle = 'rgba(0, 200, 0, 0.0)'; // Transparent
+                            ctx.strokeStyle = 'rgba(0, 200, 0, 0.0)';
                             ctx.lineWidth = 1;
                         }
                         ctx.fill();
