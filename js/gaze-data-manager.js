@@ -559,7 +559,7 @@ export class GazeDataManager {
         const validSweeps = [];
         let currentLineNum = 1;
         let lastSweepEndTime = -Infinity;
-        const MIN_LINE_DURATION = 300; // ms (Algorithm 2: Minimum time to read a line)
+        const MIN_LINE_DURATION = 150; // ms (Algorithm 2: Minimum time to read a line - Reduced from 300ms for high WPM)
 
         // Ensure LineIndex integrity (Carry-Forward) for validation
         // We do this locally on the slice to avoid mutating global state permanently if not desired, 

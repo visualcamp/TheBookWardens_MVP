@@ -257,7 +257,7 @@ function detectLinesMobile(geoData, startTime = 0, endTime = Infinity) {
     const validSweeps = [];
     let currentLineNum = 1;
     let lastSweepEndTime = -Infinity;
-    const MIN_LINE_DURATION = 300; // ms (Algorithm 2)
+    const MIN_LINE_DURATION = 150; // ms (Algorithm 2: Reduced for High WPM)
 
     for (const sweep of candidates) {
         const sweepData = validDataSlice[sweep.startIndex];
