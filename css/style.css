@@ -503,3 +503,13 @@ body {
   background-color: #ffd700 !important;
   box-shadow: 0 0 8px #ffd700 !important;
 }
+
+/* --- Chunk Fade Out Effect --- */
+#book-content span {
+  transition: opacity 1.0s ease-out;
+  /* Smooth fade */
+}
+
+.chunk-fade-out {
+  opacity: 0 !important;
+}

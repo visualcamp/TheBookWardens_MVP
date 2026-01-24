@@ -425,10 +425,11 @@ Game.typewriter = {
 
         if (this.shouldClearOldestChunk) {
             while (this.visibleChunksQueue.length >= 2) {
-                console.log("[Game] Clearing oldest chunk to maintain 2-chunk window.");
+                console.log("[Game] Fading out oldest chunk (maintaining 2-chunk window).");
                 const chunkToRemove = this.visibleChunksQueue.shift();
                 chunkToRemove.forEach(node => {
-                    node.style.visibility = "hidden"; // Preserve layout
+                    // node.style.visibility = "hidden"; // OLD: Instant hide
+                    node.classList.add("chunk-fade-out"); // NEW: CSS Fade
                 });
             }
             this.shouldClearOldestChunk = false;
