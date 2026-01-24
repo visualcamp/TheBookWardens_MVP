@@ -556,10 +556,41 @@ export class GazeDataManager {
         candidates.sort((a, b) => a.start_ms - b.start_ms);
 
         // --- Advanced Validation (Algorithm 1 & 2) ---
+        // 0. Dynamic Threshold Calculation (Algorithm 2)
+        // Calculate MIN_LINE_DURATION based on the shortest observed line reading duration (50% of min).
+        let observedMinLineDur = Infinity;
+        let curLineIdxForDur = -1;
+        let curLineStartTForDur = -1;
+
+        for (let i = 0; i < validDataSlice.length; i++) {
+            const d = validDataSlice[i];
+            // Check for valid LineIndex
+            if (d.lineIndex !== null && d.lineIndex !== undefined && d.lineIndex !== "") {
+                const idx = Number(d.lineIndex);
+                if (idx !== curLineIdxForDur) {
+                    // Line Change Detected
+                    if (curLineIdxForDur !== -1) {
+                        const duration = d.t - curLineStartTForDur;
+                        // Filter out noise/glitches (e.g. < 50ms) to avoid setting threshold too low
+                        if (duration > 50 && duration < observedMinLineDur) {
+                            observedMinLineDur = duration;
+                        }
+                    }
+                    curLineIdxForDur = idx;
+                    curLineStartTForDur = d.t;
+                }
+            }
+        }
+
+        // Fallback default if no multi-line data found
+        if (observedMinLineDur === Infinity) observedMinLineDur = 300;
+
+        const MIN_LINE_DURATION = observedMinLineDur * 0.5;
+        console.log(`[GazeDataManager] Dynamic Threshold: MinObserved=${observedMinLineDur}ms -> Threshold=${MIN_LINE_DURATION}ms`);
+
         const validSweeps = [];
         let currentLineNum = 1;
         let lastSweepEndTime = -Infinity;
-        const MIN_LINE_DURATION = 150; // ms (Algorithm 2: Minimum time to read a line - Reduced from 300ms for high WPM)
 
         // Ensure LineIndex integrity (Carry-Forward) for validation
         // We do this locally on the slice to avoid mutating global state permanently if not desired, 
@@ -581,7 +612,6 @@ export class GazeDataManager {
             const sweepTime = sweepData.t;
 
             // --- Algorithm 2: Time Gap Validation ---
-            // "Returnsweep과 연속한 returnsweep간의 시간 간격은... 짧은 경우보다는 길거나 같아야 정상"
             const timeSinceLast = sweepData.t - lastSweepEndTime;
             if (validSweeps.length > 0 && timeSinceLast < MIN_LINE_DURATION) {
                 console.log(`[Reject Sweep] Rapid Fire: dt=${timeSinceLast}ms < ${MIN_LINE_DURATION}ms at T=${sweepTime}`);
