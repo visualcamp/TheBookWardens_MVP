@@ -303,8 +303,8 @@ function detectLinesMobile(geoData, startTime = 0, endTime = Infinity) {
             const visibleLines = Number(currentLineIndex) + 1;
             const targetLineNum = currentLineNum + 1;
 
-            if (targetLineNum > visibleLines) {
-                console.log(`[Reject Sweep] Premature: TargetLine ${targetLineNum} > VisibleLines ${visibleLines} at T=${sweepTime}`);
+            if (targetLineNum > visibleLines + 1) {
+                console.log(`[Reject Sweep] Premature: TargetLine ${targetLineNum} > VisibleLines ${visibleLines} + 1 Buffer at T=${sweepTime}`);
                 continue;
             }
         }

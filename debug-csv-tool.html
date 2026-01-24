@@ -1138,8 +1138,8 @@
                         const visibleLines = Number(currentLineIndex) + 1;
                         const targetLineNum = currentLineNum + 1;
 
-                        if (targetLineNum > visibleLines) {
-                            // log(`[Chart11 Reject] Premature: TargetLine ${targetLineNum} > VisibleLines ${visibleLines}`);
+                        if (targetLineNum > visibleLines + 1) {
+                            // log(`[Chart11 Reject] Premature: TargetLine ${targetLineNum} > VisibleLines ${visibleLines} + 1`);
                             continue;
                         }
                     }

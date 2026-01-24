@@ -641,8 +641,10 @@ export class GazeDataManager {
                 const visibleLines = Number(currentLineIndex) + 1;
                 const targetLineNum = currentLineNum + 1; // We are currently on 'currentLineNum', trying to go to +1
 
-                if (targetLineNum > visibleLines) {
-                    console.log(`[Reject Sweep] Premature: TargetLine ${targetLineNum} > VisibleLines ${visibleLines} at T=${sweepTime}`);
+                // However, due to Typewriter delay, gaze often anticipates the line change before logic updates LineIndex.
+                // We add a +1 buffer to allow "1 line anticipation".
+                if (targetLineNum > visibleLines + 1) {
+                    console.log(`[Reject Sweep] Premature: TargetLine ${targetLineNum} > VisibleLines ${visibleLines} + 1 Buffer at T=${sweepTime}`);
                     continue;
                 }
             }
