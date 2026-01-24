@@ -277,9 +277,11 @@ Game.typewriter = {
         this.wordCount = 0;
         this.startTime = null;
         this.totalPausedTime = 0;
-        this.renderedNodes = []; // Track text nodes for eraser
-        this.erasureStarted = false; // Flag for snake effect
-        this.isFlushing = false; // Flag for end-game erasure
+
+        // Chunk Display Logic Init
+        this.currentChunkNodes = [];
+        this.shouldClearPreviousChunk = false;
+
         Game.state.ink = 0; // Reset Ink
         Game.hasExported = false; // Reset export flag
         Game.updateUI();
@@ -353,9 +355,10 @@ Game.typewriter = {
         this.visualLineIndex = 0;  // Actual visual line
         this.lastOffsetTop = undefined;
         this.charIndex = 0;
-        this.renderedNodes = [];
-        this.erasureStarted = false;
-        this.isFlushing = false;
+
+        // Reset Chunk Logic per Paragraph
+        this.currentChunkNodes = [];
+        this.shouldClearPreviousChunk = false;
 
         if (this.pauseStartTimestamp) {
             this.totalPausedTime += Date.now() - this.pauseStartTimestamp;
@@ -414,135 +417,114 @@ Game.typewriter = {
             return;
         }
 
-        // --- 1. ERASURE LOGIC (Snake Tail) ---
-        // Conditions: Erasure activated (Line 1 started) OR Flushing phase
-        if ((this.erasureStarted || this.isFlushing) && this.renderedNodes.length > 0) {
-            const nodeToErase = this.renderedNodes.shift();
-            if (nodeToErase) {
-                // Use visibility:hidden to preserve layout stability for eye tracking
-                nodeToErase.style.visibility = "hidden";
-            }
+        // --- 1. CHUNK CLEARING LOGIC ---
+        // If the previous chunk ended (flag set), we clear it NOW before typing the new chunk.
+        if (this.shouldClearPreviousChunk) {
+            console.log("[Game] Clearing previous chunk (preserving layout).");
+            this.currentChunkNodes.forEach(node => {
+                node.style.visibility = "hidden"; // Preserve space for layout/eye-tracking
+            });
+            this.currentChunkNodes = []; // Start new chunk accumulation
+            this.shouldClearPreviousChunk = false;
         }
 
-        // --- 2. CHECK FLUSH COMPLETION ---
-        if (this.isFlushing && this.renderedNodes.length === 0) {
-            this.finishSession();
-            return;
-        }
-
-        // --- 3. TYPING LOGIC (Snake Head) ---
+        // --- 2. TYPING LOGIC ---
         let nextDelay = this.baseSpeed;
 
-        if (!this.isFlushing) {
-            // Advance character
-            let char = this.currentText[this.charIndex];
+        // Advance character
+        let char = this.currentText[this.charIndex];
 
-            // A. Chunk End Handling
-            if (char === '/') {
-                // Insert chunk separator (space)
-                const separatorSpan = document.createElement("span");
-                separatorSpan.textContent = " ";
-                this.currentP.insertBefore(separatorSpan, this.cursorBlob);
+        // A. Chunk End Handling (Slash)
+        if (char === '/') {
+            // Insert chunk separator (space)
+            const separatorSpan = document.createElement("span");
+            separatorSpan.textContent = " ";
+            this.currentP.insertBefore(separatorSpan, this.cursorBlob);
 
-                // Track it for erasure
-                this.renderedNodes.push(separatorSpan);
+            // Add separator to current chunk (it will disappear with the chunk)
+            this.currentChunkNodes.push(separatorSpan);
 
-                this.charIndex++; // Skip the slash
+            this.charIndex++; // Skip the slash
 
-                // Skip any immediate space after slash in source text
-                while (this.charIndex < this.currentText.length && this.currentText[this.charIndex] === ' ') {
-                    this.charIndex++;
-                }
-
-                nextDelay = this.chunkDelay || 1000;
-                console.log(`[Game] Chunk Pause: ${nextDelay}ms`);
-            }
-            // B. Normal Character
-            else if (this.charIndex < this.currentText.length) {
-                // Capture Gaze Timeline Start (First legitimate character printed)
-                if (this.charIndex === 0 && this.typingStartGazeTime === null) {
-                    if (window.gazeDataManager) {
-                        const allData = window.gazeDataManager.getAllData();
-                        if (allData.length > 0) {
-                            this.typingStartGazeTime = allData[allData.length - 1].t;
-                            console.log(`[Game] Typing Started. Sync Gaze T: ${this.typingStartGazeTime}ms`);
-                        } else {
-                            this.typingStartGazeTime = 0;
-                        }
-                    }
-                }
-
-                // Wrap character in SPAN for erasure control
-                const charSpan = document.createElement("span");
-                charSpan.textContent = char;
-                this.currentP.insertBefore(charSpan, this.cursorBlob);
-                this.renderedNodes.push(charSpan);
-
-                if (char === ' ') this.wordCount++;
-
+            // Skip any immediate space after slash in source text
+            while (this.charIndex < this.currentText.length && this.currentText[this.charIndex] === ' ') {
                 this.charIndex++;
-
-                // Punctuation delay
-                if (char === '.' || char === '!' || char === '?') {
-                    nextDelay = 800;
-                }
             }
 
-            // --- 4. VISUAL LINE DETECTION ---
-            const rect = this.cursorBlob.getBoundingClientRect();
-            const currentTop = rect.top + window.scrollY;
+            // Flag to clear THIS chunk when the next tick starts
+            this.shouldClearPreviousChunk = true;
 
-            // Debugging Line Detection
-            if (this.charIndex % 30 === 0) {
-                console.log(`[LineDetect] Top:${currentTop}, Last:${this.lastOffsetTop}, Line:${this.visualLineIndex}`);
-            }
-
-            if (this.lastOffsetTop === undefined) {
-                this.lastOffsetTop = currentTop;
-            } else {
-                // Check difference (> 5px threshold for new line)
-                if (currentTop > this.lastOffsetTop + 5) {
-                    // Line Break Detected
-                    this.recordLineY(this.lastOffsetTop, (this.visualLineIndex || 0));
-                    this.visualLineIndex = (this.visualLineIndex || 0) + 1;
-                    this.lastOffsetTop = currentTop;
-
-                    // ACTIVATE ERASURE (Snake Effect)
-                    // "After the yellow cursor moves to the next line... delete letters displayed on the first line"
-                    if (!this.erasureStarted) {
-                        console.log("[Game] Erasure (Snake) Started.");
-                        this.erasureStarted = true;
-                    }
-                }
-            }
-
-            // Auto-scroll
-            const el = document.getElementById("book-content");
-            if (el) el.scrollTop = el.scrollHeight;
-
-            // --- 5. CHECK TYPING END ---
-            if (this.charIndex >= this.currentText.length) {
-                // Record the very last line
-                if (this.lastOffsetTop !== undefined) {
-                    this.recordLineY(this.lastOffsetTop, (this.visualLineIndex || 0));
-                }
-
-                this.pauseStartTimestamp = Date.now();
-
-                // Capture End Time
+            nextDelay = this.chunkDelay || 1000;
+            console.log(`[Game] Chunk End. Pause: ${nextDelay}ms. Next tick will clear this chunk.`);
+        }
+        // B. Normal Character
+        else if (this.charIndex < this.currentText.length) {
+            // Capture Gaze Timeline Start (First legitimate character printed)
+            if (this.charIndex === 0 && this.typingStartGazeTime === null) {
                 if (window.gazeDataManager) {
                     const allData = window.gazeDataManager.getAllData();
                     if (allData.length > 0) {
-                        this.typingEndGazeTime = allData[allData.length - 1].t;
-                        console.log(`[Game] Typing Finished. Sync Gaze T: ${this.typingEndGazeTime}ms`);
+                        this.typingStartGazeTime = allData[allData.length - 1].t;
+                        console.log(`[Game] Typing Started. Sync Gaze T: ${this.typingStartGazeTime}ms`);
+                    } else {
+                        // Fallback
+                        this.typingStartGazeTime = 0;
                     }
                 }
-
-                // Enter Flushing Mode
-                console.log("[Game] Entering Flush Mode (Erasing remaining text).");
-                this.isFlushing = true;
-                nextDelay = this.baseSpeed; // Continue flush at normal speed
             }
+
+            // Wrap character in SPAN for chunk control
+            const charSpan = document.createElement("span");
+            charSpan.textContent = char;
+            this.currentP.insertBefore(charSpan, this.cursorBlob);
+
+            // Track for current chunk
+            this.currentChunkNodes.push(charSpan);
+
+            if (char === ' ') this.wordCount++;
+
+            this.charIndex++;
+
+            // Punctuation delay
+            if (char === '.' || char === '!' || char === '?') {
+                nextDelay = 800;
+            }
+        }
+
+        // --- 3. VISUAL LINE DETECTION ---
+        const rect = this.cursorBlob.getBoundingClientRect();
+        const currentTop = rect.top + window.scrollY;
+
+        // Debugging Line Detection
+        if (this.charIndex % 30 === 0) {
+            console.log(`[LineDetect] Top:${currentTop}, Last:${this.lastOffsetTop}, Line:${this.visualLineIndex}`);
+        }
+
+        if (this.lastOffsetTop === undefined) {
+            this.lastOffsetTop = currentTop;
+        } else {
+            // Check difference (> 5px threshold for new line)
+            if (currentTop > this.lastOffsetTop + 5) {
+                // Line Break Detected
+                this.recordLineY(this.lastOffsetTop, (this.visualLineIndex || 0));
+                this.visualLineIndex = (this.visualLineIndex || 0) + 1;
+                this.lastOffsetTop = currentTop;
+            }
+        }
+
+        // Auto-scroll
+        const el = document.getElementById("book-content");
+        if (el) el.scrollTop = el.scrollHeight;
+
+        // --- 4. CHECK TYPING END ---
+        if (this.charIndex >= this.currentText.length) {
+            // Record the very last line
+            if (this.lastOffsetTop !== undefined) {
+                this.recordLineY(this.lastOffsetTop, (this.visualLineIndex || 0));
+            }
+
+            this.finishSession();
+            return;
         }
 
         // Update Context
