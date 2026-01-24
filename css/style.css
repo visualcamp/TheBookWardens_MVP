@@ -466,3 +466,40 @@ body {
   cursor: auto;
   user-select: text;
 }
+
+/* --- Yellow Cursor for Snake Effect --- */
+.cursor {
+  display: inline-block;
+  width: 8px;
+  height: 1.2em;
+  background-color: #ffd700;
+  /* Yellow */
+  vertical-align: sub;
+  margin-left: 2px;
+  animation: blink 1s step-end infinite;
+  box-shadow: 0 0 5px #ffd700;
+  border-radius: 1px;
+}
+
+@keyframes blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Highlight styles for debug */
+.glow-perfect {
+  background-color: #00ff00 !important;
+  box-shadow: 0 0 10px #00ff00 !important;
+}
+
+.glow-good {
+  background-color: #ffd700 !important;
+  box-shadow: 0 0 8px #ffd700 !important;
+}

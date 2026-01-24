@@ -278,6 +278,8 @@ Game.typewriter = {
         this.startTime = null;
         this.totalPausedTime = 0;
         this.renderedNodes = []; // Track text nodes for eraser
+        this.erasureStarted = false; // Flag for snake effect
+        this.isFlushing = false; // Flag for end-game erasure
         Game.state.ink = 0; // Reset Ink
         Game.hasExported = false; // Reset export flag
         Game.updateUI();
@@ -351,6 +353,9 @@ Game.typewriter = {
         this.visualLineIndex = 0;  // Actual visual line
         this.lastOffsetTop = undefined;
         this.charIndex = 0;
+        this.renderedNodes = [];
+        this.erasureStarted = false;
+        this.isFlushing = false;
 
         if (this.pauseStartTimestamp) {
             this.totalPausedTime += Date.now() - this.pauseStartTimestamp;
@@ -409,166 +414,185 @@ Game.typewriter = {
             return;
         }
 
-        // Advance character
-        let char = this.currentText[this.charIndex];
-        let insertedNode = null;
-
-        // 1. Chunk End Handling
-        if (char === '/') {
-            // Insert chunk separator (space)
-            const separator = document.createTextNode(" ");
-            this.currentP.insertBefore(separator, this.cursorBlob);
-
-            this.charIndex++; // Skip the slash
-
-            // Skip any immediate space after slash
-            while (this.charIndex < this.currentText.length && this.currentText[this.charIndex] === ' ') {
-                this.charIndex++;
+        // --- 1. ERASURE LOGIC (Snake Tail) ---
+        // Conditions: Erasure activated (Line 1 started) OR Flushing phase
+        if ((this.erasureStarted || this.isFlushing) && this.renderedNodes.length > 0) {
+            const nodeToErase = this.renderedNodes.shift();
+            if (nodeToErase) {
+                // Use visibility:hidden to preserve layout stability for eye tracking
+                nodeToErase.style.visibility = "hidden";
             }
+        }
 
-            const delay = this.chunkDelay || 1000;
-            console.log(`[Game] Chunk Pause: ${delay}ms`);
-            this.timer = setTimeout(() => this.tick(), delay);
+        // --- 2. CHECK FLUSH COMPLETION ---
+        if (this.isFlushing && this.renderedNodes.length === 0) {
+            this.finishSession();
             return;
         }
 
-        // 2. Normal Character Printing
-        if (this.charIndex < this.currentText.length) {
-            // Capture Gaze Timeline Start (First legitimate character printed)
-            if (this.charIndex === 0 && this.typingStartGazeTime === null) {
+        // --- 3. TYPING LOGIC (Snake Head) ---
+        let nextDelay = this.baseSpeed;
+
+        if (!this.isFlushing) {
+            // Advance character
+            let char = this.currentText[this.charIndex];
+
+            // A. Chunk End Handling
+            if (char === '/') {
+                // Insert chunk separator (space)
+                const separatorSpan = document.createElement("span");
+                separatorSpan.textContent = " ";
+                this.currentP.insertBefore(separatorSpan, this.cursorBlob);
+
+                // Track it for erasure
+                this.renderedNodes.push(separatorSpan);
+
+                this.charIndex++; // Skip the slash
+
+                // Skip any immediate space after slash in source text
+                while (this.charIndex < this.currentText.length && this.currentText[this.charIndex] === ' ') {
+                    this.charIndex++;
+                }
+
+                nextDelay = this.chunkDelay || 1000;
+                console.log(`[Game] Chunk Pause: ${nextDelay}ms`);
+            }
+            // B. Normal Character
+            else if (this.charIndex < this.currentText.length) {
+                // Capture Gaze Timeline Start (First legitimate character printed)
+                if (this.charIndex === 0 && this.typingStartGazeTime === null) {
+                    if (window.gazeDataManager) {
+                        const allData = window.gazeDataManager.getAllData();
+                        if (allData.length > 0) {
+                            this.typingStartGazeTime = allData[allData.length - 1].t;
+                            console.log(`[Game] Typing Started. Sync Gaze T: ${this.typingStartGazeTime}ms`);
+                        } else {
+                            this.typingStartGazeTime = 0;
+                        }
+                    }
+                }
+
+                // Wrap character in SPAN for erasure control
+                const charSpan = document.createElement("span");
+                charSpan.textContent = char;
+                this.currentP.insertBefore(charSpan, this.cursorBlob);
+                this.renderedNodes.push(charSpan);
+
+                if (char === ' ') this.wordCount++;
+
+                this.charIndex++;
+
+                // Punctuation delay
+                if (char === '.' || char === '!' || char === '?') {
+                    nextDelay = 800;
+                }
+            }
+
+            // --- 4. VISUAL LINE DETECTION ---
+            const rect = this.cursorBlob.getBoundingClientRect();
+            const currentTop = rect.top + window.scrollY;
+
+            // Debugging Line Detection
+            if (this.charIndex % 30 === 0) {
+                console.log(`[LineDetect] Top:${currentTop}, Last:${this.lastOffsetTop}, Line:${this.visualLineIndex}`);
+            }
+
+            if (this.lastOffsetTop === undefined) {
+                this.lastOffsetTop = currentTop;
+            } else {
+                // Check difference (> 5px threshold for new line)
+                if (currentTop > this.lastOffsetTop + 5) {
+                    // Line Break Detected
+                    this.recordLineY(this.lastOffsetTop, (this.visualLineIndex || 0));
+                    this.visualLineIndex = (this.visualLineIndex || 0) + 1;
+                    this.lastOffsetTop = currentTop;
+
+                    // ACTIVATE ERASURE (Snake Effect)
+                    // "After the yellow cursor moves to the next line... delete letters displayed on the first line"
+                    if (!this.erasureStarted) {
+                        console.log("[Game] Erasure (Snake) Started.");
+                        this.erasureStarted = true;
+                    }
+                }
+            }
+
+            // Auto-scroll
+            const el = document.getElementById("book-content");
+            if (el) el.scrollTop = el.scrollHeight;
+
+            // --- 5. CHECK TYPING END ---
+            if (this.charIndex >= this.currentText.length) {
+                // Record the very last line
+                if (this.lastOffsetTop !== undefined) {
+                    this.recordLineY(this.lastOffsetTop, (this.visualLineIndex || 0));
+                }
+
+                this.pauseStartTimestamp = Date.now();
+
+                // Capture End Time
                 if (window.gazeDataManager) {
                     const allData = window.gazeDataManager.getAllData();
                     if (allData.length > 0) {
-                        this.typingStartGazeTime = allData[allData.length - 1].t;
-                        console.log(`[Game] Typing Started. Sync Gaze T: ${this.typingStartGazeTime}ms`);
-                    } else {
-                        // Fallback if no data yet (rare after 2.4s wait)
-                        this.typingStartGazeTime = 0;
+                        this.typingEndGazeTime = allData[allData.length - 1].t;
+                        console.log(`[Game] Typing Finished. Sync Gaze T: ${this.typingEndGazeTime}ms`);
                     }
                 }
-            }
 
-            const charNode = document.createTextNode(char);
-            this.currentP.insertBefore(charNode, this.cursorBlob);
-
-            if (char === ' ') this.wordCount++;
-
-            this.charIndex++;
-        }
-
-        // 3. Visual Line Detection
-        // V21 Fix: Use getBoundingClientRect for absolute detection (offsetTop can be flaky inside inline-blocks)
-        const rect = this.cursorBlob.getBoundingClientRect();
-        const currentTop = rect.top + window.scrollY;
-        // Debugging Line Detection
-        if (this.charIndex % 30 === 0) {
-            console.log(`[LineDetect] Top:${currentTop}, Last:${this.lastOffsetTop}, Line:${this.visualLineIndex}`);
-        }
-
-        if (this.lastOffsetTop === undefined) {
-            this.lastOffsetTop = currentTop;
-        } else {
-            // Check difference (> 5px threshold for new line)
-            if (currentTop > this.lastOffsetTop + 5) {
-                // Line Break Detected: Record previous line
-                this.recordLineY(this.lastOffsetTop, (this.visualLineIndex || 0));
-
-                this.visualLineIndex = (this.visualLineIndex || 0) + 1;
-                this.lastOffsetTop = currentTop;
+                // Enter Flushing Mode
+                console.log("[Game] Entering Flush Mode (Erasing remaining text).");
+                this.isFlushing = true;
+                nextDelay = this.baseSpeed; // Continue flush at normal speed
             }
         }
 
-        // Auto-scroll
-        const el = document.getElementById("book-content");
-        if (el) el.scrollTop = el.scrollHeight;
-
-        // Check if finished
-        if (this.charIndex >= this.currentText.length) {
-            // Record the very last line
-            if (this.lastOffsetTop !== undefined) {
-                this.recordLineY(this.lastOffsetTop, (this.visualLineIndex || 0));
-            }
-
-            this.pauseStartTimestamp = Date.now();
-
-            // --- CAPTURE END TIME IMMEDIATELY ---
-            if (window.gazeDataManager) {
-                const allData = window.gazeDataManager.getAllData();
-                if (allData.length > 0) {
-                    this.typingEndGazeTime = allData[allData.length - 1].t;
-                    console.log(`[Game] Typing Finished Immediately. Sync Gaze T: ${this.typingEndGazeTime}ms`);
-                } else {
-                    this.typingEndGazeTime = 0; // Should not happen if data flowing
-                }
-            }
-
-            if (this.currentP.contains(this.cursorBlob)) {
-                this.currentP.removeChild(this.cursorBlob);
-            }
-
-            // --- STOP CHAR INDEX STAMPING ---
-            // Mark the end of the "Text" session in the data stream
-            if (window.gazeDataManager) {
-                window.gazeDataManager.setContext({ charIndex: null });
-            }
-
-            // User Requirement: End recording 3 seconds after last character
-            // But detection only uses data up to +2000ms.
-            console.log("[Game] Text finished. Waiting 3s (Data collection continues, but charIndex is null)...");
-            setTimeout(() => {
-                let detectedLines = 0;
-                if (window.gazeDataManager) {
-                    // Use STRICT CharIndex Range
-                    const { startTime, endTime } = window.gazeDataManager.getCharIndexTimeRange();
-
-                    // Fallback if valid range not found (e.g. error)
-                    const tStart = startTime !== null ? startTime : 0;
-                    const tEnd = endTime !== null ? endTime : Infinity;
-
-                    console.log(`[Game] Processing Gaze Data for Range based on CharIndex: ${tStart}ms ~ ${tEnd}ms`);
-
-                    // 1. Line Detection Algorithm
-                    detectedLines = window.gazeDataManager.detectLinesMobile(tStart, tEnd);
-                    console.log(`[Game] Line Detection Result: ${detectedLines}`);
-
-                    // 2. Display on UI
-                    const resEl = document.getElementById("line-detect-result");
-                    if (resEl) resEl.innerText = `Line detection: ${detectedLines}`;
-
-                    // NEW: Calculate Replay Coordinates (Rx, Ry) and store in data
-                    this.calculateReplayCoords(tStart, tEnd);
-
-                    // 3. Export CSV (End of Recording) - REMOVED per user request
-                    /*
-                    if (!Game.hasExported) {
-                        console.log(`[Game] Exporting CSV (Range: ${tStart} ~ ${tEnd}ms).`);
-                        window.gazeDataManager.exportCSV(tStart, tEnd);
-                        Game.hasExported = true;
-                    }
-                    */
-                }
-
-                // 4. Proceed to Gaze Replay
-                this.startGazeReplay();
-            }, 3000);
-
-            return; // Early return to prevent updating context with old charIndex
-        } else {
-            // Speed Logic
-            let nextDelay = this.baseSpeed;
-            const lastChar = char;
-            if (lastChar === '.' || lastChar === '!' || lastChar === '?') {
-                nextDelay = 800;
-            }
-            this.timer = setTimeout(() => this.tick(), nextDelay);
-        }
-
+        // Update Context
         if (window.gazeDataManager) {
             window.gazeDataManager.setContext({
                 lineIndex: this.visualLineIndex || 0,
                 charIndex: this.charIndex
             });
         }
+
+        // Schedule Next Tick
+        this.timer = setTimeout(() => this.tick(), nextDelay);
+    },
+
+    finishSession() {
+        if (this.currentP.contains(this.cursorBlob)) {
+            this.currentP.removeChild(this.cursorBlob);
+        }
+
+        // --- STOP CHAR INDEX STAMPING ---
+        if (window.gazeDataManager) {
+            window.gazeDataManager.setContext({ charIndex: null });
+        }
+
+        console.log("[Game] Text fully erased. Waiting 3s...");
+        setTimeout(() => {
+            let detectedLines = 0;
+            if (window.gazeDataManager) {
+                // Use STRICT CharIndex Range
+                const { startTime, endTime } = window.gazeDataManager.getCharIndexTimeRange();
+                const tStart = startTime !== null ? startTime : 0;
+                const tEnd = endTime !== null ? endTime : Infinity;
+
+                console.log(`[Game] Processing Gaze Data for Range based on CharIndex: ${tStart}ms ~ ${tEnd}ms`);
+
+                // 1. Line Detection Algorithm
+                detectedLines = window.gazeDataManager.detectLinesMobile(tStart, tEnd);
+                console.log(`[Game] Line Detection Result: ${detectedLines}`);
+
+                // 2. Display on UI
+                const resEl = document.getElementById("line-detect-result");
+                if (resEl) resEl.innerText = `Line detection: ${detectedLines}`;
+
+                // NEW: Calculate Replay Coordinates (Rx, Ry) and store in data
+                this.calculateReplayCoords(tStart, tEnd);
+            }
+
+            // 4. Proceed to Gaze Replay
+            this.startGazeReplay();
+        }, 3000);
     },
 
     recordLineY(y, index) {
