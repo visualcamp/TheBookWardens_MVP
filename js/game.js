@@ -573,34 +573,6 @@ Game.typewriter = {
         // Store
         if (!this.lineYData) this.lineYData = [];
         this.lineYData.push({ lineIndex: index, y: y });
-        console.log(`[Game] Recorded Line ${index} at Y=${y}`); // Less noise
-
-        // Visualize
-        const el = document.getElementById("book-content");
-        if (el) {
-            const marker = document.createElement("div");
-            marker.style.position = "absolute";
-            marker.style.top = `${y}px`;
-            marker.style.left = "0";
-            marker.style.width = "100%";
-            marker.style.height = "1px";
-            marker.style.borderTop = "1px dashed rgba(255, 50, 50, 0.7)";
-            marker.style.pointerEvents = "none";
-            marker.style.zIndex = "10";
-
-            const label = document.createElement("span");
-            label.innerText = `L${index} Y:${y}`;
-            label.style.position = "absolute";
-            label.style.right = "5px";
-            label.style.top = "-0.7em";
-            label.style.fontSize = "10px";
-            label.style.color = "rgba(255, 100, 100, 0.9)";
-            label.style.backgroundColor = "rgba(0,0,0,0.5)";
-            label.style.padding = "0 2px";
-            marker.appendChild(label);
-
-            el.appendChild(marker);
-        }
     },
 
     applyMagicEraser() {
