@@ -304,25 +304,32 @@ function detectLinesMobile(geoData, startTime = 0, endTime = Infinity) {
             const targetLineNum = currentLineNum + 1;
 
             if (targetLineNum > visibleLinesNow) {
-                // Algorithm 1 Refined: Validate Post-Sweep
-                const postSweepData = validDataSlice[sweep.endIndex];
-                let pIdx = postSweepData.lineIndex;
+                // Algorithm 1 Refined: Post-Sweep Validation with Latency Tolerance
+                // Issue: Gaze arrives (Sweep End) slightly before System updates 'LineIndex' (Latency).
+                // Solution: Check a short window (200ms) AFTER Sweep End to see if LineIndex catches up.
 
-                if (pIdx == null) {
-                    for (let k = sweep.endIndex; k >= sweep.startIndex; k--) {
-                        if (validDataSlice[k].lineIndex != null) {
-                            pIdx = validDataSlice[k].lineIndex;
-                            break;
+                let validated = false;
+                const toleranceWindow = 200; // ms
+                const searchUntil = sweep.end_ms + toleranceWindow;
+
+                // Start checking from Sweep End
+                for (let k = sweep.endIndex; k < validDataSlice.length; k++) {
+                    const d = validDataSlice[k];
+                    if (d.t > searchUntil) break;
+
+                    if (d.lineIndex !== null && d.lineIndex !== undefined) {
+                        const vNum = Number(d.lineIndex) + 1;
+                        if (vNum >= targetLineNum) {
+                            validated = true;
+                            break; // System caught up! Valid sweep.
                         }
                     }
                 }
 
-                if (pIdx != null) {
-                    const visibleAfter = Number(pIdx) + 1;
-                    if (targetLineNum > visibleAfter) {
-                        console.log(`[Reject Sweep] Premature: Target ${targetLineNum} > Visible ${visibleAfter} (at Sweep End)`);
-                        continue;
-                    }
+                if (!validated) {
+                    // Even after waiting, the line index didn't change appropriately. Real Reject.
+                    console.log(`[Reject Sweep] Premature: Target ${targetLineNum} not reached within ${toleranceWindow}ms after Sweep End.`);
+                    continue;
                 }
             }
         }
