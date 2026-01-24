@@ -425,11 +425,14 @@ Game.typewriter = {
 
         if (this.shouldClearOldestChunk) {
             while (this.visibleChunksQueue.length >= 2) {
-                console.log("[Game] Fading out oldest chunk (maintaining 2-chunk window).");
+                console.log("[Game] Wiping out oldest chunk (Left->Right).");
                 const chunkToRemove = this.visibleChunksQueue.shift();
-                chunkToRemove.forEach(node => {
-                    // node.style.visibility = "hidden"; // OLD: Instant hide
-                    node.classList.add("chunk-fade-out"); // NEW: CSS Fade
+
+                // Add staggered delay for "Sliding/Wiping" effect
+                chunkToRemove.forEach((node, index) => {
+                    // Delay increases by 30ms per character -> Left to Right wipe
+                    node.style.transitionDelay = `${index * 30}ms`;
+                    node.classList.add("chunk-fade-out");
                 });
             }
             this.shouldClearOldestChunk = false;
