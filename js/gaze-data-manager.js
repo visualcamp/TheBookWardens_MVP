@@ -710,10 +710,11 @@ export class GazeDataManager {
         for (const sweep of validSweeps) {
             const lineEndRelIdx = sweep.startIndex;
 
-            if (lineEndRelIdx - lastEndRelIdx > 5) {
+            // V22 Fix: Mark segment if data exists, but ALWAYS increment lineNum for a valid sweep
+            if (lineEndRelIdx > lastEndRelIdx) {
                 markLine(lastEndRelIdx, lineEndRelIdx, lineNum);
-                lineNum++;
             }
+            lineNum++; // Increment unconditionally
 
             lastEndRelIdx = sweep.endIndex + 1;
 

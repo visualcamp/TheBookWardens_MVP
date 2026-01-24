@@ -538,12 +538,14 @@ Game.typewriter = {
                     // NEW: Calculate Replay Coordinates (Rx, Ry) and store in data
                     this.calculateReplayCoords(tStart, tEnd);
 
-                    // 3. Export CSV (End of Recording)
+                    // 3. Export CSV (End of Recording) - REMOVED per user request
+                    /*
                     if (!Game.hasExported) {
                         console.log(`[Game] Exporting CSV (Range: ${tStart} ~ ${tEnd}ms).`);
                         window.gazeDataManager.exportCSV(tStart, tEnd);
                         Game.hasExported = true;
                     }
+                    */
                 }
 
                 // 4. Proceed to Gaze Replay
@@ -1027,6 +1029,14 @@ Game.typewriter = {
                 } else {
                     setTimeout(() => {
                         if (document.body.contains(overlay)) document.body.removeChild(overlay);
+
+                        // Export CSV after Replay (User Request)
+                        if (window.gazeDataManager && !Game.hasExported) {
+                            console.log("[Replay] Finished. Exporting CSV once.");
+                            window.gazeDataManager.exportCSV(tStart, tEnd);
+                            Game.hasExported = true;
+                        }
+
                         this.showVillainQuiz();
                     }, 500);
                 }
