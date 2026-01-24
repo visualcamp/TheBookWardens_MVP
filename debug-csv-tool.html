@@ -443,8 +443,8 @@
             // Use all data
             const samples = geoData.map(d => ({ ts_ms: d.t, velX: d.vx }));
 
-            // *** K = 3.0 (Updated) ***
-            const { threshold, spikeIntervals } = detectVelXSpikes(samples, { k: 3.0, gapMs: 120, expandOneSample: true });
+            // *** K = 2.0 (Updated) ***
+            const { threshold, spikeIntervals } = detectVelXSpikes(samples, { k: 2.0, gapMs: 120, expandOneSample: true });
 
             const returnSweeps = spikeIntervals.filter(interval => {
                 let sum = 0;
@@ -519,7 +519,7 @@
             const link = document.createElement("a");
             const url = URL.createObjectURL(blob);
 
-            const newName = originalFilename.replace(/\.(csv|txt)$/i, "") + "_processed_k3.0.csv";
+            const newName = originalFilename.replace(/\.(csv|txt)$/i, "") + "_processed_k2.0.csv";
 
             link.href = url;
             link.setAttribute("download", newName);
@@ -581,7 +581,15 @@
                 }
             };
 
-            const createCanvas = (id, title) => {
+            const createCanvas = (id, title, isUpdate = false) => {
+                let canvas = document.getElementById(id);
+                if (canvas && isUpdate) {
+                    // Update Title
+                    const h3 = canvas.previousElementSibling;
+                    if (h3) h3.innerText = title;
+                    return canvas.getContext('2d');
+                }
+
                 const wrapper = document.createElement('div');
                 wrapper.className = 'chart-wrapper';
                 wrapper.innerHTML = `<h3>${title}</h3><canvas id="${id}"></canvas>`;
@@ -866,14 +874,14 @@
             });
             algoCharts.push(chart8);
 
-            // --- Chart 9: Positive VelY Spike Detection (k=3.0) ---
+            // --- Chart 9: Positive VelY Spike Detection (k=2.0) ---
             // Detect Positive VelY spikes (Downward movement = Line Breaks)
             const velySamples = data.map(d => ({
                 ts_ms: d.t,
                 velX: (typeof d.vy === 'number' && d.vy > 0) ? d.vy : 0 // FILTER: Positive Only
             }));
 
-            const velYResult = detectVelXSpikes(velySamples, { k: 3.0, gapMs: 120, expandOneSample: true });
+            const velYResult = detectVelXSpikes(velySamples, { k: 2.0, gapMs: 120, expandOneSample: true });
 
             // Map spikes back to data for visualization
             const velYSpikePoints = [];
@@ -883,7 +891,7 @@
                 }
             });
 
-            const ctx9 = createCanvas('chart9', "Chart 9: Positive Vertical Velocity (VelY > 0) Analysis (k=3.0)");
+            const ctx9 = createCanvas('chart9', "Chart 9: Positive Vertical Velocity (VelY > 0) Analysis (k=2.0)");
             const chart9 = new Chart(ctx9, {
                 type: 'line',
                 data: {
@@ -976,98 +984,190 @@
             algoCharts.push(chart10);
 
             // --- Chart 11: Independent Return Sweep Detection & Visualization (Like Chart 3) ---
-            // 1. Prepare samples using Recalculated VelX
-            // Use same logic as detectLinesMobile: Mask positive velocity to 0
-            const reCalcSamples = reCalcVelX.map((v, i) => ({
-                ts_ms: data[i].t,
-                velX: v < 0 ? v : 0
-            }));
+            // UI Calculation for K value
+            let dynamicK = 2.0; // Default
 
-            // 2. Run Detection (k=3.0)
-            const reCalcResult = detectVelXSpikes(reCalcSamples, { k: 3.0, gapMs: 120, expandOneSample: true });
-
-            // 3. Identify Return Sweeps (Filter by Displacement > 100px)
-            // Need SmoothX (gx) for displacement check. If not available, use RawX.
-            // Since we promised independence, let's use smoothened RawX locally or just RawX. 
-            // Let's use RawX for purity, or re-smooth locally. 
-            // For simplicity and robustness, let's use the RawX from CSV.
-            const reCalcSweeps = reCalcResult.spikeIntervals.filter(interval => {
-                const sIdx = interval.startIndex;
-                const eIdx = interval.endIndex;
-                if (data[sIdx] && data[eIdx]) {
-                    const startX = data[sIdx].x !== null ? data[sIdx].x : 0;
-                    const endX = data[eIdx].x !== null ? data[eIdx].x : 0;
-                    const displacement = startX - endX;
-                    return displacement > 100;
+            // Function to Render Chart 11
+            function renderChart11(kVal) {
+                // Remove existing chart 11 from array if present
+                const existingIndex = algoCharts.findIndex(c => c.canvas.id === 'chart11');
+                if (existingIndex !== -1) {
+                    algoCharts[existingIndex].destroy();
+                    algoCharts.splice(existingIndex, 1);
                 }
-                return false;
-            });
 
-            // 4. Map to Visualization Data
-            // We need a dataset array for "Detected Return Sweeps"
-            // And we want to overlay this on top of RawX (or Recalculated SmoothX).
-            // Let's overlay on RawX to show "Raw Data + New Detection"
+                // 1. Prepare samples using Recalculated VelX
+                // Use same logic as detectLinesMobile: Mask positive velocity to 0
+                const reCalcSamples = reCalcVelX.map((v, i) => ({
+                    ts_ms: data[i].t,
+                    velX: v < 0 ? v : 0
+                }));
 
-            const detectedSweepPoints = [];
-            const sweepIntervalsForShading = [];
+                // 2. Run Detection (Use Dynamic K)
+                const reCalcResult = detectVelXSpikes(reCalcSamples, { k: kVal, gapMs: 120, expandOneSample: true });
 
-            reCalcSweeps.forEach(sw => {
-                sweepIntervalsForShading.push({ start: data[sw.startIndex].t, end: data[sw.endIndex].t });
-                for (let k = sw.startIndex; k <= sw.endIndex; k++) {
-                    detectedSweepPoints.push({ x: data[k].t, y: data[k].x }); // Plot on X-graph
-                }
-            });
-
-            const ctx11 = createCanvas('chart11', "Chart 11: Independent Return Sweep Detection (RawX + Recalc VelX)");
-
-            // Local Shading Plugin for this chart
-            const localShadingPlugin = {
-                id: 'localReturnSweepShading',
-                beforeDatasetsDraw(chart) {
-                    const { ctx, chartArea, scales } = chart;
-                    if (!chartArea) return;
-                    const x = scales.x;
-                    ctx.save();
-                    ctx.fillStyle = 'rgba(0, 255, 0, 0.2)'; // Green tint for NEW detection
-
-                    for (const it of sweepIntervalsForShading) {
-                        const x0 = x.getPixelForValue(it.start);
-                        const x1 = x.getPixelForValue(it.end);
-                        if (Number.isFinite(x0) && Number.isFinite(x1)) {
-                            ctx.fillRect(Math.min(x0, x1), chartArea.top, Math.abs(x1 - x0), chartArea.bottom - chartArea.top);
-                        }
+                // 3. Identify Return Sweeps (Filter by Displacement > 100px)
+                const reCalcSweeps = reCalcResult.spikeIntervals.filter(interval => {
+                    const sIdx = interval.startIndex;
+                    const eIdx = interval.endIndex;
+                    if (data[sIdx] && data[eIdx]) {
+                        const startX = data[sIdx].x !== null ? data[sIdx].x : 0;
+                        const endX = data[eIdx].x !== null ? data[eIdx].x : 0;
+                        const displacement = startX - endX;
+                        return displacement > 100;
                     }
-                    ctx.restore();
+                    return false;
+                });
+
+                // 4. Map to Visualization Data
+                const detectedSweepPoints = [];
+                const sweepIntervalsForShading = [];
+
+                reCalcSweeps.forEach(sw => {
+                    sweepIntervalsForShading.push({ start: data[sw.startIndex].t, end: data[sw.endIndex].t });
+                    for (let k = sw.startIndex; k <= sw.endIndex; k++) {
+                        detectedSweepPoints.push({ x: data[k].t, y: data[k].x }); // Plot on X-graph
+                    }
+                });
+
+                const ctx11 = createCanvas('chart11', `Chart 11: Independent Return Sweep Detection (RawX + Recalc VelX) [K=${kVal}]`, true);
+
+                // Local Shading Plugin for this chart
+                const localShadingPlugin = {
+                    id: 'localReturnSweepShading',
+                    beforeDatasetsDraw(chart) {
+                        const { ctx, chartArea, scales } = chart;
+                        if (!chartArea) return;
+                        const x = scales.x;
+                        ctx.save();
+                        ctx.fillStyle = 'rgba(0, 255, 0, 0.2)'; // Green tint for NEW detection
+
+                        for (const it of sweepIntervalsForShading) {
+                            const x0 = x.getPixelForValue(it.start);
+                            const x1 = x.getPixelForValue(it.end);
+                            if (Number.isFinite(x0) && Number.isFinite(x1)) {
+                                ctx.fillRect(Math.min(x0, x1), chartArea.top, Math.abs(x1 - x0), chartArea.bottom - chartArea.top);
+                            }
+                        }
+                        ctx.restore();
+                    }
+                };
+
+                const chart11 = new Chart(ctx11, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'RawX',
+                                data: data.map(d => d.x),
+                                borderColor: '#888',
+                                borderWidth: 1,
+                                pointRadius: 0,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'LineIndex',
+                                data: data.map(d => d.lineIndex),
+                                borderColor: 'orange', // Orange for visibility
+                                backgroundColor: 'rgba(255, 165, 0, 0.1)',
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                stepped: true,
+                                yAxisID: 'y1'
+                            },
+                            {
+                                label: 'Detected RS Points',
+                                data: detectedSweepPoints,
+                                type: 'scatter',
+                                backgroundColor: 'lime', // Bright Green
+                                pointStyle: 'rectRot',
+                                radius: 4,
+                                yAxisID: 'y'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        scales: {
+                            x: { ticks: { maxTicksLimit: 20 } },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: { display: true, text: 'Raw X (px)' }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                grid: {
+                                    drawOnChartArea: false, // only want the grid lines for one axis to show up
+                                },
+                                title: { display: true, text: 'Line Index' },
+                                min: 0,
+                                ticks: { stepSize: 1 }
+                            }
+                        }
+                    },
+                    plugins: [localShadingPlugin]
+                });
+                algoCharts.push(chart11);
+
+                // Inject UI controls after chart is created
+                setTimeout(injectChart11Controls, 100);
+            }
+
+            // Initial Render
+            renderChart11(dynamicK);
+
+            // Expose update function globally or via event
+            window.updateChart11K = (newK) => {
+                dynamicK = parseFloat(newK);
+                if (!isNaN(dynamicK)) {
+                    log(`Updating Chart 11 with K=${dynamicK}`);
+                    renderChart11(dynamicK);
                 }
             };
-
-            const chart11 = new Chart(ctx11, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        { label: 'RawX', data: data.map(d => d.x), borderColor: '#888', borderWidth: 1, pointRadius: 0 },
-                        {
-                            label: 'Detected RS Points',
-                            data: detectedSweepPoints,
-                            type: 'scatter',
-                            backgroundColor: 'lime', // Bright Green
-                            pointStyle: 'rectRot',
-                            radius: 4
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: { x: { ticks: { maxTicksLimit: 20 } } }
-                },
-                plugins: [localShadingPlugin]
-            });
-            algoCharts.push(chart11);
         }
 
         // --- 3. UI Events ---
+        // UI for Chart 11 (Inserted dynamically above Chart 11)
+        function injectChart11Controls() {
+            if (document.getElementById('chart11-controls')) return;
+
+            const chart11Canvas = document.getElementById('chart11');
+            if (!chart11Canvas) return; // Wait until chart is created
+
+            const wrapper = chart11Canvas.parentNode; // .chart-wrapper
+            const container = document.getElementById('charts-container');
+
+            const ctrlDiv = document.createElement('div');
+            ctrlDiv.id = 'chart11-controls';
+            ctrlDiv.style.margin = '10px 0';
+            ctrlDiv.style.padding = '10px';
+            ctrlDiv.style.background = '#eee';
+            ctrlDiv.style.borderRadius = '4px';
+            ctrlDiv.style.textAlign = 'center';
+            ctrlDiv.innerHTML = `
+                <label style="font-weight:bold; margin-right:10px;">Chart 11 Sensitivity (K):</label>
+                <input type="number" id="inputK" value="3.0" step="0.1" style="width:60px;padding:5px; margin-right:10px;">
+                <button class="btn" style="padding: 5px 15px;" onclick="window.updateChart11K(document.getElementById('inputK').value)">Update K</button>
+            `;
+
+            // Insert BEFORE the Chart 11 wrapper
+            container.insertBefore(ctrlDiv, wrapper);
+        }
+
+        // Hook into updateChart11K to ensure controls exist? No, create after initial render.
+        // We will call this at the end of renderCharts()
+        injectChart11Controls(); // Call after initial chart 11 render
+
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
 
