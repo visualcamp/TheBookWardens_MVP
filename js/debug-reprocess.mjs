@@ -237,18 +237,57 @@ function detectLinesMobile(geoData, startTime = 0, endTime = Infinity) {
     // With positive velocities removed, the baseline noise is low.
     const { threshold, spikeIntervals } = detectVelXSpikes(samples, { k: 2.0, gapMs: 120, expandOneSample: true });
 
-    const returnSweeps = spikeIntervals.filter(interval => {
+    // 4. Identify Potential Return Sweeps
+    const candidates = spikeIntervals.filter(interval => {
         // Check Displacement
         if (validDataSlice[interval.startIndex] && validDataSlice[interval.endIndex]) {
             const startX = validDataSlice[interval.startIndex].gx;
             const endX = validDataSlice[interval.endIndex].gx;
             const displacement = startX - endX;
             if (displacement < 100) return false;
+        } else {
+            return false;
         }
         return true;
     });
 
-    returnSweeps.sort((a, b) => a.start_ms - b.start_ms);
+    candidates.sort((a, b) => a.start_ms - b.start_ms);
+
+    // --- Advanced Validation (Algorithm 1 & 2) ---
+    const validSweeps = [];
+    let currentLineNum = 1;
+    let lastSweepEndTime = -Infinity;
+    const MIN_LINE_DURATION = 300; // ms (Algorithm 2)
+
+    for (const sweep of candidates) {
+        const sweepData = validDataSlice[sweep.startIndex];
+        const sweepTime = sweepData.t;
+
+        // Algo 2: Time Gap
+        const timeSinceLast = sweepData.t - lastSweepEndTime;
+        if (validSweeps.length > 0 && timeSinceLast < MIN_LINE_DURATION) {
+            console.log(`[Reject Sweep] Rapid Fire: dt=${timeSinceLast}ms < ${MIN_LINE_DURATION}ms at T=${sweepTime}`);
+            continue;
+        }
+
+        // Algo 1: LineNum Constraint
+        let currentLineIndex = sweepData.lineIndex;
+        // In this file, carry-forward is already done in loading phase, so lineIndex should be reliable.
+
+        if (currentLineIndex !== null && currentLineIndex !== undefined) {
+            const visibleLines = Number(currentLineIndex) + 1;
+            const targetLineNum = currentLineNum + 1;
+
+            if (targetLineNum > visibleLines) {
+                console.log(`[Reject Sweep] Premature: TargetLine ${targetLineNum} > VisibleLines ${visibleLines} at T=${sweepTime}`);
+                continue;
+            }
+        }
+
+        validSweeps.push(sweep);
+        lastSweepEndTime = sweep.end_ms;
+        currentLineNum++;
+    }
 
     let lineNum = 1;
     let lastEndRelIdx = 0;
@@ -262,7 +301,7 @@ function detectLinesMobile(geoData, startTime = 0, endTime = Infinity) {
         if (geoData[relEnd - 1]) geoData[relEnd - 1].extrema = "PosMax";
     };
 
-    for (const sweep of returnSweeps) {
+    for (const sweep of validSweeps) {
         const lineEndRelIdx = sweep.startIndex;
         if (lineEndRelIdx - lastEndRelIdx > 5) {
             markLine(lastEndRelIdx, lineEndRelIdx, lineNum);
@@ -278,7 +317,7 @@ function detectLinesMobile(geoData, startTime = 0, endTime = Infinity) {
         markLine(lastEndRelIdx, samples.length, lineNum);
     }
 
-    console.log(`Detected ${lineNum} lines.`);
+    console.log(`Detected ${lineNum} lines (Advanced Validation Applied).`);
 }
 
 detectLinesMobile(data);

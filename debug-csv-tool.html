@@ -446,7 +446,8 @@
             // *** K = 2.0 (Updated) ***
             const { threshold, spikeIntervals } = detectVelXSpikes(samples, { k: 2.0, gapMs: 120, expandOneSample: true });
 
-            const returnSweeps = spikeIntervals.filter(interval => {
+            // 4. Identify Potential Return Sweeps
+            const candidates = spikeIntervals.filter(interval => {
                 let sum = 0;
                 let count = 0;
                 for (let i = interval.startIndex; i <= interval.endIndex; i++) {
@@ -456,10 +457,54 @@
                     }
                 }
                 const meanVel = count > 0 ? sum / count : 0;
-                return meanVel < 0;
+                if (meanVel >= 0) return false;
+
+                // Also check displacement
+                const sIdx = interval.startIndex;
+                const eIdx = interval.endIndex;
+                if (geoData[sIdx] && geoData[eIdx]) {
+                    const disp = geoData[sIdx].gx - geoData[eIdx].gx;
+                    return disp > 100;
+                }
+                return false;
             });
 
-            returnSweeps.sort((a, b) => a.start_ms - b.start_ms);
+            candidates.sort((a, b) => a.start_ms - b.start_ms);
+
+            // --- Advanced Validation (Algorithm 1 & 2) ---
+            const validSweeps = [];
+            let currentLineNum = 1;
+            let lastSweepEndTime = -Infinity;
+            const MIN_LINE_DURATION = 300; // ms (Algorithm 2)
+
+            for (const sweep of candidates) {
+                const sweepData = geoData[sweep.startIndex];
+                const sweepTime = sweepData.t;
+
+                // Algo 2: Time Gap
+                const timeSinceLast = sweepData.t - lastSweepEndTime;
+                if (validSweeps.length > 0 && timeSinceLast < MIN_LINE_DURATION) {
+                    log(`[Reject Sweep] Rapid Fire: dt=${timeSinceLast}ms < ${MIN_LINE_DURATION}ms at T=${sweepTime}`);
+                    continue;
+                }
+
+                // Algo 1: LineNum Constraint
+                // Note: carry-forward logic is assumed to be handled during load
+                let currentLineIndex = sweepData.lineIndex;
+                if (currentLineIndex !== null && currentLineIndex !== undefined) {
+                    const visibleLines = Number(currentLineIndex) + 1;
+                    const targetLineNum = currentLineNum + 1;
+
+                    if (targetLineNum > visibleLines) {
+                        log(`[Reject Sweep] Premature: TargetLine ${targetLineNum} > VisibleLines ${visibleLines} at T=${sweepTime}`);
+                        continue;
+                    }
+                }
+
+                validSweeps.push(sweep);
+                lastSweepEndTime = sweep.end_ms;
+                currentLineNum++;
+            }
 
             let lineNum = 1;
             let lastEndRelIdx = 0;
@@ -473,7 +518,7 @@
                 if (geoData[relEnd - 1]) geoData[relEnd - 1].extrema = "PosMax";
             };
 
-            for (const sweep of returnSweeps) {
+            for (const sweep of validSweeps) {
                 const lineEndRelIdx = sweep.startIndex;
                 if (lineEndRelIdx - lastEndRelIdx > 5) {
                     markLine(lastEndRelIdx, lineEndRelIdx, lineNum);

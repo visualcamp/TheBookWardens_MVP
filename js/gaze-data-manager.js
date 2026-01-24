@@ -535,8 +535,8 @@ export class GazeDataManager {
         // With positive velocities removed, the baseline noise is low. Revert k to 3.0 to avoid noise.
         const { threshold, spikeIntervals } = detectVelXSpikes(samples, { k: 2.0, gapMs: 120, expandOneSample: true });
 
-        // 4. Identify Return Sweeps
-        const returnSweeps = spikeIntervals.filter(interval => {
+        // 4. Identify Potential Return Sweeps (First Pass: Displacement & Basic Validity)
+        const candidates = spikeIntervals.filter(interval => {
             // Check Displacement (Distinguish Return Sweep from Regression)
             // interval.startIndex/endIndex are relative to validDataSlice
             if (validDataSlice[interval.startIndex] && validDataSlice[interval.endIndex]) {
@@ -546,75 +546,127 @@ export class GazeDataManager {
 
                 // Threshold: 100px (Assumes Return Sweep covers significant screen width)
                 if (displacement < 100) return false;
+            } else {
+                return false;
             }
-
             return true;
         });
 
         // Sort by time
-        returnSweeps.sort((a, b) => a.start_ms - b.start_ms);
+        candidates.sort((a, b) => a.start_ms - b.start_ms);
 
-        // 5. Reset detections ONLY within the target range? 
-        // Or global reset? User likely wants a clean slate for this session.
-        // Let's do global reset for safety as we usually process session-by-session.
+        // --- Advanced Validation (Algorithm 1 & 2) ---
+        const validSweeps = [];
+        let currentLineNum = 1;
+        let lastSweepEndTime = -Infinity;
+        const MIN_LINE_DURATION = 300; // ms (Algorithm 2: Minimum time to read a line)
+
+        // Ensure LineIndex integrity (Carry-Forward) for validation
+        // We do this locally on the slice to avoid mutating global state permanently if not desired, 
+        // but for 'detectLines', we want best best effort.
+        let lastKnownLineIndex = null;
+        for (let i = 0; i < validDataSlice.length; i++) {
+            const d = validDataSlice[i];
+            if (d.lineIndex !== null && d.lineIndex !== undefined && d.lineIndex !== "") {
+                lastKnownLineIndex = d.lineIndex;
+            } else if (lastKnownLineIndex !== null) {
+                // Determine if we should fill in? For validation purposes, yes.
+                // But we just need it during the sweep check.
+            }
+        }
+
+        for (const sweep of candidates) {
+            // Get Data Point at Sweep Start (for Context Check)
+            const sweepData = validDataSlice[sweep.startIndex];
+            const sweepTime = sweepData.t;
+
+            // --- Algorithm 2: Time Gap Validation ---
+            // "Returnsweep과 연속한 returnsweep간의 시간 간격은... 짧은 경우보다는 길거나 같아야 정상"
+            const timeSinceLast = sweepData.t - lastSweepEndTime;
+            if (validSweeps.length > 0 && timeSinceLast < MIN_LINE_DURATION) {
+                console.log(`[Reject Sweep] Rapid Fire: dt=${timeSinceLast}ms < ${MIN_LINE_DURATION}ms at T=${sweepTime}`);
+                continue;
+            }
+
+            // --- Algorithm 1: LineNum Constraint ---
+            // "구간 B(Sweep 후)에서 실제 노출된 라인수(LineIndex+1) < n+1 인 경우 returnsweep은 취소된다."
+            // We check the 'LineIndex' recorded at the sweep event.
+            // Note: LineIndex in data is "Current Typing Line Index" (0-based).
+            // So Visible Lines = LineIndex + 1.
+
+            // Resolve LineIndex at this moment (Safety: Search nearby if null)
+            let currentLineIndex = sweepData.lineIndex;
+            if (currentLineIndex === null || currentLineIndex === undefined) {
+                // Fallback: Look backward for last valid LineIndex
+                for (let k = sweep.startIndex; k >= 0; k--) {
+                    if (validDataSlice[k].lineIndex !== null && validDataSlice[k].lineIndex !== undefined) {
+                        currentLineIndex = validDataSlice[k].lineIndex;
+                        break;
+                    }
+                }
+            }
+
+            // Perform Check if we have valid LineIndex metadata
+            if (currentLineIndex !== null && currentLineIndex !== undefined) {
+                const visibleLines = Number(currentLineIndex) + 1;
+                const targetLineNum = currentLineNum + 1; // We are currently on 'currentLineNum', trying to go to +1
+
+                if (targetLineNum > visibleLines) {
+                    console.log(`[Reject Sweep] Premature: TargetLine ${targetLineNum} > VisibleLines ${visibleLines} at T=${sweepTime}`);
+                    continue;
+                }
+            }
+
+            // If passed all checks
+            validSweeps.push(sweep);
+            lastSweepEndTime = sweep.end_ms; // Update Last Time
+            currentLineNum++;
+        }
+
+        // 5. Reset detections
         for (let i = 0; i < this.data.length; i++) {
             delete this.data[i].detectedLineIndex;
             delete this.data[i].extrema;
             delete this.data[i].isReturnSweep;
         }
 
-        // 6. Apply Lines (Adjusting for startIndex offset)
+        // 6. Apply Valid Lines
         let lineNum = 1;
-
-        // Note: interval.startIndex is relative to 'samples' (validDataSlice)
-        // We must add 'startIndex' to map to 'this.data'
-
-        // Track the end of the last sweep (Relative Index)
         let lastEndRelIdx = 0;
 
         const markLine = (relStart, relEnd, num) => {
             if (relEnd <= relStart) return;
-            // Map to Global
             const globalStart = startIndex + relStart;
             const globalEnd = startIndex + relEnd;
 
             for (let k = globalStart; k < globalEnd; k++) {
                 if (this.data[k]) this.data[k].detectedLineIndex = num;
             }
-
             if (this.data[globalStart]) this.data[globalStart].extrema = "LineStart";
-
-            // PosMax is usually the last point of the line
             if (this.data[globalEnd - 1]) this.data[globalEnd - 1].extrema = "PosMax";
         };
 
-        for (const sweep of returnSweeps) {
-            // sweep.startIndex, sweep.endIndex are RELATIVE to slice
-
+        for (const sweep of validSweeps) {
             const lineEndRelIdx = sweep.startIndex;
 
-            // Check segment length
             if (lineEndRelIdx - lastEndRelIdx > 5) {
                 markLine(lastEndRelIdx, lineEndRelIdx, lineNum);
                 lineNum++;
             }
 
-            // Next line starts after sweep
             lastEndRelIdx = sweep.endIndex + 1;
 
-            // Mark Return Sweep in Data (Map to Global)
             for (let k = sweep.startIndex; k <= sweep.endIndex; k++) {
                 const globalIdx = startIndex + k;
                 if (this.data[globalIdx]) this.data[globalIdx].isReturnSweep = true;
             }
         }
 
-        // Process final segment
         if (samples.length - lastEndRelIdx > 5) {
             markLine(lastEndRelIdx, samples.length, lineNum);
         }
 
-        console.log(`[GazeDataManager] MAD Line Detection: Found ${lineNum} lines. Range: ${startTime}~${endTime}ms (Indices: ${startIndex}~${endIndex})`);
+        console.log(`[GazeDataManager] MAD Line Detection (Adv): Found ${lineNum} lines. Range: ${startTime}~${endTime}ms.`);
 
         return lineNum;
     }
