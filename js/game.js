@@ -579,24 +579,25 @@ Game.typewriter = {
             window.gazeDataManager.setContext({ charIndex: null });
         }
 
-        // --- TRIGGER FINAL WIPE (DOM-based Robust) ---
-        // Select ALL spans to ensure nothing is left behind
-        const allSpans = this.currentP.querySelectorAll("span");
-        console.log(`[Game] Wiping out all text nodes. Count: ${allSpans.length}`);
+        // --- TRIGGER FINAL WIPE (Smart & Natural) ---
+        // Only select spans that are NOT already faded out
+        const remainingSpans = this.currentP.querySelectorAll("span:not(.chunk-fade-out)");
+        console.log(`[Game] Wiping out remaining text. Count: ${remainingSpans.length}`);
 
+        // Wait briefly (200ms) after typing ends, then wipe quickly
         setTimeout(() => {
-            allSpans.forEach((node, index) => {
-                node.style.transitionDelay = `${index * 20}ms`; // Slightly faster (20ms) to ensure completion
+            remainingSpans.forEach((node, index) => {
+                // Wipe fast: 10ms per char delay
+                node.style.transitionDelay = `${index * 10}ms`;
                 node.classList.add("chunk-fade-out");
             });
-        }, 1200);
+        }, 200);
 
-        // Wait ample time for the wipe to finish before next step
-        // Max delay approx: 500 chars * 20ms = 10000ms... wait, if text is long this might be too slow?
-        // Alice text is usually ~200-300 chars. 300 * 20 = 6000ms.
-        // Let's cap the wait or speed it up if text is long.
-        const totalWipeTime = Math.min(allSpans.length * 20 + 1000, 5000);
-        console.log(`[Game] Text finished. Transition wait: ${totalWipeTime}ms`);
+        // Calculate transition time based on remaining spans only
+        const transitionDuration = remainingSpans.length * 10 + 500; // +500ms buffer for CSS fade opacity
+        const nextStepWait = Math.max(1000, transitionDuration); // At least 1 sec guaranteed
+
+        console.log(`[Game] Next step in ${nextStepWait}ms`);
 
         setTimeout(() => {
             let detectedLines = 0;
@@ -615,7 +616,7 @@ Game.typewriter = {
             }
 
             this.startGazeReplay();
-        }, 1200 + totalWipeTime);
+        }, 200 + nextStepWait);
     },
 
     recordLineY(y, index) {
