@@ -1036,7 +1036,7 @@ Game.typewriter = {
 
         const validData = rawData.filter(d =>
             d.t >= tStart && d.t <= tEnd &&
-            d.detectedLineIndex !== null && d.detectedLineIndex !== undefined
+            d.lineIndex !== null && d.lineIndex !== undefined
         );
 
         if (validData.length === 0) return;
@@ -1044,7 +1044,7 @@ Game.typewriter = {
         // 2. Pre-calculate Min/Max X for Rx normalization
         const lineGroups = {};
         validData.forEach(d => {
-            const idx = d.detectedLineIndex;
+            const idx = d.lineIndex;
             if (!lineGroups[idx]) lineGroups[idx] = { min: Infinity, max: -Infinity };
             const val = d.gx || d.x;
             if (val < lineGroups[idx].min) lineGroups[idx].min = val;
@@ -1053,7 +1053,7 @@ Game.typewriter = {
 
         // 3. Assign Rx/Ry
         validData.forEach(d => {
-            const idx = d.detectedLineIndex;
+            const idx = d.lineIndex;
             const vLine = visualLines[idx];
 
             if (vLine) {
@@ -1104,8 +1104,8 @@ Game.typewriter = {
             const validData = rawData.filter(d =>
                 d.t >= tStart &&
                 d.t <= tEnd &&
-                d.detectedLineIndex !== undefined &&
-                d.detectedLineIndex !== null &&
+                d.lineIndex !== undefined &&
+                d.lineIndex !== null &&
                 d.rx !== undefined // Check Rx is present (Ry might be null if edge-case)
             );
             console.log(`[Replay] Valid Data Count with Rx/Ry: ${validData.length}`);
