@@ -680,9 +680,10 @@ export class GazeDataManager {
                 // Rely on k=1.5 MAD + Metadata Logic.
 
                 if (lineDecreased) {
-                    // Explicit Regression in Metadata -> REJECT
-                    console.log(`[Reject Sweep] Metadata indicates Regression (${startLineVal} -> Decreased). Disp=${displacement.toFixed(0)}`);
-                    continue;
+                    // Explicit Regression in Metadata -> NOW ACCEPTED (As per User Request to match Chart 11)
+                    // The physical eye movement is trusted more than the metadata lag.
+                    console.warn(`[Accept Sweep] Metadata Regression (${startLineVal} -> Decreased). Accepted to match Chart 11 logic. Disp=${displacement.toFixed(0)}`);
+                    // continue; // REMOVED REJECTION
                 }
 
                 if (lineIncreased) {

@@ -785,6 +785,8 @@
             algoCharts.push(chart6);
 
             // --- Chart 7: Replay X/Y Combined with ReturnSweep ---
+            // MOVED TO renderChart11 to synchronize with Dynamic K Return Sweeps
+            /*
             const ctx7 = createCanvas('chart7', "Chart 7: Replay X/Y & ReturnSweep");
             const chart7 = new Chart(ctx7, {
                 type: 'line',
@@ -807,6 +809,7 @@
                 plugins: [shadingPlugin]
             });
             algoCharts.push(chart7);
+            */
 
             // --- Chart 8: Spatial Plot (RawX vs RawY) with Target Lines ---
             const maxX = Math.max(...data.map(d => typeof d.x === 'number' ? d.x : 0), 1000);
@@ -1139,6 +1142,8 @@
                         // A valid Return Sweep must result in a Line Index increment.
                         // We check a 200ms window after sweep end for system latency.
 
+                        /* 
+                        // TEMPORARILTY DISABLED to allow pure K-based visualization
                         const startLineVal = Number(currentLineIndex);
                         let lineIncreased = false;
                         const toleranceWindow = 200; // ms
@@ -1162,6 +1167,7 @@
                             // console.log(`[Reject Sweep] Regression/Premature: LineIndex did not increase (${startLineVal} -> ?) within 200ms of Sweep End.`);
                             continue;
                         }
+                        */
                     }
 
                     validSweeps.push(sweep);
@@ -1269,6 +1275,140 @@
                 });
                 algoCharts.push(chart11);
 
+                // 5. Generate Simulated Replay Data (Based on Chart 11 Sweeps)
+                // To visualize what Replay would look like with this K value.
+
+                // A. Segment Data into Lines based on Sweeps
+                const simLines = []; // Array of { startIdx, endIdx, minX, maxX }
+                let currentStartIdx = 0;
+
+                // Sort sweeps by time just in case
+                validSweeps.sort((a, b) => a.startIndex - b.startIndex);
+
+                validSweeps.forEach(sw => {
+                    // Line ends at sweep START (or effectively sweep duration is transition)
+                    // Let's say line ends at sweep.startIndex.
+                    const endIdx = sw.startIndex;
+                    if (endIdx > currentStartIdx) {
+                        simLines.push({ startIdx: currentStartIdx, endIdx: endIdx });
+                    }
+                    // Next line starts after sweep ends? Or immediately?
+                    // Typically sweep duration is non-reading. Next line starts at sweep.endIndex.
+                    currentStartIdx = sw.endIndex;
+                });
+                // Last segment
+                if (currentStartIdx < data.length) {
+                    simLines.push({ startIdx: currentStartIdx, endIdx: data.length - 1 });
+                }
+
+                // B. Calculate Min/Max and TargetY for each Sim Line
+                // Reuse uniqueTargetYs from parent scope if possible.
+                // We need to assume 'uniqueTargetYs' variable is accessible or re-derive it.
+                // Re-deriving uniqueTargetYs safely:
+                const validTargetYs = [...new Set(data.map(d => d.targetY))].filter(y => y !== null && y !== "" && !isNaN(y)).sort((a, b) => a - b);
+
+                // Fallback for TargetY if not enough found
+                const estimatedLineHeight = 60;
+                const getTargetY = (lineIdx) => {
+                    if (lineIdx < validTargetYs.length) return validTargetYs[lineIdx];
+                    // If out of bounds, extrapolate
+                    if (validTargetYs.length > 0) {
+                        return validTargetYs[validTargetYs.length - 1] + (lineIdx - validTargetYs.length + 1) * estimatedLineHeight;
+                    }
+                    return 100 + lineIdx * estimatedLineHeight;
+                };
+
+                const simReplayX = new Array(data.length).fill(null);
+                const simReplayY = new Array(data.length).fill(null);
+                const simReturnSweepPoints = []; // For visualization
+
+                // Global Container Width estimation (from Max Raw X observed or fixed)
+                // Let's use 0-1 normalization scaled to e.g. 1000px for graph.
+                const GRAPH_WIDTH = 350; // Matches typical Y-axis scale range for visibility?
+                // Actually Rx is usually screen coord (0-1920). Let's use 0-500 range for the chart visibility.
+                // Or preserve original scale? Chart 7 compares Rx and Ry. Ry is in pixels (e.g. 300).
+                // So Rx should be comparable. Let's assume normalized 0-1 maps to 0-WrapperWidth.
+                // Let's just use 0-100% of the Segment Min/Max? 
+                // Wait, User wants "ReplayX data values". Usually Rx is Screen Coordinates.
+                // Let's map normalized 0..1 to MinX..MaxX of the line? No, that reconstructs original.
+                // We want "Simulated Screen Coordinates". 
+                // Let's assume a standard line width of 800px starting at x=100.
+                const SIM_LINE_START_X = 50;
+                const SIM_LINE_WIDTH = 300; // Small width to fit on Y-axis scale (0-400 usually)
+
+                simLines.forEach((line, idx) => {
+                    let minX = Infinity, maxX = -Infinity;
+                    for (let i = line.startIdx; i <= line.endIdx; i++) {
+                        const val = data[i].gx !== null ? data[i].gx : data[i].x;
+                        if (val !== null && typeof val === 'number') {
+                            if (val < minX) minX = val;
+                            if (val > maxX) maxX = val;
+                        }
+                    }
+
+                    const targetY = getTargetY(idx);
+
+                    for (let i = line.startIdx; i <= line.endIdx; i++) {
+                        const val = data[i].gx !== null ? data[i].gx : data[i].x;
+                        if (val !== null && typeof val === 'number') {
+                            // Normalize
+                            let norm = 0;
+                            if (maxX > minX) norm = (val - minX) / (maxX - minX);
+
+                            // Map to Simulated Screen
+                            // simReplayX[i] = SIM_LINE_START_X + norm * SIM_LINE_WIDTH;
+                            // BETTER: Just use Normalized 0-350 for visualization consistency
+                            simReplayX[i] = norm * 350;
+                        }
+                        simReplayY[i] = targetY;
+                    }
+                });
+
+                // C. Render Chart 7 (Simulated)
+                // Remove existing chart 7
+                const existingIndex7 = algoCharts.findIndex(c => c.canvas.id === 'chart7');
+                if (existingIndex7 !== -1) {
+                    algoCharts[existingIndex7].destroy();
+                    algoCharts.splice(existingIndex7, 1);
+                }
+
+                // Prepare RS points for Chart 7 (Visualize the Jump)
+                validSweeps.forEach(sw => {
+                    // Start of sweep (Line End) -> End of sweep (Next Line Start)
+                    // Visualize a point at the sweep start time
+                    if (data[sw.startIndex]) {
+                        simReturnSweepPoints.push({ x: data[sw.startIndex].t, y: simReplayX[sw.startIndex] });
+                    }
+                });
+
+                const ctx7 = createCanvas('chart7', `Chart 7: Simulated Replay X/Y (Based on K=${kVal} Detection)`, true);
+                const chart7 = new Chart(ctx7, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            { label: 'ReplayX (Sim)', data: simReplayX, borderColor: '#00FFFF', borderWidth: 2, pointRadius: 0 }, // Cyan
+                            { label: 'ReplayY (Sim)', data: simReplayY, borderColor: '#9932CC', borderWidth: 2, pointRadius: 0 }, // Purple
+                            {
+                                label: 'Detected RS',
+                                data: detectedSweepPoints, // Reuse detected points from Chart 11
+                                type: 'scatter',
+                                backgroundColor: 'magenta',
+                                pointStyle: 'rectRot',
+                                radius: 4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: { x: { ticks: { maxTicksLimit: 20 } } },
+                        plugins: { legend: { labels: { usePointStyle: true } } }
+                    },
+                    plugins: [localShadingPlugin] // Reuse shading from Chart 11
+                });
+                algoCharts.push(chart7);
+
                 // Inject UI controls after chart is created
                 setTimeout(injectChart11Controls, 100);
             }
@@ -1346,8 +1486,6 @@
                 processFile(e.dataTransfer.files[0]);
             }
         });
+</body >
 
-    </script>
-</body>
-
-</html>
+</html >
