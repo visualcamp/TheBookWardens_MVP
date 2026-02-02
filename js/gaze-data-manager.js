@@ -261,7 +261,8 @@ export class GazeDataManager {
         });
 
         // CSV Header
-        let csv = "RelativeTimestamp_ms,RawX,RawY,SmoothX,SmoothY,VelX,VelY,Type,ReturnSweep,LineIndex,CharIndex,AlgoLineIndex,Extrema,TargetY_Px,AvgCoolGazeY_Px,ReplayX,ReplayY,InkSuccess,InkCoverage_Px\n";
+        // CSV Header
+        let csv = "RelativeTimestamp_ms,RawX,RawY,SmoothX,SmoothY,VelX,VelY,Type,ReturnSweep,LineIndex,CharIndex,AlgoLineIndex,Extrema,TargetY_Px,AvgCoolGazeY_Px,ReplayX,ReplayY,InkSuccess,InkCoverage_Px,isLagFix\n";
 
         // Rows
         this.data.forEach(d => {
@@ -303,7 +304,8 @@ export class GazeDataManager {
                 (d.rx !== undefined && d.rx !== null) ? d.rx.toFixed(2) : "",
                 (d.ry !== undefined && d.ry !== null) ? d.ry.toFixed(2) : "",
                 (this.lineMetadata[lIdx] && this.lineMetadata[lIdx].success) ? "TRUE" : "FALSE",
-                (this.lineMetadata[lIdx] && this.lineMetadata[lIdx].coverage !== undefined) ? this.lineMetadata[lIdx].coverage.toFixed(0) : ""
+                (this.lineMetadata[lIdx] && this.lineMetadata[lIdx].coverage !== undefined) ? this.lineMetadata[lIdx].coverage.toFixed(0) : "",
+                (d.isLagCorrection ? "TRUE" : "")
             ];
             csv += row.join(",") + "\n";
         });

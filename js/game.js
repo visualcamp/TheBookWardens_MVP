@@ -1117,7 +1117,30 @@ Game.typewriter = {
             }
         });
 
-        console.log("[Replay] Coords Updated (Rx: GlobalNorm, Ry: lineYData).");
+        // 4. Post-Process: Fix "Laggy Return Sweep" Artifacts
+        // Because LineIndex updates instantly but eye tracker lags, the first few frames of a NEW line
+        // often still have the X-coordinate of the OLD line (Right side).
+        // This causes the "Drop Down on Right -> Then Sweep Left" artifact.
+        // We fix this by detecting Line Change boundaries and forcing "Right-Sided" points on the New Line to the Left.
+        for (let i = 1; i < validData.length; i++) {
+            const curr = validData[i];
+            const prev = validData[i - 1];
+
+            // Detect Line Change
+            if (curr.lineIndex !== prev.lineIndex) {
+                // If the new line's point is visually on the Right (> 50% width), it's likely lag.
+                // Force it to the left trigger area.
+                const relativeX = (curr.rx - globalLeft) / globalWidth;
+
+                if (relativeX > 0.5) {
+                    console.log(`[Replay] Fixed Lag Artifact at Line ${curr.lineIndex} (t=${curr.t}): Force Left.`);
+                    curr.rx = globalLeft + (globalWidth * 0.05); // Snap to 5% Left
+                    curr.isLagCorrection = true; // Mark as corrected in data
+                }
+            }
+        }
+
+        console.log("[Replay] Coords Updated (Rx: GlobalNorm + Lag Fix, Ry: lineYData).");
     },
 
     startGazeReplay() {
