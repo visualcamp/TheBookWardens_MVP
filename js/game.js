@@ -280,7 +280,8 @@ Game.typewriter = {
     currentLineMinX: 99999,
     currentLineMaxX: -99999,
     prevGazeX: null,
-    hasReturnSweep: false,
+    prevGazeX: null,
+    isReturnSweep: false,
 
     updateGazeStats(x, y) {
         // Only track if typing is active
@@ -296,7 +297,7 @@ Game.typewriter = {
             // Threshold: 20% negative jump
             const w = window.innerWidth;
             if (dx < -(w * 0.2)) {
-                this.hasReturnSweep = true;
+                this.isReturnSweep = true;
                 console.log(`[Game] Return Sweep! dx:${Math.round(dx)}`);
             }
         }
@@ -311,7 +312,7 @@ Game.typewriter = {
         const widthThreshold = totalWidth * 0.4;
 
         const isCoverageGood = coverage >= widthThreshold;
-        const isReturnSweep = this.hasReturnSweep;
+        const isReturnSweep = this.isReturnSweep; // Renamed from hasReturnSweep
 
         console.log(`[Line ${lineIndex}] Cov:${Math.round(coverage)} OR Sweep:${isReturnSweep}`);
 
@@ -319,10 +320,19 @@ Game.typewriter = {
             this.spawnInkIcon(lineTop);
         }
 
+        // Store Line Metadata in Gaze Data Manager
+        if (window.gazeDataManager && typeof window.gazeDataManager.setLineMetadata === 'function') {
+            window.gazeDataManager.setLineMetadata(lineIndex, {
+                success: (isReturnSweep || isCoverageGood),
+                coverage: coverage,
+                isReturnSweep: isReturnSweep
+            });
+        }
+
         // Reset
         this.currentLineMinX = 99999;
         this.currentLineMaxX = -99999;
-        this.hasReturnSweep = false;
+        this.isReturnSweep = false;
     },
 
     spawnInkIcon(top) {
@@ -1007,9 +1017,9 @@ Game.typewriter = {
     // --- Gaze Feedback Logic ---
     // --- Gaze Replay Logic ---
 
-    // NEW FUNCTION: Calculate Rx and Ry based on V20 Logic (Direct Line Mapping)
+    // NEW FUNCTION: Calculate Rx and Ry based on Ink Success Status
     calculateReplayCoords(tStart, tEnd) {
-        console.log(`[Replay] Calculating Replay Coordinates (Simplifed V20) Range: ${tStart}~${tEnd}`);
+        console.log(`[Replay] Calculating Replay Coords (Ink-Based Logic) Range: ${tStart}~${tEnd}`);
 
         // 1. Get Visual Lines from current text geometry
         const contentEl = document.getElementById("book-content");
@@ -1022,6 +1032,8 @@ Game.typewriter = {
         }
 
         const rawData = window.gazeDataManager.getAllData();
+        const lineMetadata = window.gazeDataManager.lineMetadata || {}; // Access per-line metadata
+
         const validData = rawData.filter(d =>
             d.t >= tStart && d.t <= tEnd &&
             d.detectedLineIndex !== null && d.detectedLineIndex !== undefined
@@ -1045,10 +1057,21 @@ Game.typewriter = {
             const vLine = visualLines[idx];
 
             if (vLine) {
-                // ReplayY: Center of the visual line
-                d.ry = vLine.top + (vLine.bottom - vLine.top) / 2;
+                // Determine Success Status from Metadata
+                const isLineSuccessful = lineMetadata[idx] && lineMetadata[idx].success;
 
-                // ReplayX: Normalize within line bounds
+                // ReplayY Logic:
+                if (isLineSuccessful) {
+                    // Success -> Snap to Center (Fixed Ry)
+                    d.ry = vLine.top + (vLine.bottom - vLine.top) / 2;
+                } else {
+                    // Failed -> Use Smoothed Gaze Y (gy)
+                    // Clamp to visual area or just use raw? Usually clamp for safety but keep 'wobble' to show error.
+                    // We will use gy directly but ensure it exists.
+                    d.ry = (d.gy !== undefined && d.gy !== null) ? d.gy : d.y;
+                }
+
+                // ReplayX Logic: (Existing) Normalize within line bounds
                 const bounds = lineGroups[idx];
                 let norm = 0.5;
                 if (bounds.max > bounds.min + 1) { // Avoid div by zero
@@ -1064,7 +1087,7 @@ Game.typewriter = {
             }
         });
 
-        console.log("[Replay] Coords Updated (V20 Simpler).");
+        console.log("[Replay] Coords Updated (Rx: Norm, Ry: Conditional on Ink).");
     },
 
     startGazeReplay() {

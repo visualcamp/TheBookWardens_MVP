@@ -13,6 +13,7 @@ export class GazeDataManager {
         this.KERNEL = [0.05, 0.25, 0.4, 0.25, 0.05];
         this.firstTimestamp = null;
         this.context = {}; // Initialize context
+        this.lineMetadata = {}; // Store per-line metadata (Ink success, coverage, etc.)
     }
 
     /**
@@ -173,6 +174,18 @@ export class GazeDataManager {
         this.context = { ...this.context, ...ctx };
     }
 
+    /**
+     * Store metadata for a specific line (e.g., Ink success status)
+     * @param {number} lineIndex 
+     * @param {Object} metadata 
+     */
+    setLineMetadata(lineIndex, metadata) {
+        if (!this.lineMetadata[lineIndex]) {
+            this.lineMetadata[lineIndex] = {};
+        }
+        this.lineMetadata[lineIndex] = { ...this.lineMetadata[lineIndex], ...metadata };
+    }
+
     getFixations() {
         return this.data.filter(d => d.type === 'Fixation');
     }
@@ -186,6 +199,7 @@ export class GazeDataManager {
         this.buffer = [];
         this.firstTimestamp = null;
         this.context = {};
+        this.lineMetadata = {};
     }
 
     getCharIndexTimeRange() {
@@ -247,7 +261,7 @@ export class GazeDataManager {
         });
 
         // CSV Header
-        let csv = "RelativeTimestamp_ms,RawX,RawY,SmoothX,SmoothY,VelX,VelY,Type,ReturnSweep,LineIndex,CharIndex,AlgoLineIndex,Extrema,TargetY_Px,AvgCoolGazeY_Px,ReplayX,ReplayY\n";
+        let csv = "RelativeTimestamp_ms,RawX,RawY,SmoothX,SmoothY,VelX,VelY,Type,ReturnSweep,LineIndex,CharIndex,AlgoLineIndex,Extrema,TargetY_Px,AvgCoolGazeY_Px,ReplayX,ReplayY,InkSuccess,InkCoverage_Px\n";
 
         // Rows
         this.data.forEach(d => {
@@ -287,7 +301,9 @@ export class GazeDataManager {
                 targetY,
                 avgY,
                 (d.rx !== undefined && d.rx !== null) ? d.rx.toFixed(2) : "",
-                (d.ry !== undefined && d.ry !== null) ? d.ry.toFixed(2) : ""
+                (d.ry !== undefined && d.ry !== null) ? d.ry.toFixed(2) : "",
+                (this.lineMetadata[lIdx] && this.lineMetadata[lIdx].success) ? "TRUE" : "FALSE",
+                (this.lineMetadata[lIdx] && this.lineMetadata[lIdx].coverage !== undefined) ? this.lineMetadata[lIdx].coverage.toFixed(0) : ""
             ];
             csv += row.join(",") + "\n";
         });
