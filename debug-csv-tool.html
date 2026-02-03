@@ -1251,6 +1251,15 @@
                             pointRadius: 2,
                             pointHoverRadius: 5,
                             tension: 0
+                        },
+                        {
+                            label: 'TargetY_Px',
+                            data: data.map(d => d.targetY), // Actual Text Line Y
+                            borderColor: 'blue',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            borderDash: [5, 5],
+                            stepped: true // Draw as steps for clear line distinction
                         }
                     ]
                 },
