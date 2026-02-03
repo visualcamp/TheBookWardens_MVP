@@ -1192,6 +1192,18 @@ Game.typewriter = {
     startGazeReplay() {
         console.log("[Game] Starting Gaze Replay Logic...");
 
+        // [User Request] Restore vanished text for Replay Background
+        if (this.currentP) {
+            const hiddenSpans = this.currentP.querySelectorAll("span");
+            console.log(`[Replay] Restoring text visibility for ${hiddenSpans.length} spans.`);
+            hiddenSpans.forEach(span => {
+                span.classList.remove("chunk-fade-out");
+                span.style.opacity = "1";
+                span.style.transition = "opacity 0.5s ease";
+                span.style.transitionDelay = "0s"; // Reset delay
+            });
+        }
+
         try {
             // 1. Data Source (SeeSo SDK) with Time Range Filter
             const { startTime, endTime } = window.gazeDataManager.getCharIndexTimeRange();
