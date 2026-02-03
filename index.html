@@ -254,21 +254,38 @@
         <p style="color: #bbb;">Select your comfortable reading speed.</p>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 15px; width: 100%; max-width: 300px;">
+      <div style="display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 320px;">
+        <!-- Novice: Cyan (Mystical/Beginner) -->
         <button class="btn-secondary" onclick="Game.selectWPM(100)"
-          style="padding: 15px; font-size: 1.1rem; border-color: #4caf50; color: #4caf50;">
-          <span style="display:block; font-size: 1.4rem; font-weight: bold;">Novice</span>
-          <span style="font-size: 0.9rem; opacity: 0.8;">100 WPM</span>
+          style="padding: 20px; text-align: left; background: linear-gradient(90deg, rgba(0, 229, 255, 0.05), transparent); border: 1px solid rgba(0, 229, 255, 0.3); color: #00e5ff; transition: all 0.3s; box-shadow: 0 0 10px rgba(0, 229, 255, 0.05);">
+          <span style="display:flex; justify-content: space-between; align-items: center;">
+            <span
+              style="font-family: 'Cinzel', serif; font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 5px rgba(0, 229, 255, 0.4);">Novice</span>
+            <span style="font-size: 0.9rem; opacity: 0.7; letter-spacing: 1px;">100 WPM</span>
+          </span>
+          <span style="display:block; font-size: 0.8rem; color: #888; margin-top: 5px;">Careful & Deliberate</span>
         </button>
+
+        <!-- Apprentice: Amethyst (Magic/Intermediate) -->
         <button class="btn-secondary" onclick="Game.selectWPM(200)"
-          style="padding: 15px; font-size: 1.1rem; border-color: #2196f3; color: #2196f3;">
-          <span style="display:block; font-size: 1.4rem; font-weight: bold;">Apprentice</span>
-          <span style="font-size: 0.9rem; opacity: 0.8;">200 WPM</span>
+          style="padding: 20px; text-align: left; background: linear-gradient(90deg, rgba(213, 0, 249, 0.05), transparent); border: 1px solid rgba(213, 0, 249, 0.3); color: #e040fb; transition: all 0.3s; box-shadow: 0 0 10px rgba(213, 0, 249, 0.05);">
+          <span style="display:flex; justify-content: space-between; align-items: center;">
+            <span
+              style="font-family: 'Cinzel', serif; font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 5px rgba(213, 0, 249, 0.4);">Apprentice</span>
+            <span style="font-size: 0.9rem; opacity: 0.7; letter-spacing: 1px;">200 WPM</span>
+          </span>
+          <span style="display:block; font-size: 0.8rem; color: #888; margin-top: 5px;">Standard Reader</span>
         </button>
+
+        <!-- Master: Gold (Legendary/Fast) -->
         <button class="btn-secondary" onclick="Game.selectWPM(300)"
-          style="padding: 15px; font-size: 1.1rem; border-color: #ff9800; color: #ff9800;">
-          <span style="display:block; font-size: 1.4rem; font-weight: bold;">Master</span>
-          <span style="font-size: 0.9rem; opacity: 0.8;">300 WPM</span>
+          style="padding: 20px; text-align: left; background: linear-gradient(90deg, rgba(255, 215, 0, 0.05), transparent); border: 1px solid rgba(255, 215, 0, 0.3); color: #ffd700; transition: all 0.3s; box-shadow: 0 0 10px rgba(255, 215, 0, 0.05);">
+          <span style="display:flex; justify-content: space-between; align-items: center;">
+            <span
+              style="font-family: 'Cinzel', serif; font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 5px rgba(255, 215, 0, 0.4);">Master</span>
+            <span style="font-size: 0.9rem; opacity: 0.7; letter-spacing: 1px;">300 WPM</span>
+          </span>
+          <span style="display:block; font-size: 0.8rem; color: #888; margin-top: 5px;">Swift & Precise</span>
         </button>
       </div>
     </section>
