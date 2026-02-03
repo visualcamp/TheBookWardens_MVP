@@ -1231,7 +1231,7 @@ Game.typewriter = {
                     t: virtualTime,
                     x: d.rx, // Use pre-calculated Rx
                     y: d.ry, // Use pre-calculated Ry (possibly null if edge gap)
-                    r: 20,
+                    r: 10, // Radius reduced by 50% (20 -> 10)
                     type: d.type
                 });
             });
