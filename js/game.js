@@ -1127,12 +1127,15 @@ Game.typewriter = {
             // Strategy: Use Majority LineIndex to map to visual line center
             // (Chart 7 does this)
             if (bestL !== -1) {
-                const pStyle = window.getComputedStyle(this.currentP || contentEl);
-                const fSize = parseFloat(pStyle.fontSize) || 16;
+                const lineRec = lineYData.find(Rec => Rec.lineIndex === bestL);
+                if (lineRec) {
+                    const pStyle = window.getComputedStyle(this.currentP || contentEl);
+                    const fSize = parseFloat(pStyle.fontSize) || 16;
 
-                // Align ReplayY to the vertical center of the text line.
-                // lineRec.y is the Top of the line. Adding fSize/2 moves it to the Middle.
-                targetRy = lineRec.y + (fSize / 2);
+                    // Align ReplayY to the vertical center of the text line.
+                    // lineRec.y is the Top of the line. Adding fSize/2 moves it to the Middle.
+                    targetRy = lineRec.y + (fSize / 2);
+                }
             }
             if (targetRy === null) {
                 // Fallback: Average Gy
