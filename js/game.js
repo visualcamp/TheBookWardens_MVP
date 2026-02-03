@@ -5,6 +5,7 @@ const Game = {
     state: {
         gems: 0,
         currentWordIndex: 0,
+        vocabIndex: 0, // Track Word Forge progress
         readProgress: 0, // 0..100
         isTracking: false,
         rift: {
@@ -53,6 +54,8 @@ const Game = {
                 }
 
                 setTimeout(() => {
+                    this.state.vocabIndex = 0; // Reset
+                    this.loadVocab(0);         // Load first word
                     this.switchScreen("screen-word");
                 }, 800);
 
@@ -143,26 +146,97 @@ const Game = {
     },
 
     // --- 1. Word Forge ---
+    vocabList: [
+        {
+            word: "Luminous",
+            sentence: "The <b>luminous</b> mushroom lit up the dark cave.",
+            options: ["A. Very heavy and dark", "B. Full of light / Shining", "C. Related to the moon"],
+            answer: 1
+        },
+        {
+            word: "Cipher",
+            sentence: "Alice found a cryptic <b>cipher</b> hidden in the scroll.",
+            options: ["A. A delicious cake", "B. A secret code", "C. A type of flower"],
+            answer: 1
+        },
+        {
+            word: "Ethereal",
+            sentence: "The Cheshire Cat had an <b>ethereal</b> glow.",
+            options: ["A. Heavy and solid", "B. Delicate and light", "C. Angry and red"],
+            answer: 1
+        }
+    ],
+
+    loadVocab(index) {
+        if (index >= this.vocabList.length) return;
+        const data = this.vocabList[index];
+
+        // Update Title and Sentence
+        const titleEl = document.getElementById("vocab-word");
+        if (titleEl) titleEl.textContent = data.word;
+
+        // Find the sentence paragraph - assuming it's the <p> after title
+        // Better to use a specific ID if possible, but structure is fixed in HTML
+        // Let's rely on querySelector within .word-card if IDs aren't granular
+        const card = document.querySelector(".word-card");
+        if (card) {
+            const p = card.querySelector("p");
+            if (p) p.innerHTML = data.sentence;
+        }
+
+        // Update Counter (1/3)
+        const counterDiv = document.querySelector("#screen-word > div:first-child");
+        if (counterDiv) counterDiv.textContent = `WORD FORGE (${index + 1}/${this.vocabList.length})`;
+
+        // Update Options
+        const optionsDiv = document.getElementById("vocab-options");
+        if (optionsDiv) {
+            optionsDiv.innerHTML = ""; // Clear existing
+            data.options.forEach((optText, idx) => {
+                const btn = document.createElement("button");
+                btn.className = "option-btn";
+                btn.textContent = optText;
+                btn.onclick = () => Game.checkVocab(idx);
+                optionsDiv.appendChild(btn);
+            });
+        }
+    },
+
     async checkVocab(optionIndex) {
-        const isCorrect = (optionIndex === 1);
+        const currentIndex = this.state.vocabIndex || 0;
+        const currentData = this.vocabList[currentIndex];
+
+        const isCorrect = (optionIndex === currentData.answer);
+
         if (isCorrect) {
-            alert("Correct! +10 Gems");
+            // alert("Correct! +10 Gems"); // Removed alert for smoother flow
             this.state.gems += 10;
             this.updateUI();
 
-            if (this.trackingInitPromise) {
-                const ok = await this.trackingInitPromise;
-                if (!ok) return;
-            }
+            // Progress
+            this.state.vocabIndex++;
 
-            this.switchScreen("screen-calibration");
-            setTimeout(() => {
-                if (typeof window.startCalibrationRoutine === "function") {
-                    window.startCalibrationRoutine();
-                } else {
-                    this.switchScreen("screen-read");
+            if (this.state.vocabIndex < this.vocabList.length) {
+                // Next Word
+                this.loadVocab(this.state.vocabIndex);
+            } else {
+                // All Done
+                console.log("Word Forge Complete. Initializing Eye Tracking...");
+
+                if (this.trackingInitPromise) {
+                    const ok = await this.trackingInitPromise;
+                    if (!ok) return;
                 }
-            }, 500);
+
+                this.switchScreen("screen-calibration");
+                setTimeout(() => {
+                    if (typeof window.startCalibrationRoutine === "function") {
+                        window.startCalibrationRoutine();
+                    } else {
+                        this.switchScreen("screen-read");
+                    }
+                }, 500);
+            }
         } else {
             alert("Try again!");
         }
