@@ -317,7 +317,7 @@ Game.typewriter = {
         console.log(`[Line ${lineIndex}] Cov:${Math.round(coverage)} OR Sweep:${isReturnSweep}`);
 
         if (isReturnSweep || isCoverageGood) {
-            this.spawnInkIcon(lineTop);
+            this.spawnInkIcon(lineTop, lineIndex); // Pass lineIndex
         }
 
         // Store Line Metadata in Gaze Data Manager
@@ -335,11 +335,12 @@ Game.typewriter = {
         this.isReturnSweep = false;
     },
 
-    spawnInkIcon(top) {
+    spawnInkIcon(top, lineIndex) {
         const el = document.getElementById("book-content");
         if (!el) return;
 
         const ink = document.createElement("div");
+        if (lineIndex !== undefined) ink.dataset.lineIndex = lineIndex; // Tag for Replay Lookup
         console.log("[Game] Spawning Ink Icon! 💧");
         ink.textContent = "💧";
         ink.className = "ink-drop";
@@ -1086,7 +1087,19 @@ Game.typewriter = {
         // [Fix] Use current visual lines from DOM instead of stored lineYData
         // stored lineYData (snapshot) may mismatch due to scrolling/clamping.
         // visualLines gives the definitive current viewport position.
+        // visualLines gives the definitive current viewport position.
         const visualLines = this.getVisualLines(this.currentP || contentEl);
+
+        // [New Strategy: Ink Icon Mapping] (Priority 0)
+        // Scan current DOM for Ink Icons to use as absolute anchors.
+        const inkMap = {};
+        const inkElements = document.querySelectorAll('.ink-drop');
+        inkElements.forEach(ink => {
+            const idx = parseInt(ink.dataset.lineIndex);
+            if (!isNaN(idx)) {
+                inkMap[idx] = ink.getBoundingClientRect();
+            }
+        });
 
         const K_VEL_THRESHOLD = 0.5;
         const segments = [];
@@ -1130,7 +1143,21 @@ Game.typewriter = {
             // Determine TargetRy
             let targetRy = null;
 
-            // [New Strategy: CharIndex Mapping] (Priority 1)
+            // [Strategy: Ink Icon Mapping] (Priority 0)
+            // Absolute Trust: If an ink drop exists, align strictly with it.
+            // Ink Top was originally set to (LineTop - 10px).
+            // So LineTop = InkTop + 10px.
+            // We want ReplayY = LineTop + fSize/4.
+            // Therefore: ReplayY = InkTop + 10 + fSize/4.
+            if (bestL !== -1 && inkMap[bestL]) {
+                const inkRect = inkMap[bestL];
+                const pStyle = window.getComputedStyle(this.currentP || contentEl);
+                const fSize = parseFloat(pStyle.fontSize) || 16;
+                // Use Ink's Viewport Top + window.scrollY (for Page Y) + offset restoration
+                targetRy = inkRect.top + window.scrollY + 10 + (fSize / 4);
+            }
+
+            // [Strategy: CharIndex Mapping] (Priority 1)
             // Fixes "progressive drift" by targeting the exact character element in DOM.
             const charIndices = [];
             for (let k = safeStart; k <= safeEnd; k++) {
