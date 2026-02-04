@@ -78,7 +78,7 @@ class TextRenderer {
                 const span = document.createElement("span");
                 span.textContent = w;
                 span.className = "tr-word"; // Base class
-                span.style.opacity = "0";   // Invisible initially
+                // span.style.opacity = "0";   // Handled by CSS class .tr-word
                 span.style.marginRight = this.options.wordSpacing;
                 span.style.display = "inline-block"; // Important for reliable rects
                 span.dataset.index = globalWordIndex;
@@ -104,11 +104,8 @@ class TextRenderer {
         // 3. Add a "cursor" element at the end (optional, can be managed separately)
         this.cursor = document.createElement("span");
         this.cursor.className = "tr-cursor";
-        this.cursor.style.display = "inline-block";
-        this.cursor.style.width = "2px";
-        this.cursor.style.height = "1em";
-        this.cursor.style.backgroundColor = "gold";
-        this.cursor.style.opacity = "0";
+        // REMOVED INLINE STYLES to let CSS control it (z-index, color, size)
+        // Only layout-essential styles remain if needed, but CSS is better.
         this.container.appendChild(this.cursor);
     }
 

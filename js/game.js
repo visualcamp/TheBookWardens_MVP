@@ -590,6 +590,12 @@ Game.typewriter = {
     tick() {
         if (this.isPaused) return;
 
+        // Prevent double-tick: clear previous if exists (though usually it fires once)
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+
         // Reveal next chunk
         if (this.chunkIndex < this.renderer.chunks.length) {
             this.renderer.revealChunk(this.chunkIndex);
@@ -600,10 +606,13 @@ Game.typewriter = {
             this.chunkIndex++;
 
             // Calculate Delay with Safety Clamp
-            let delay = Game.targetChunkDelay || 1500; // Default slower (1.5s)
-            if (delay < 500) delay = 500; // Absolute minimum 0.5s safety
+            let delay = Game.targetChunkDelay || 1500;
+            if (delay < 800) delay = 800; // Bump min safety to 0.8s
 
-            this.timer = setTimeout(() => this.tick(), delay);
+            this.timer = setTimeout(() => {
+                this.timer = null;
+                this.tick();
+            }, delay);
         } else {
             console.log("Paragraph Fully Revealed.");
         }
