@@ -181,6 +181,9 @@ class TextRenderer {
         const first = words[0].rect;
         const last = words[words.length - 1].rect;
 
+        // Define lineIndex derived from current lines count
+        const lineIndex = this.lines.length;
+
         // Find min top and max bottom in this line
         const minTop = Math.min(...words.map(w => w.rect.top));
         const maxBottom = Math.max(...words.map(w => w.rect.bottom));
