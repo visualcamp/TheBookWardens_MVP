@@ -273,6 +273,14 @@ class TextRenderer {
                 timeOffset = 400; // ms for cursor return sweep
                 // Trigger the move to start immediately (at t=0 relative to this call)
                 this.updateCursor(firstW, 'start');
+
+                // RHYTHM IMPACT: Trigger "Pop" Animation
+                // Removed 'tr-blink' temporarily if needed, or just add pulse class
+                if (this.cursor) {
+                    this.cursor.classList.remove("impact-pulse");
+                    void this.cursor.offsetWidth; // Trigger Reflow
+                    this.cursor.classList.add("impact-pulse");
+                }
             }
 
             indices.forEach((wordIdx, i) => {

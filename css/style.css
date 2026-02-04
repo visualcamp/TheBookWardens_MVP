@@ -581,6 +581,38 @@ body {
     opacity: 0.3;
     box-shadow: none;
   }
+
+  50% {
+    opacity: 0.3;
+    box-shadow: none;
+  }
+}
+
+/* Impact Pulse for Return Sweep (Rhythm) */
+.tr-cursor.impact-pulse {
+  animation: cursor-landing-pulse 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes cursor-landing-pulse {
+  0% {
+    transform: translate(0, -50%) scale(1);
+    box-shadow: 0 0 10px #ff00ff;
+    background-color: #ff00ff;
+  }
+
+  30% {
+    transform: translate(0, -50%) scale(2.0);
+    box-shadow: 0 0 25px #00ffff;
+    /* Cyan Flash */
+    background-color: #ffffff;
+    /* White Core */
+  }
+
+  100% {
+    transform: translate(0, -50%) scale(1);
+    box-shadow: 0 0 10px #ff00ff;
+    background-color: #ff00ff;
+  }
 }
 
 /* Ink Reward Animation */
