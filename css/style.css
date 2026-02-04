@@ -350,6 +350,8 @@ body {
   width: 200px;
   height: 200px;
   margin: 0 auto;
+  transform: translateY(-100px);
+  /* Move up 100px as requested */
 }
 
 .owl-head {
