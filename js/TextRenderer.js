@@ -229,10 +229,15 @@ class TextRenderer {
         const r = wordObj.rect; // Use cached rect
 
         // Position cursor visually after the word
-        // Vertically Centered: Top = CenterY. CSS transform handles the -50% shift.
+        // Vertically Centered Correction:
+        // rect.centerY includes line-height (which is huge, 2.8).
+        // To hit the text glyph center, we need to move UP significantly.
+        // Heuristic: top + 40% of height (slightly above center)
+        const visualY = r.top + (r.height * 0.4);
+
         this.cursor.style.position = "fixed";
         this.cursor.style.left = (r.right + 2) + "px";
-        this.cursor.style.top = r.centerY + "px"; // Use CenterY
+        this.cursor.style.top = visualY + "px";
 
         // Remove height override for Dot Cursor
         this.cursor.style.height = "";
