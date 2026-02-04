@@ -1114,72 +1114,79 @@ Game.typewriter = {
     },
 
     showFullTextReview() {
+        // 1. Switch Screen
         Game.switchScreen("screen-review");
+
+        // 2. Hide Gaze Dot / Debug Visuals
+        if (window.setGazeDotState) window.setGazeDotState(false);
+        Game.gazeDisplayOn = false;
+
+        // Remove any existing fixation dots (cleanup)
+        const existingDots = document.getElementById("fixation-dots-container");
+        if (existingDots) existingDots.remove();
+        // Also cleanup previous session dots if appended differently
+        const oldDots = document.querySelector("#screen-review > div[style*='position: absolute']");
+        if (oldDots) oldDots.remove();
+
+
+        // 3. Calculate Stats
+        const now = Date.now();
+        const durationSec = (this.startTime) ? (now - this.startTime - this.totalPausedTime) / 1000 : 60;
+        // Prevent div by zero
+        const safeDuration = durationSec > 0 ? durationSec : 1;
+        const wpm = Math.round(this.wordCount / (safeDuration / 60));
+
+        // 4. Update UI Elements (Stats)
+        const statWpm = document.getElementById("stat-wpm");
+        if (statWpm) this.animateValue(statWpm, 0, wpm, 1500);
+
+        const statInk = document.getElementById("stat-ink");
+        if (statInk) this.animateValue(statInk, 0, Game.state.ink || 0, 1500);
+
+        const statGems = document.getElementById("stat-gems");
+        if (statGems) this.animateValue(statGems, 0, Game.state.gems || 0, 1500);
+
+        // Words Mastered (Vocab List length or tracked count)
+        const statWords = document.getElementById("stat-words");
+        if (statWords) this.animateValue(statWords, 0, Game.vocabList.length, 1000);
+
+        // 5. Render Text Review (Accordion / Collapsible)
         const container = document.getElementById("full-text-container");
         if (container) {
             // Join paragraphs and clean up slashes
-            const fullText = this.paragraphs.join("\n\n").replace(/\//g, "");
-            container.textContent = fullText;
+            const cleanText = this.paragraphs.map(p => p.replace(/\//g, "")).join("\n\n");
 
-            // --- DRAW FIXATIONS ---
-            if (window.gazeDataManager) {
-                const fixations = window.gazeDataManager.getFixations();
-                console.log("[Game] Fixations to draw:", fixations.length);
-
-                // We need to map screen coordinates to the container relative coords?
-                // Or just absolute positioning over the container.
-                // Since the container scrolls, absolute positioning over it might move with scroll ONLY if appended to container.
-                // But container has textContent set, which kills children.
-                // So let's wrap text in a div and append dots to the container.
-                container.innerHTML = `<div style="position:relative; z-index:1;">${fullText}</div>`;
-
-                // Get container bounds to offset if needed, but gaze is screen coordinates usually (clientXY).
-                // However, container position on screen matters.
-                // If gaze is screen coordinates (pageX/Y-ish), we need to place dots absolutely in body OR relative to a full-screen overlay.
-                // Let's create a canvas overlay on top of the container text.
-                // Simpler approach: Just append absolute divs to the container or body.
-                // CAUTION: Text might scroll. Fixations captured DURING reading might align with WHERE the text was.
-                // But here we are just reviewing. The gaze data collected was from the previous screen ("screen-read").
-                // The coordinates form the reading session won't match the new "Review" screen layout!
-                // The user request says: "위 자료구조를 활용해 텍스트 지문을 읽고 나서 화면에 픽세이션인 점을을... 그린다."
-                // Since the layout is different (Reading Mode vs Review Mode), the dots will be in "wrong" places relative to text content
-                // UNLESS the prompt implies plotting them WHERE THEY WERE LOOKING during reading (spatial heatmap)
-                // OR plotting them relative to the text (which is very hard without word-level timestamp mapping).
-
-                // Given "Reading Game", assuming we just overlay where they looked on the SCREEN to show their pattern.
-                // But the review screen has the text. If we just plot X,Y coords, and the text layout changed,
-                // it might look weird. However, re-creating the EXACT reading environment is complex.
-                // We will assume plotting the RAW screen coordinates is the goal (to show scan path pattern).
-                // We will append a fullscreen transparent container for dots.
-
-                const dotContainer = document.createElement("div");
-                dotContainer.style.position = "absolute";
-                dotContainer.style.top = "0";
-                dotContainer.style.left = "0";
-                dotContainer.style.width = "100%";
-                dotContainer.style.height = "100%";
-                dotContainer.style.pointerEvents = "none";
-                dotContainer.style.zIndex = "100";
-                document.getElementById("screen-review").appendChild(dotContainer); // Append to screen-review to keep scoped
-
-                fixations.forEach(fix => {
-                    // Filter out 0,0 or invalid
-                    if (fix.x <= 0 && fix.y <= 0) return;
-
-                    const dot = document.createElement("div");
-                    dot.className = "fixation-dot";
-                    dot.style.position = "fixed"; // Use fixed to match screen coords
-                    dot.style.left = (fix.x - 5) + "px"; // Radius 5px -> width 10px? "반지름 5px" means width 10px
-                    dot.style.top = (fix.y - 5) + "px";
-                    dot.style.width = "10px";
-                    dot.style.height = "10px";
-                    dot.style.borderRadius = "50%";
-                    dot.style.backgroundColor = "rgba(255, 0, 0, 0.5)"; // Semi-transparent red
-                    dot.style.zIndex = "999";
-                    dotContainer.appendChild(dot);
-                });
-            }
+            // Create Accordion Structure
+            container.innerHTML = `
+                <div class="review-accordion">
+                    <button class="accordion-header" onclick="this.classList.toggle('active'); this.nextElementSibling.classList.toggle('show');">
+                        📜 View Full Text Log
+                    </button>
+                    <div class="accordion-content">
+                        <p>${cleanText}</p>
+                    </div>
+                </div>
+            `;
         }
+    },
+
+    // Utility: Number Counter Animation
+    animateValue(obj, start, end, duration) {
+        if (!obj) return;
+        let startTimestamp = null;
+        const step = (timestamp) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+            obj.innerHTML = Math.floor(progress * (end - start) + start);
+            if (progress < 1) {
+                window.requestAnimationFrame(step);
+            } else {
+                // Finish Effect (Pop)
+                obj.style.transform = "scale(1.2)";
+                setTimeout(() => obj.style.transform = "scale(1)", 200);
+            }
+        };
+        window.requestAnimationFrame(step);
     },
 
     showSummaryShare() {

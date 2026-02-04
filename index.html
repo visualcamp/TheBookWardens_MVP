@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="./css/rune-game.css" />
   <link rel="stylesheet" href="./css/rabbit.css" />
   <link rel="stylesheet" href="./css/splash.css" />
+  <link rel="stylesheet" href="./css/victory.css" />
   <script src="./coi-serviceworker.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
@@ -479,30 +480,60 @@
       <button class="btn-primary" onclick="Game.typewriter.showFullTextReview()">Review Reading</button>
     </section>
 
-    <!-- SCREEN 5: FULL TEXT REVIEW -->
+    <!-- SCREEN 5: VICTORY / STATS REVIEW -->
     <section id="screen-review" class="screen"
-      style="justify-content: flex-start; padding-top: 80px; overflow-y: auto;">
-      <h2 style="color: #fff; margin-bottom: 20px;">Today's Reading</h2>
-      <div id="full-text-container" style="
-            width: 90%; 
-            max-width: 800px; 
-            height: 60vh; 
-            overflow-y: auto; 
-            background: rgba(255,255,255,0.1); 
-            padding: 20px; 
-            border-radius: 8px; 
-            text-align: left; 
-            font-family: 'Crimson Text', serif; 
-            font-size: 1.2rem; 
-            line-height: 1.6;
-            margin-bottom: 20px;
-            white-space: pre-wrap;">
-        <!-- Full text injected here -->
+      style="justify-content: flex-start; padding-top: 60px; overflow-y: auto;">
+
+      <!-- Victory Header -->
+      <div style="text-align: center; margin-bottom: 30px; animation: popIn 0.5s ease-out;">
+        <h1
+          style="font-family: 'Cinzel', serif; font-size: 2.5rem; color: #ffd700; text-shadow: 0 0 20px rgba(255, 215, 0, 0.6); margin: 0;">
+          VICTORY!
+        </h1>
+        <p style="color: #aaa; letter-spacing: 2px; font-size: 0.9rem;">Rift Sealed Successfully</p>
       </div>
-      <div style="display:flex; gap:10px; margin-top: 10px;">
-        <button class="btn-primary" onclick="Game.typewriter.showSummaryShare()">Next</button>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <!-- Stat 1: WPM -->
+        <div class="stat-card" style="border-color: #00e5ff;">
+          <div class="stat-icon">⚡</div>
+          <div class="stat-value" id="stat-wpm">0</div>
+          <div class="stat-label">Avg. WPM</div>
+        </div>
+
+        <!-- Stat 2: Ink -->
+        <div class="stat-card" style="border-color: #8b2fc9;">
+          <div class="stat-icon">🖋️</div>
+          <div class="stat-value" id="stat-ink">0</div>
+          <div class="stat-label">Ink Collected</div>
+        </div>
+
+        <!-- Stat 3: Gems -->
+        <div class="stat-card" style="border-color: #ff4444;">
+          <div class="stat-icon">💎</div>
+          <div class="stat-value" id="stat-gems">0</div>
+          <div class="stat-label">Gems Earned</div>
+        </div>
+
+        <!-- Stat 4: Words -->
+        <div class="stat-card" style="border-color: #ffd700;">
+          <div class="stat-icon">📜</div>
+          <div class="stat-value" id="stat-words">0</div>
+          <div class="stat-label">Words Mastered</div>
+        </div>
+      </div>
+
+      <!-- Accordion Text Log -->
+      <div id="full-text-container" style="width: 90%; max-width: 600px; margin-bottom: 30px;">
+        <!-- Injected via JS -->
+      </div>
+
+      <!-- Action Buttons -->
+      <div style="display:flex; gap:15px; margin-top: 10px; z-index: 10;">
+        <button class="btn-primary" onclick="Game.typewriter.showSummaryShare()">Share Victory</button>
         <button class="btn-primary" style="background:#444;"
-          onclick="if(window.gazeDataManager) window.gazeDataManager.exportCSV()">Gaze Data Output</button>
+          onclick="if(window.gazeDataManager) window.gazeDataManager.exportCSV()">Export Data</button>
       </div>
     </section>
 
