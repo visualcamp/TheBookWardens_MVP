@@ -593,10 +593,16 @@ Game.typewriter = {
         // Reveal next chunk
         if (this.chunkIndex < this.renderer.chunks.length) {
             this.renderer.revealChunk(this.chunkIndex);
+
+            // Debug Log
+            console.log(`[Typewriter] Chunk ${this.chunkIndex} revealed.`);
+
             this.chunkIndex++;
 
-            // Calculate Delay
-            const delay = Game.targetChunkDelay || 800;
+            // Calculate Delay with Safety Clamp
+            let delay = Game.targetChunkDelay || 1500; // Default slower (1.5s)
+            if (delay < 500) delay = 500; // Absolute minimum 0.5s safety
+
             this.timer = setTimeout(() => this.tick(), delay);
         } else {
             console.log("Paragraph Fully Revealed.");
