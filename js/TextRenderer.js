@@ -131,24 +131,11 @@ class TextRenderer {
             const r = word.element.getBoundingClientRect();
 
             // B. Get TIGHT Glyph Bounds (Actual Ink) using Range
-            // Assuming word.element contains a single text node or simple text
-            range.selectNodeContents(word.element);
-            const tightRect = range.getBoundingClientRect();
-
-            // Calculate Visual Center based on TIGHT bounds (Robust fallback if tightRect is empty is r)
-            // Safety Check: tightRect should have height and represent a valid screen position
-            // If Text is hidden (opacity:0), tightRect might be 0.
-            const useTight = tightRect.height > 0 && tightRect.top >= 0;
-
-            // Visual Center Y: Center of the actual glyphs
-            let visualCenterY = useTight
-                ? tightRect.top + (tightRect.height / 2)
-                : r.top + (r.height / 2);
-
-            // Final Safety Net: If calculation failed (NaN or 0), force fallback to Box Center
-            if (!visualCenterY || isNaN(visualCenterY)) {
-                visualCenterY = r.top + (r.height / 2);
-            }
+            // REVERTED: Range logic caused instability with hidden elements.
+            // Using Simple Robust Fallback:
+            // visualCenterY based on Bounding Box with constant adjustment for Crimson Text (0.4 factor)
+            // This ensures cursor is visually centered on the glyphs, not the line-height box.
+            const visualCenterY = r.top + (r.height * 0.4);
 
             word.rect = {
                 left: r.left,
@@ -159,7 +146,7 @@ class TextRenderer {
                 height: r.height,
                 centerX: r.left + r.width / 2,
                 centerY: r.top + r.height / 2, // Default Box Center
-                visualCenterY: visualCenterY   // NEW: Precise Glyph Center
+                visualCenterY: visualCenterY   // Reverted to Simple
             };
 
             // --- 2. Line Detection ---
