@@ -549,20 +549,22 @@ body {
 /* Custom Cursor (for TextRenderer) */
 .tr-cursor {
   display: inline-block;
-  width: 5px;
-  /* Thicker */
-  height: 1.5em;
-  /* Ensure height */
+  width: 12px;
+  /* Circle Size */
+  height: 12px;
   background-color: #ff00ff;
-  /* Magenta for Debug/Visibility */
+  /* Magenta */
+  border-radius: 50%;
+  /* Circle */
   animation: tr-blink 1s infinite;
-  box-shadow: 0 0 15px #ff00ff, 0 0 5px #fff;
-  border-radius: 2px;
+  box-shadow: 0 0 10px #ff00ff;
   position: absolute;
   pointer-events: none;
-  transition: left 0.2s cubic-bezier(0.25, 1, 0.5, 1), top 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+  transition: left 0.1s linear, top 0.1s linear;
+  /* Fast & Smooth */
   z-index: 200000 !important;
-  /* On top of EVERYTHING */
+  transform: translate(0, -50%);
+  /* Center Vertically by default logic */
 }
 
 @keyframes tr-blink {

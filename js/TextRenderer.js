@@ -227,13 +227,16 @@ class TextRenderer {
     updateCursor(wordObj) {
         if (!this.cursor || !wordObj) return;
         const r = wordObj.rect; // Use cached rect
+
         // Position cursor visually after the word
-        // Since cursor is absolute or we use transform
-        // Best to use fixed/absolute positioning based on cached rect
-        this.cursor.style.position = "fixed"; // Or absolute relative to body
+        // Vertically Centered: Top = CenterY. CSS transform handles the -50% shift.
+        this.cursor.style.position = "fixed";
         this.cursor.style.left = (r.right + 2) + "px";
-        this.cursor.style.top = r.top + "px";
-        this.cursor.style.height = r.height + "px";
+        this.cursor.style.top = r.centerY + "px"; // Use CenterY
+
+        // Remove height override for Dot Cursor
+        this.cursor.style.height = "";
+
         this.cursor.style.opacity = "1";
     }
 
