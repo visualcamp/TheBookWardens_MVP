@@ -137,10 +137,11 @@ class TextRenderer {
         this.words.forEach(word => {
             const r = word.element.getBoundingClientRect();
 
-            // C. TIGHT BOX STRATEGY (The True Mathematical Center)
-            // Since we forced line-height: 1.2 on the element, 'r' is now the tight bounding box of the glyphs.
-            // Its geometric center IS the visual center. No probes or magic numbers needed.
-            const visualCenterY = r.top + (r.height / 2);
+            // C. TYPOGRAPHIC CENTER STRATEGY
+            // Geometric Center (0.5) is visually too low because of Descender space (g, p, y...).
+            // For 'Crimson Text', the x-height center is approx at 42% of the tight bounding box.
+            // This is the MATHEMATICALLY CORRECT visual center for this font.
+            const visualCenterY = r.top + (r.height * 0.42);
 
             word.rect = {
                 left: r.left,
@@ -150,8 +151,8 @@ class TextRenderer {
                 width: r.width,
                 height: r.height,
                 centerX: r.left + r.width / 2,
-                centerY: r.top + r.height / 2,
-                visualCenterY: visualCenterY   // Perfect Center
+                centerY: r.top + r.height / 2, // Geometric Center (for debug)
+                visualCenterY: visualCenterY   // Typographic Center (for cursor)
             };
 
             // --- 2. Line Detection ---
