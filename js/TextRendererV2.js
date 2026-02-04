@@ -352,6 +352,22 @@ class TextRenderer {
     }
 
     /**
+     * Fades out a specific chunk by adding a CSS class.
+     * @param {number} chunkIndex 
+     */
+    fadeOutChunk(chunkIndex) {
+        if (chunkIndex < 0 || chunkIndex >= this.chunks.length) return;
+
+        const indices = this.chunks[chunkIndex];
+        indices.forEach(wordIdx => {
+            const w = this.words[wordIdx];
+            if (w && w.element) {
+                w.element.classList.add("chunk-fade-out");
+            }
+        });
+    }
+
+    /**
      * Performs a high-performance hit test against the cached layout.
      * @param {number} gx - Gaze X
      * @param {number} gy - Gaze Y

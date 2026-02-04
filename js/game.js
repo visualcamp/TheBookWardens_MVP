@@ -616,6 +616,14 @@ Game.typewriter = {
         // Reveal next chunk
         if (this.chunkIndex < this.renderer.chunks.length) {
 
+            // TEXT TRAIN EFFECT:
+            // Fade out the chunk that is 3 steps behind the current one.
+            // Keeps a "train" of 3 visible chunks.
+            const fadeTargetIndex = this.chunkIndex - 3;
+            if (fadeTargetIndex >= 0) {
+                this.renderer.fadeOutChunk(fadeTargetIndex);
+            }
+
             // Wait for Animation to Finish (Promise-based)
             this.renderer.revealChunk(this.chunkIndex).then(() => {
                 // Animation Done. Now wait for the "Reading Pause" delay.
