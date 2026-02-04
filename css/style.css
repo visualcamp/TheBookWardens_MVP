@@ -516,6 +516,10 @@ body {
 
 .chunk-fade-out {
   opacity: 0 !important;
+  visibility: hidden;
+  /* Ensure it's hidden from layout/rendering */
+  transition: opacity 1.0s ease-out, visibility 1.0s linear;
+  /* Match opacity duration */
 }
 
 /* --- TextRenderer Specialized Styles --- */
