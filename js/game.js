@@ -227,12 +227,33 @@ const Game = {
         const currentIndex = this.state.vocabIndex || 0;
         const currentData = this.vocabList[currentIndex];
 
+        // Find the button element that was clicked
+        // We need to re-select because we passed an index, or we could pass event/element
+        // Assuming the order matches:
+        const optionsDiv = document.getElementById("vocab-options");
+        const btns = optionsDiv ? optionsDiv.querySelectorAll(".option-btn") : [];
+        const selectedBtn = btns[optionIndex];
+
+        // Prevent multi-click during animation
+        if (selectedBtn && selectedBtn.disabled) return;
+
         const isCorrect = (optionIndex === currentData.answer);
 
         if (isCorrect) {
-            // alert("Correct! +10 Gems"); // Removed alert for smoother flow
+            // --- JUICY SUCCESS ---
+            if (selectedBtn) {
+                selectedBtn.classList.add("correct");
+                this.spawnFloatingText(selectedBtn, "+10 Gems!", "correct");
+                this.spawnParticles(selectedBtn, 15); // Confetti
+            }
+
+            // Audio cue here (optional)
+
             this.state.gems += 10;
             this.updateUI();
+
+            // Wait for animation
+            await new Promise(r => setTimeout(r, 1200));
 
             // Progress
             this.state.vocabIndex++;
@@ -246,7 +267,53 @@ const Game = {
                 this.switchScreen("screen-wpm");
             }
         } else {
-            alert("Try again!");
+            // --- JUICY FAIL ---
+            if (selectedBtn) {
+                selectedBtn.classList.add("wrong");
+                selectedBtn.disabled = true; // Disable this specific wrong option
+                this.spawnFloatingText(selectedBtn, "The Rift resists...", "error");
+            }
+            // Audio cue here (optional)
+        }
+    },
+
+    // FX Helpers
+    spawnFloatingText(targetEl, text, type) {
+        const rect = targetEl.getBoundingClientRect();
+        const floatEl = document.createElement("div");
+        floatEl.className = `feedback-text ${type}`;
+        floatEl.innerText = text;
+        floatEl.style.left = (rect.left + rect.width / 2) + "px";
+        floatEl.style.top = (rect.top) + "px"; // Start slightly above
+        document.body.appendChild(floatEl);
+
+        // Cleanup
+        setTimeout(() => floatEl.remove(), 1000);
+    },
+
+    spawnParticles(targetEl, count) {
+        const rect = targetEl.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        for (let i = 0; i < count; i++) {
+            const p = document.createElement("div");
+            p.className = "particle";
+
+            // Random scatter
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Math.random() * 60 + 20; // 20px to 80px out
+            const tx = Math.cos(angle) * dist + "px";
+            const ty = Math.sin(angle) * dist + "px";
+
+            p.style.setProperty("--tx", tx);
+            p.style.setProperty("--ty", ty);
+            p.style.left = centerX + "px";
+            p.style.top = centerY + "px";
+            p.style.backgroundColor = `hsl(${Math.random() * 50 + 40}, 100%, 50%)`; // Gold/Yellow range
+
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 800);
         }
     },
 
