@@ -176,7 +176,12 @@ class TextRenderer {
         const minTop = Math.min(...words.map(w => w.rect.top));
         const maxBottom = Math.max(...words.map(w => w.rect.bottom));
 
+        // Assign Line Index to Words for precise lookup
+        const lineIndex = this.lines.length;
+        words.forEach(w => w.lineIndex = lineIndex);
+
         return {
+            index: lineIndex,
             startIndex: words[0].index,
             endIndex: words[words.length - 1].index,
             wordIndices: words.map(w => w.index),
@@ -226,14 +231,22 @@ class TextRenderer {
 
     updateCursor(wordObj) {
         if (!this.cursor || !wordObj) return;
-        const r = wordObj.rect; // Use cached rect
 
-        // Position cursor visually after the word
-        // Vertically Centered Correction:
-        // rect.centerY includes line-height (which is huge, 2.8).
-        // To hit the text glyph center, we need to move UP significantly.
-        // Heuristic: top + 40% of height (slightly above center)
-        const visualY = r.top + (r.height * 0.4);
+        // Correct Vertical Alignment: Center of the LINE
+        // Instead of word-relative heuristics, we use the Line's cached bounding box.
+        let visualY;
+
+        if (wordObj.lineIndex !== undefined && this.lines[wordObj.lineIndex]) {
+            const lineRect = this.lines[wordObj.lineIndex].rect;
+            // Exact Vertical Center of the Line Box
+            visualY = lineRect.top + (lineRect.height / 2);
+        } else {
+            // Fallback (Safe Mode)
+            const r = wordObj.rect;
+            visualY = r.top + (r.height * 0.5);
+        }
+
+        const r = wordObj.rect; // Use cached rect
 
         this.cursor.style.position = "fixed";
         this.cursor.style.left = (r.right + 2) + "px";
