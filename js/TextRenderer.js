@@ -74,16 +74,31 @@ class TextRenderer {
             const rawWords = cleanChunk.split(/\s+/);
 
             rawWords.forEach((w) => {
-                // Create Span
+                // Create Span with Probe for Mathematical Centering
                 const span = document.createElement("span");
-                span.textContent = w;
                 span.className = "tr-word"; // Base class
                 // FORCE STYLES for Debugging/Visibility
                 span.style.color = "#ffffff";
-                span.style.opacity = "0"; // Start hidden (revealed by JS)
+                span.style.opacity = "0"; // Start hidden
                 span.style.marginRight = this.options.wordSpacing;
                 span.style.display = "inline-block";
                 span.dataset.index = globalWordIndex;
+
+                // 1. Text Content
+                span.textContent = w;
+
+                // 2. Probe Element (The "Anchor")
+                // vertical-align: middle aligns this element's midpoint with:
+                // "baseline of parent + half the x-height of parent"
+                // This is the TRUE VISUAL CENTER for reading.
+                const probe = document.createElement("span");
+                probe.className = "tr-probe";
+                probe.style.display = "inline-block";
+                probe.style.width = "0px";
+                probe.style.height = "0px"; // Zero size point
+                probe.style.verticalAlign = "middle";
+                probe.style.visibility = "hidden";
+                span.appendChild(probe);
 
                 this.container.appendChild(span);
 
@@ -93,7 +108,8 @@ class TextRenderer {
                     text: w,
                     chunkId: chunkIndex,
                     element: span,
-                    rect: null // Will be filled in lockLayout
+                    probe: probe, // Store ref to probe
+                    rect: null
                 });
 
                 chunkWordIndices.push(globalWordIndex);
@@ -103,11 +119,9 @@ class TextRenderer {
             this.chunks.push(chunkWordIndices);
         });
 
-        // 3. Add a "cursor" element at the end (optional, can be managed separately)
+        // 3. Add a "cursor" element... (unchanged)
         this.cursor = document.createElement("span");
         this.cursor.className = "tr-cursor";
-        // REMOVED INLINE STYLES to let CSS control it (z-index, color, size)
-        // Only layout-essential styles remain if needed, but CSS is better.
         this.container.appendChild(this.cursor);
     }
 
@@ -118,37 +132,26 @@ class TextRenderer {
     lockLayout() {
         if (this.words.length === 0) return;
 
-        // Force a reflow if needed (reading properties does this)
+        // Force a reflow
         const containerRect = this.container.getBoundingClientRect();
 
         // --- 1. Cache Word Rects ---
         let currentLineY = -9999;
         let lineBuffer = [];
 
-        // Helper: Create a Range to get TIGHT bounds of the text node (ignoring line-height)
-        const range = document.createRange();
-
         this.words.forEach(word => {
-            // A. Get Bounding Box (Visual Block including line-height/padding)
             const r = word.element.getBoundingClientRect();
 
-            // B. Get TIGHT Glyph Bounds (Actual Ink) using Range
-            // Assuming word.element contains a single text node or simple text
-            range.selectNodeContents(word.element);
-            const tightRect = range.getBoundingClientRect();
+            // C. PROBE STRATEGY (The Mathematical Center)
+            // The probe is strictly aligned to the font's x-height center by the browser engine.
+            const probeRect = word.probe.getBoundingClientRect();
 
-            // Safety Check: tightRect should have height and represent a valid screen position
-            // If Text is hidden (opacity:0), tightRect might be 0.
-            const useTight = tightRect.height > 0 && tightRect.top >= 0;
+            // If probe fails (hidden/collapsed), fallback to BBox center
+            let visualCenterY = probeRect.top;
 
-            // Visual Center Y: Center of the actual glyphs
-            let visualCenterY = useTight
-                ? tightRect.top + (tightRect.height / 2)
-                : r.top + (r.height / 2); // Default to box center if range fails
-
-            // Final Safety Net: If calculation failed (NaN or 0), force fallback to Box Center
-            if (!visualCenterY || isNaN(visualCenterY)) {
-                visualCenterY = r.top + (r.height / 2);
+            // Safety: If probe is 0 (e.g. display:none parent), fallback
+            if (visualCenterY === 0 || isNaN(visualCenterY)) {
+                visualCenterY = r.top + (r.height * 0.45); // Approximate fallback
             }
 
             word.rect = {
@@ -159,8 +162,8 @@ class TextRenderer {
                 width: r.width,
                 height: r.height,
                 centerX: r.left + r.width / 2,
-                centerY: r.top + r.height / 2, // Default Box Center
-                visualCenterY: visualCenterY   // NEW: Precise Glyph Center
+                centerY: r.top + r.height / 2,
+                visualCenterY: visualCenterY   // NEW: Browser-Native Mathematical Center
             };
 
             // --- 2. Line Detection ---
