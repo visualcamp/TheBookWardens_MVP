@@ -640,7 +640,6 @@ body {
 span.tr-word.chunk-fade-out {
   opacity: 0 !important;
   visibility: hidden;
-  transform: translateY(-10px);
-  /* Optional: drift up slightly */
-  transition: opacity 1.0s ease-out, visibility 1.0s linear, transform 1.0s ease-out;
+  /* transform removed to fade in place */
+  transition: opacity 1.0s ease-out, visibility 1.0s linear;
 }

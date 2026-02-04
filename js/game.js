@@ -640,7 +640,36 @@ Game.typewriter = {
             });
 
         } else {
-            console.log("Paragraph Fully Revealed.");
+            console.log("Paragraph Fully Revealed. Clearing tail...");
+
+            // CLEANUP TAIL: Fade out any remaining visible chunks
+            // We need to fade out from (chunkIndex - 3) up to (chunkIndex - 1)
+            // But actually, since the loop stopped, we just need to clear everything remaining.
+            // Let's sweep from max(0, chunkIndex - 3) to total chunks.
+
+            let cleanupDelay = 0;
+            const startCleanupIdx = Math.max(0, this.chunkIndex - 3);
+
+            for (let i = startCleanupIdx; i < this.renderer.chunks.length; i++) {
+                setTimeout(() => {
+                    this.renderer.fadeOutChunk(i);
+                }, cleanupDelay);
+                cleanupDelay += 600; // Delay between chunk fades during cleanup
+            }
+
+            // Optional: Move to next paragraph after cleanup is visually done
+            // The cleanup takes roughly (3 * 600) = 1800ms
+            if (this.currentParaIndex < this.paragraphs.length - 1) {
+                setTimeout(() => {
+                    this.currentParaIndex++;
+                    this.playNextParagraph();
+                }, cleanupDelay + 1000);
+            } else {
+                // Boss Battle Trigger (Game Over for text)
+                setTimeout(() => {
+                    this.startBossBattle();
+                }, cleanupDelay + 1000);
+            }
         }
     },
 

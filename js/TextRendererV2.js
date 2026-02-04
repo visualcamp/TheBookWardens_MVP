@@ -359,13 +359,16 @@ class TextRenderer {
         if (chunkIndex < 0 || chunkIndex >= this.chunks.length) return;
 
         const indices = this.chunks[chunkIndex];
-        indices.forEach(wordIdx => {
+        indices.forEach((wordIdx, i) => {
             const w = this.words[wordIdx];
             if (w && w.element) {
-                // FORCE RESOLUTION: Remove the 'revealed' class which holds opacity: 1 !important
-                w.element.classList.remove("revealed");
-                // Add fade-out class
-                w.element.classList.add("chunk-fade-out");
+                // Staggered Fade Out (Left to Right within chunk)
+                setTimeout(() => {
+                    // FORCE RESOLUTION: Remove the 'revealed' class
+                    w.element.classList.remove("revealed");
+                    // Add fade-out class
+                    w.element.classList.add("chunk-fade-out");
+                }, i * 50); // 50ms stagger per word
             }
         });
     }
