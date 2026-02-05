@@ -51,6 +51,16 @@ const Game = {
             }
         }
 
+        // 4. Session ID for Firebase
+        this.sessionId = Math.random().toString(36).substring(2, 6).toUpperCase();
+        console.log("Session ID:", this.sessionId);
+
+        // Display Session ID permanently
+        const sessionBadge = document.createElement("div");
+        sessionBadge.innerText = `ID: ${this.sessionId}`;
+        sessionBadge.style.cssText = "position:fixed; bottom:10px; left:10px; background:rgba(0,0,0,0.5); color:lime; padding:5px 10px; font-family:monospace; font-weight:bold; z-index:9999; border:1px solid lime; border-radius:4px; pointer-events:none;";
+        document.body.appendChild(sessionBadge);
+
         // DEBUG: Manual Export Button (Removed per user request)
 
     },
@@ -664,29 +674,16 @@ Game.typewriter = {
                 cleanupDelay += 600;
             }
 
-            // AUTO-EXPORT CSV (Requested Feature)
+            // AUTO-EXPORT TO FIREBASE
             // Triggered automatically when the paragraphs is fully displayed + 3s reading time.
             setTimeout(() => {
-                console.log("[Auto-Export] ------------------------------------------------");
-                console.log("[Auto-Export] Paragraph Complete. Saving CSV Data automatically.");
-                console.log("[Auto-Export] ------------------------------------------------");
+                console.log("[Auto-Upload] ------------------------------------------------");
+                console.log("[Auto-Upload] Paragraph Complete. Uploading to Cloud.");
+                console.log("[Auto-Upload] ------------------------------------------------");
 
-                if (window.gazeDataManager) {
-                    window.gazeDataManager.exportCSV();
-
-                    // Optional: Show visual feedback
-                    const toast = document.createElement("div");
-                    toast.innerText = "💾 CSV Auto-Saved";
-                    toast.style.position = "fixed";
-                    toast.style.bottom = "20px";
-                    toast.style.right = "20px";
-                    toast.style.background = "#28a745";
-                    toast.style.color = "white";
-                    toast.style.padding = "10px 20px";
-                    toast.style.borderRadius = "5px";
-                    toast.style.zIndex = "99999";
-                    document.body.appendChild(toast);
-                    setTimeout(() => toast.remove(), 2000);
+                if (window.gazeDataManager && Game.sessionId) {
+                    // Upload instead of download
+                    window.gazeDataManager.uploadToCloud(Game.sessionId);
                 }
             }, 3000);
 

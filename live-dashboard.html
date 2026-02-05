@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Live Eye Tracking Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.0.2"></script>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="./js/firebase-config.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        h1,
+        h2 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input {
+            flex: 1;
+            padding: 10px;
+            font-size: 1.1rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 1.1rem;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        #status {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        canvas {
+            max-height: 400px;
+            width: 100%;
+        }
+
+        .health-good {
+            color: #28a745;
+        }
+
+        .health-warn {
+            color: #ffc107;
+        }
+
+        .health-crit {
+            color: #dc3545;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="card">
+        <h1>☁️ Live Eye Tracking Dashboard (Firebase)</h1>
+        <p>Enter the <b>Session ID</b> displayed on the mobile device to view data instantly.</p>
+
+        <div id="status">Waiting for connection...</div>
+
+        <div class="input-group">
+            <input type="text" id="sessionIdInput" placeholder="Enter Session ID (e.g. session_1234)">
+            <button onclick="connectSession()">Connect</button>
+        </div>
+    </div>
+
+    <!-- Health Report -->
+    <div id="healthReport" class="card" style="display:none; border-left: 5px solid #ccc;"></div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" style="display:none;">
+        <div class="card">
+            <h2>📉 Chart 1: Return Sweep Analysis (MAD)</h2>
+            <canvas id="chart1"></canvas>
+        </div>
+        <div class="card">
+            <h2>🗺️ Chart 2: Spatial Path</h2>
+            <canvas id="chart2"></canvas>
+        </div>
+        <div class="card">
+            <h2>⏱️ Chart 3: Position & Line Index</h2>
+            <canvas id="chart3"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // --- Global Chart Instances ---
+        let chart1, chart2, chart3;
+
+        // --- Firebase Logic ---
+        function connectSession() {
+            const sessionId = document.getElementById('sessionIdInput').value.trim();
+            if (!sessionId) return alert("Please enter a Session ID.");
+
+            if (!window.firebase || !window.FIREBASE_CONFIG) return alert("Firebase Config Missing!");
+
+            if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
+            const db = firebase.database();
+
+            document.getElementById('status').innerText = `Connecting to [${sessionId}]...`;
+
+            // Listen for changes
+            const ref = db.ref('sessions/' + sessionId);
+            ref.on('value', (snapshot) => {
+                const val = snapshot.val();
+                if (val) {
+                    document.getElementById('status').innerHTML = `✅ Data Received! Last Update: ${new Date(val.meta.timestamp).toLocaleTimeString()}<br>User Agent: ${val.meta.userAgent}`;
+                    // Process Data
+                    processData(val.data);
+                } else {
+                    document.getElementById('status').innerText = `⚠️ Session [${sessionId}] not found or empty.`;
+                }
+            });
+        }
+
+        // --- Data Processing Setup ---
+        function processData(rawData) {
+            if (!rawData || !Array.isArray(rawData)) return;
+
+            // Convert to format expected by charts (already largely compatible)
+            // Ensure numbers
+            const data = rawData.map(d => ({
+                ...d,
+                t: Number(d.t),
+                x: Number(d.x),
+                y: Number(d.y),
+                vx: Number(d.vx),
+                // Re-calculate thresholds locally if needed, but we can trust logs for now
+                dbgThresh: d.debugThreshold,
+                dbgVX: d.debugVX,
+                didFire: d.didFire
+            }));
+
+            analyzeDataHealth(data);
+            renderCharts(data);
+            document.getElementById('dashboard').style.display = 'block';
+        }
+
+        // --- Health Check (Copied) ---
+        function analyzeDataHealth(data) {
+            if (data.length < 2) return;
+            let timeReversals = 0, largeGaps = 0, maxGap = 0, sumGap = 0;
+
+            for (let i = 1; i < data.length; i++) {
+                const dt = data[i].t - data[i - 1].t;
+                if (dt < 0) timeReversals++;
+                if (dt > 100) largeGaps++;
+                if (dt > maxGap) maxGap = dt;
+                sumGap += dt;
+            }
+
+            const avgGap = sumGap / (data.length - 1);
+            const hz = avgGap > 0 ? (1000 / avgGap).toFixed(1) : 0;
+
+            let status = "GOOD", color = "#28a745";
+            if (timeReversals > 0 || largeGaps > data.length * 0.1) { status = "WARNING"; color = "#ffc107"; }
+            if (avgGap > 100) { status = "CRITICAL"; color = "#dc3545"; }
+
+            const report = document.getElementById('healthReport');
+            report.style.display = 'block';
+            report.borderColor = color;
+            report.innerHTML = `
+            <h3 style="color:${color}; margin-top:0;">🩺 Health: ${status}</h3>
+            <div>Hz: <b>${hz}</b> | Max Gap: <b>${maxGap}ms</b> | Samples: <b>${data.length}</b></div>
+        `;
+        }
+
+        // --- Chart Rendering ---
+        function renderCharts(data) {
+            // Destroy old
+            if (chart1) chart1.destroy();
+            if (chart2) chart2.destroy();
+            if (chart3) chart3.destroy();
+
+            const labels = data.map(d => d.t);
+            const triggers = data.map(d => d.didFire || d.realtimeRS ? d.vx : null);
+
+            // Chart 1: MAD Analysis
+            chart1 = new Chart(document.getElementById('chart1'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Realtime VX', data: data.map(d => d.vx), borderColor: '#36a2eb', borderWidth: 1, pointRadius: 0 },
+                        { label: 'Threshold', data: data.map(d => d.dbgThresh), borderColor: '#ff6384', borderDash: [5, 5], borderWidth: 1, pointRadius: 0 },
+                        { label: 'Triggered', data: triggers, type: 'scatter', pointStyle: 'star', radius: 8, backgroundColor: 'gold' }
+                    ]
+                },
+                options: { animation: false, interaction: { mode: 'index', intersect: false } }
+            });
+
+            // Chart 2: Spatial
+            chart2 = new Chart(document.getElementById('chart2'), {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        { label: 'Gaze Path', data: data.map(d => ({ x: d.x, y: d.y })), borderColor: '#ccc', borderWidth: 1, showLine: true, pointRadius: 1 },
+                        { label: 'Trigger Points', data: data.filter(d => d.didFire).map(d => ({ x: d.x, y: d.y })), backgroundColor: 'gold', pointRadius: 6 }
+                    ]
+                },
+                options: {
+                    scales: {
+                        y: { reverse: true, min: 0, max: window.innerHeight },
+                        x: { min: 0, max: window.innerWidth }
+                    },
+                    animation: false
+                }
+            });
+
+            // Chart 3: Position & Line Index
+            chart3 = new Chart(document.getElementById('chart3'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Raw X', data: data.map(d => d.x), borderColor: '#28a745', borderWidth: 1, yAxisID: 'y' },
+                        { label: 'Line Index', data: data.map(d => d.lineIndex), borderColor: '#fd7e14', borderWidth: 2, stepper: true, yAxisID: 'y1' }
+                    ]
+                },
+                options: {
+                    animation: false,
+                    scales: {
+                        y: { type: 'linear', display: true, position: 'left' },
+                        y1: { type: 'linear', display: true, position: 'right', min: 0, max: 10 }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>

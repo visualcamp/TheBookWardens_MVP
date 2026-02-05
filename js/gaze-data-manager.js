@@ -360,6 +360,60 @@ export class GazeDataManager {
         this.exportChartImage(deviceType, startTime, endTime);
     }
 
+    /**
+     * Upload current session data to Firebase Realtime Database
+     * @param {string} sessionId - Unique session ID (e.g. from URL or random)
+     */
+    async uploadToCloud(sessionId) {
+        if (!window.firebase || !window.FIREBASE_CONFIG) {
+            console.error("[Firebase] SDK or Config not loaded. Check index.html and firebase-config.js");
+            alert("Firebase not configured. Cannot upload.");
+            return;
+        }
+
+        console.log(`[Firebase] Uploading session [${sessionId}]...`);
+
+        try {
+            // 1. Ensure App Initialized
+            if (!firebase.apps.length) {
+                firebase.initializeApp(window.FIREBASE_CONFIG);
+            }
+
+            // 2. Preprocess Data before upload
+            this.preprocessData();
+
+            // 3. Prepare Payload (Minimize data size if possible, but raw is fine for debug)
+            // Storing metadata + raw data
+            const payload = {
+                meta: {
+                    timestamp: Date.now(),
+                    userAgent: navigator.userAgent,
+                    lineMetadata: this.lineMetadata,
+                    totalSamples: this.data.length
+                },
+                data: this.data // The raw array
+            };
+
+            // 4. Write to DB
+            // Path: sessions/<sessionId>
+            const db = firebase.database();
+            await db.ref('sessions/' + sessionId).set(payload);
+
+            console.log("[Firebase] Upload Complete! ✅");
+
+            // Visual Feedback
+            const toast = document.createElement("div");
+            toast.innerText = `☁️ Cloud Upload Done: ${sessionId}`;
+            toast.style.cssText = "position:fixed; bottom:50px; left:50%; transform:translateX(-50%); background:#0d47a1; color:white; padding:10px 20px; border-radius:20px; z-index:99999;";
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+
+        } catch (e) {
+            console.error("[Firebase] Upload Failed", e);
+            alert(`Upload Failed: ${e.message}`);
+        }
+    }
+
     async exportChartImage(deviceType, startTime = 0, endTime = Infinity) {
         if (typeof Chart === 'undefined') {
             console.warn("Chart.js is not loaded. Skipping chart export.");
