@@ -296,11 +296,39 @@ class TextRenderer {
     }
 
     hitTest(gx, gy) {
-        if (!this.isLayoutLocked) return null;
-        const LINE_PADDING = 20;
-        const line = this.lines.find(l => gy >= (l.rect.top - LINE_PADDING) && gy <= (l.rect.bottom + LINE_PADDING));
+        // Must have lines
+        if (!this.isLayoutLocked || this.lines.length === 0) return null;
+
+        // 1. Strict Hit Test (Vertical)
+        // Check if falls exactly within [top, bottom] with padding
+        const LINE_PADDING = 30;
+        let line = this.lines.find(l => gy >= (l.rect.top - LINE_PADDING) && gy <= (l.rect.bottom + LINE_PADDING));
+
+        // 2. Fallback: Snap to NEAREST Line (Infinite Force Snap)
+        // If the gaze is outside ALL strict line boundaries, we force it to the nearest line.
+        // This solves the issue where "RawX is reading" but "LineIndex is null or stuck".
+        if (!line) {
+            let minDist = Infinity;
+            let closest = null;
+            this.lines.forEach(l => {
+                const dist = Math.abs(l.visualY - gy);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = l;
+                }
+            });
+
+            // Just take the closest, no matter how far.
+            // Assumption: User is looking at the screen.
+            if (closest) {
+                line = closest;
+            }
+        }
+
+        // If for some reason we still have no line (e.g. no lines created), return null
         if (!line) return null;
 
+        // 3. Horizontal Hit Test (Word) within that line
         const WORD_PADDING = 15;
         const wordIndex = line.wordIndices.find(idx => {
             const w = this.words[idx];
@@ -308,6 +336,8 @@ class TextRenderer {
         });
 
         if (wordIndex !== undefined) return { type: 'word', word: this.words[wordIndex], line: line };
+
+        // If valid line but no word hit (space or margin), still return the line info!
         return { type: 'line', line: line };
     }
 
@@ -352,7 +382,6 @@ class TextRenderer {
 
         // VISUAL TRICK: Start "Mid-Explosion" (Retroactive Feedback)
         // Compensates for detection latency by skipping the initial expansion frames.
-        // It feels like it "already happened" and we are catching up.
         impact.style.transform = "translate(-50%, -50%) scale(2.0)";
 
         // Force Reflow
