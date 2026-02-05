@@ -119,10 +119,10 @@
             <canvas id="chart1"></canvas>
         </div>
         <div class="card">
-            <h2>📊 Chart 4: Comprehensive Trigger Analysis (Raw X, Y, Vel X)</h2>
+            <h2>📊 Chart 4: Comprehensive Trigger Analysis</h2>
             <p style="color:#666; font-size:0.9em;">
-                Green: Raw X (Position) | Blue: Velocity X (Right Axis) | Star: Trigger Event<br>
-                <em>(X-Axis ticks decimated for clarity)</em>
+                Green: Raw X (Pos) | Purple: Raw Y (Pos, Hidden) | Blue: Velocity X | Star: Trigger<br>
+                <em>Hover over stars to see details (Time, Raw Y, etc). Line Index cleaned.</em>
             </p>
             <canvas id="chart4"></canvas>
         </div>
@@ -216,19 +216,29 @@
         function processData(rawData) {
             if (!rawData || !Array.isArray(rawData)) return;
 
-            // Convert to format expected by charts (already largely compatible)
-            // Ensure numbers
-            const data = rawData.map(d => ({
-                ...d,
-                t: Number(d.t),
-                x: Number(d.x),
-                y: Number(d.y),
-                vx: Number(d.vx),
-                // Re-calculate thresholds locally if needed, but we can trust logs for now
-                dbgThresh: d.debugThreshold,
-                dbgVX: d.debugVX,
-                didFire: d.didFire
-            }));
+            let lastLineIndex = 0;
+
+            const data = rawData.map(d => {
+                // Fix Line Index Jitter: If -1 (lost track), use last known good index
+                let li = d.lineIndex;
+                if (li === undefined || li < 0) {
+                    li = lastLineIndex;
+                } else {
+                    lastLineIndex = li;
+                }
+
+                return {
+                    ...d,
+                    t: Number(d.t),
+                    x: Number(d.x),
+                    y: Number(d.y),
+                    vx: Number(d.vx),
+                    lineIndex: li, // Cleaned Line Index
+                    dbgThresh: d.debugThreshold,
+                    dbgVX: d.debugVX,
+                    didFire: d.didFire
+                };
+            });
 
             analyzeDataHealth(data);
             renderCharts(data);
@@ -289,49 +299,21 @@
                 options: { animation: false, interaction: { mode: 'index', intersect: false } }
             });
 
-            // Chart 4: Comprehensive Trigger Analysis (Simplified)
+            // Chart 4: Comprehensive Trigger Analysis (Enhanced Tooltips)
             chart4 = new Chart(document.getElementById('chart4'), {
                 type: 'line',
                 data: {
                     labels: labels,
                     datasets: [
-                        // Left Axis: Position
-                        {
-                            label: 'Raw X (Position)',
-                            data: data.map(d => d.x),
-                            borderColor: '#28a745',
-                            borderWidth: 1.5,
-                            pointRadius: 0,
-                            yAxisID: 'yPos'
-                        },
-                        {
-                            label: 'Raw Y',
-                            data: data.map(d => d.y),
-                            borderColor: '#6f42c1',
-                            borderWidth: 1,
-                            pointRadius: 0,
-                            borderDash: [2, 2],
-                            yAxisID: 'yPos',
-                            hidden: true // HIDDEN
-                        },
-                        // Right Axis: Velocity
-                        {
-                            label: 'Velocity X',
-                            data: data.map(d => d.vx),
-                            borderColor: 'rgba(54, 162, 235, 0.5)',
-                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
-                            borderWidth: 1,
-                            pointRadius: 0,
-                            fill: true,
-                            yAxisID: 'yVel'
-                        },
-                        // Events: Stars on X Position
+                        { label: 'Raw X', data: data.map(d => d.x), borderColor: '#28a745', borderWidth: 1.5, pointRadius: 0, yAxisID: 'yPos' },
+                        { label: 'Raw Y', data: data.map(d => d.y), borderColor: '#6f42c1', borderWidth: 1, pointRadius: 0, borderDash: [2, 2], yAxisID: 'yPos', hidden: true },
+                        { label: 'Velocity X', data: data.map(d => d.vx), borderColor: 'rgba(54, 162, 235, 0.5)', backgroundColor: 'rgba(54, 162, 235, 0.1)', borderWidth: 1, pointRadius: 0, fill: true, yAxisID: 'yVel' },
                         {
                             label: 'Trigger Event',
                             data: data.map(d => d.didFire ? d.x : null),
                             type: 'scatter',
                             pointStyle: 'star',
-                            radius: 8,
+                            radius: 12, // Bigger star
                             backgroundColor: 'gold',
                             borderColor: 'black',
                             borderWidth: 1,
@@ -341,23 +323,38 @@
                 },
                 options: {
                     animation: false,
-                    interaction: { mode: 'index', intersect: false },
+                    interaction: { mode: 'nearest', intersect: true }, // Tooltip on hover point
                     scales: {
-                        x: {
-                            ticks: { maxTicksLimit: 20 } // CLEANER X-AXIS
-                        },
-                        yPos: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            title: { display: true, text: 'Position (px)' }
-                        },
-                        yVel: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            grid: { drawOnChartArea: false },
-                            title: { display: true, text: 'Velocity (px/frame)' }
+                        x: { ticks: { maxTicksLimit: 20 } },
+                        yPos: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Position (px)' } },
+                        yVel: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Velocity (px/frame)' } }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    const idx = context.dataIndex;
+                                    const raw = data[idx];
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y.toFixed(2);
+                                    }
+                                    // Add extra details for Triggers
+                                    if (context.dataset.label === 'Trigger Event') {
+                                        return [
+                                            `🌟 TRIGGERED!`,
+                                            `Time: ${raw.t}`,
+                                            `Raw Y: ${raw.y.toFixed(1)}`,
+                                            `Velocity: ${raw.vx.toFixed(2)}`,
+                                            `Thresh: ${raw.dbgThresh ? raw.dbgThresh.toFixed(2) : 'N/A'}`
+                                        ];
+                                    }
+                                    return label;
+                                }
+                            }
                         }
                     }
                 }
