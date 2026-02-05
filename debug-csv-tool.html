@@ -8,12 +8,114 @@
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            padding: 2rem;
-            max-width: 1200px;
-            margin: 0 auto;
-            line-height: 1.6;
+        // --- Chart 10: MAD Algorithm Debug Analysis (Realtime VX vs Threshold) ---
+        const debugVX=data.map(d=> d.debugVX);
+        const debugThresh=data.map(d=> d.debugThreshold);
+        const debugMed=data.map(d=> d.debugMedian);
+
+        // Only render if debug data exists
+        if (debugVX.some(v=> v !==null && v !==undefined)) {
+            const ctx10=createCanvas('chart10', "Chart 10: MAD Return Sweep Detection (Realtime VX vs Dynamic Threshold)");
+
+            const chart10=new Chart(ctx10, {
+
+                type: 'line',
+                data: {
+
+                    labels: labels,
+                    datasets: [ {
+                        label: 'Realtime VX (Negative)',
+                        data: debugVX,
+                        borderColor: 'blue',
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        order: 2
+                    }
+
+                    ,
+                    {
+                    label: 'Dynamic Threshold (K=1.5)',
+                    data: debugThresh,
+                    borderColor: 'red',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    order: 1
+                }
+
+                ,
+                {
+                label: 'Median (Neg Samples)',
+                data: debugMed,
+                borderColor: 'green',
+                borderWidth: 1,
+                borderDash: [2, 2],
+                pointRadius: 0,
+                hidden: true // Hide by default to reduce clutter
+            }
+
+            ,
+            {
+            label: 'Did Fire (Triggered)',
+            data: data.map(d=> d.didFire ? d.debugVX : null),
+            type: 'scatter',
+            backgroundColor: 'gold',
+            pointStyle: 'star',
+            radius: 8,
+            order: 0
+        }
+
+        ]
+        }
+
+        ,
+        options: {
+
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            }
+
+            ,
+            scales: {
+                x: {
+                    ticks: {
+                        maxTicksLimit: 20
+                    }
+                }
+
+                ,
+                y: {
+                    title: {
+                        display: true, text: 'Velocity (px/ms)'
+                    }
+
+                    // We expect negative values mostly
+                }
+            }
+
+            ,
+            plugins: {
+                annotation: {
+                    annotations: {
+                        zeroLine: {
+                            type: 'line',
+                            yMin: 0,
+                            yMax: 0,
+                            borderColor: 'black',
+                            borderWidth: 1
+                        }
+                    }
+                }
+            }
+        }
+
+        ,
+        plugins: [shadingPlugin]
+        });
+        algoCharts.push(chart10);
         }
 
         .container {
@@ -218,6 +320,12 @@
 
         function runAlgo(rawContent, filename) {
             log("Parsing CSV for Visualization (Skipping Reprocessing)...");
+
+            // Remove BOM if present
+            if (rawContent.charCodeAt(0) === 0xFEFF) {
+                rawContent = rawContent.slice(1);
+            }
+
             const lines = rawContent.split(/\r?\n/).filter(line => line.trim() !== '');
             const data = [];
             let firstTimestamp = null;
@@ -233,7 +341,11 @@
                 algoLineIndex: -1,
                 isReturnSweep: -1,
                 extrema: -1,
-                rx: -1, ry: -1
+                rx: -1, ry: -1,
+                inkY: -1, inkSuccess: -1,
+                // Debug Columns
+                isArmed: -1, didFire: -1,
+                debugSamples: -1, debugMedian: -1, debugThreshold: -1, debugVX: -1
             };
 
             let startRow = 0;
@@ -267,7 +379,6 @@
                         else if (p === 'velx' || p === 'vx') colMap.vx = i;
                         else if (p === 'vely' || p === 'vy') colMap.vy = i;
                         // Indices
-                        // Indices
                         else if (p === 'lineindex') colMap.lineIndex = i;
                         else if (p === 'charindex') colMap.charIndex = i;
                         else if (p === 'algolineindex' || p.includes('algo')) colMap.algoLineIndex = i;
@@ -279,8 +390,15 @@
                         // Replay & Ink
                         else if (p.includes('replayx')) colMap.rx = i;
                         else if (p.includes('replayy')) colMap.ry = i;
-                        else if (p.includes('inky') || p.includes('ink_y')) colMap.inkY = i; // Map InkY
+                        else if (p.includes('inky') || p.includes('ink_y')) colMap.inkY = i;
                         else if (p.includes('inksuccess') || p === 'inksuccess' || p === 'success') colMap.inkSuccess = i;
+                        // Debug
+                        else if (p.includes('isarmed')) colMap.isArmed = i;
+                        else if (p.includes('didfire')) colMap.didFire = i;
+                        else if (p.includes('debug_samples')) colMap.debugSamples = i;
+                        else if (p.includes('debug_median')) colMap.debugMedian = i;
+                        else if (p.includes('debug_threshold')) colMap.debugThreshold = i;
+                        else if (p.includes('debug_realtimevx')) colMap.debugVX = i;
                     });
 
                     startRow = 1;
@@ -291,7 +409,14 @@
                 }
             }
 
+            // Fallback: If T is not mapped, assume 0
+            if (colMap.t === -1) {
+                log("Warning: Time column not found by name. Forcing T=0.");
+                colMap.t = 0;
+            }
+
             log(`Mapped Columns: T=${colMap.t}, X=${colMap.x}, SmoothX=${colMap.gx}, LineIndex=${colMap.lineIndex}, AlgoIdx=${colMap.algoLineIndex}, Rx=${colMap.rx}, Ry=${colMap.ry}, InkY=${colMap.inkY}`);
+            log(`Debug Cols: VX=${colMap.debugVX}, Thresh=${colMap.debugThreshold}, Fire=${colMap.didFire}`);
 
             // 2. Parse Data
             let lastValidLineIndex = null;
@@ -300,7 +425,11 @@
                 const line = lines[i];
                 const parts = line.split(delimiter).map(s => s.trim());
 
-                if (parts.length < 2) { ignoredLines++; continue; }
+                if (parts.length < 2) {
+                    ignoredLines++;
+                    if (ignoredLines <= 3) log(`[Ignored] Line ${i} too short: "${line}"`);
+                    continue;
+                }
 
                 // Safe Parse Helper
                 const getVal = (idx) => {
@@ -308,15 +437,18 @@
                     const val = parts[idx];
                     if (val === "" || val === "null" || val === undefined) return null;
                     const num = parseFloat(val);
-                    return isNaN(num) ? val : num; // Return number if possible, else string (for extrema/type)
+                    return isNaN(num) ? val : num;
                 };
 
                 const t = getVal(colMap.t);
-                if (t === null || typeof t !== 'number') continue; // Timestamp is mandatory
+                if (t === null || typeof t !== 'number') {
+                    ignoredLines++;
+                    if (ignoredLines <= 3) log(`[Ignored] Line ${i}: Invalid Timestamp at col ${colMap.t}. Value="${parts[colMap.t]}"`);
+                    continue;
+                }
 
                 // Parsing Logic
                 let lIdx = getVal(colMap.lineIndex);
-                // Carry-Forward LineIndex Logic
                 if (lIdx !== null && typeof lIdx === 'number') {
                     lastValidLineIndex = lIdx;
                 } else {
@@ -326,10 +458,15 @@
                 const gx = getVal(colMap.gx);
                 const gy = getVal(colMap.gy);
 
-                // Return Sweep Parsing (Boolean check)
+                // Return Sweep Parsing
                 let isRS = false;
                 const rsVal = getVal(colMap.isReturnSweep);
                 if (rsVal === "TRUE" || rsVal === "true" || rsVal === true) isRS = true;
+
+                // DidFire Parsing
+                let fired = false;
+                const fireVal = getVal(colMap.didFire);
+                if (fireVal === "TRUE" || fireVal === "true" || fireVal === true) fired = true;
 
                 data.push({
                     t: t,
@@ -341,7 +478,7 @@
                     vy: getVal(colMap.vy),
                     lineIndex: lIdx,
                     charIndex: getVal(colMap.charIndex),
-                    inkY: getVal(colMap.inkY), // Parse InkY
+                    inkY: getVal(colMap.inkY),
                     targetY: getVal(colMap.targetY),
                     avgY: getVal(colMap.avgY),
                     detectedLineIndex: getVal(colMap.algoLineIndex),
@@ -350,11 +487,22 @@
                     rx: getVal(colMap.rx),
                     ry: getVal(colMap.ry),
                     inkSuccess: (getVal(colMap.inkSuccess) === "TRUE" || getVal(colMap.inkSuccess) === "true" || getVal(colMap.inkSuccess) === true),
-                    type: 'Unknown' // Not critically used in viz
+                    // Debug Fields
+                    isArmed: (getVal(colMap.isArmed) === "TRUE" || getVal(colMap.isArmed) === "true"),
+                    didFire: fired,
+                    debugSamples: getVal(colMap.debugSamples),
+                    debugMedian: getVal(colMap.debugMedian),
+                    debugThreshold: getVal(colMap.debugThreshold),
+                    debugVX: getVal(colMap.debugVX),
+
+                    type: 'Unknown'
                 });
             }
 
             log(`Loaded ${data.length} valid rows. (Ignored ${ignoredLines} lines)`);
+            if (data.length > 0) {
+                log(`Sample Row [0]: T=${data[0].t}, VX=${data[0].vx}, DebugVX=${data[0].debugVX}, Thresh=${data[0].debugThreshold}`);
+            }
             log("Skipping internal reprocessing (Interpolation/Smoothing/Detection) as requested.");
 
             if (data.length < 10) {
@@ -804,10 +952,7 @@
                     }
                 }
             });
-            algoCharts.push(chart9);
-
-            // --- Chart 10: Recalculated Velocity from Raw X/Y ---
-            // Independent calculation using RawX/Y from CSV
+            // --- Calculation for Chart 11 (Restored) ---
             const reCalcVelX = [];
             const reCalcVelY = [];
 
@@ -829,23 +974,7 @@
                 }
             }
 
-            const ctx10 = createCanvas('chart10', "Chart 10: Recalculated Velocity from Raw X/Y (Independent)");
-            const chart10 = new Chart(ctx10, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        { label: 'Recalculated VelX', data: reCalcVelX, borderColor: '#9370DB', borderWidth: 1, pointRadius: 0 }, // MediumPurple
-                        { label: 'Recalculated VelY', data: reCalcVelY, borderColor: '#CD853F', borderWidth: 1, pointRadius: 0 }  // Peru
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: { x: { ticks: { maxTicksLimit: 20 } } }
-                }
-            });
-            algoCharts.push(chart10);
+            // [REMOVED] Old Chart 10 (Recalculated Velocity) in favor of MAD Debug Chart
 
             // --- Chart 11: Independent Return Sweep Detection & Visualization (Like Chart 3) ---
             // UI Calculation for K value

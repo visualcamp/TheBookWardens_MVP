@@ -686,12 +686,29 @@ Game.typewriter = {
                 cleanupDelay += 600;
             }
 
-            // AUTO-EXPORT SCV for Debugging on Mobile
-            // Waiting for cleanup to mostly finish
+            // AUTO-EXPORT CSV (Requested Feature)
+            // Triggered automatically when the paragraphs is fully displayed + 3s reading time.
             setTimeout(() => {
-                console.log("[Auto-Export] Saving Gaze Data...");
+                console.log("[Auto-Export] ------------------------------------------------");
+                console.log("[Auto-Export] Paragraph Complete. Saving CSV Data automatically.");
+                console.log("[Auto-Export] ------------------------------------------------");
+
                 if (window.gazeDataManager) {
                     window.gazeDataManager.exportCSV();
+
+                    // Optional: Show visual feedback
+                    const toast = document.createElement("div");
+                    toast.innerText = "💾 CSV Auto-Saved";
+                    toast.style.position = "fixed";
+                    toast.style.bottom = "20px";
+                    toast.style.right = "20px";
+                    toast.style.background = "#28a745";
+                    toast.style.color = "white";
+                    toast.style.padding = "10px 20px";
+                    toast.style.borderRadius = "5px";
+                    toast.style.zIndex = "99999";
+                    document.body.appendChild(toast);
+                    setTimeout(() => toast.remove(), 2000);
                 }
             }, 3000);
 

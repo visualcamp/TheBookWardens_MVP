@@ -430,6 +430,23 @@ class TextRenderer {
             line: line
         };
     }
+    triggerReturnEffect() {
+        if (!this.cursor) return;
+
+        const now = Date.now();
+        const COOLDOWN = 1500; // 1.5 seconds cooldown
+        if (this.lastReturnTime && (now - this.lastReturnTime < COOLDOWN)) {
+            return false; // Cooldown active
+        }
+
+        console.log("[TextRenderer] Return Spark TRIGGERED by Gaze!");
+        this.lastReturnTime = now;
+
+        this.cursor.classList.remove("impact-pulse");
+        void this.cursor.offsetWidth; // Trigger Reflow
+        this.cursor.classList.add("impact-pulse");
+        return true;
+    }
 }
 
 // Export for module usage or global

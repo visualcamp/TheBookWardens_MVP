@@ -115,3 +115,33 @@
     color: #ffcccc !important;
     animation: shake 0.4s ease-in-out;
 }
+
+/* Return Sweep Impact Pulse (Visual Feedback) */
+@keyframes impactPulseAnim {
+    0% {
+        transform: translate(-50%, -50%) scale(1);
+        box-shadow: 0 0 10px rgba(138, 43, 226, 0.5);
+        /* Blue/Purple glow */
+        background: rgba(138, 43, 226, 0.1);
+    }
+
+    50% {
+        transform: translate(-50%, -50%) scale(2.0);
+        box-shadow: 0 0 40px rgba(0, 255, 255, 0.8), 0 0 80px rgba(138, 43, 226, 0.5);
+        background: rgba(255, 255, 255, 0.6);
+    }
+
+    100% {
+        transform: translate(-50%, -50%) scale(1.2);
+        box-shadow: 0 0 20px rgba(138, 43, 226, 0.0);
+        background: rgba(255, 255, 255, 0.0);
+    }
+}
+
+.impact-pulse {
+    /* Use !important to override default cursor styles temporarily */
+    animation: impactPulseAnim 0.6s ease-out forwards !important;
+    border-radius: 50%;
+    z-index: 10001;
+    /* Ensure on top */
+}
