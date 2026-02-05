@@ -887,19 +887,39 @@ export class GazeDataManager {
         // Default fallback if no reading data yet (e.g. 0.3 px/ms is typical)
         const avgReadVel = countReadVel > 0 ? (sumReadVel / countReadVel) : 0.3;
 
-        // Dynamic Threshold: 5x faster than reading speed, in opposite direction
+        // Base Dynamic Threshold: 5x faster than reading speed (Standard Mode)
         // Clamp: At least -1.0 to avoid noise triggering when idle
-        const RATIO_MULTIPLIER = 5.0;
-        const adaptiveThreshold = Math.min(-1.0, -(avgReadVel * RATIO_MULTIPLIER));
+        const baseMultiplier = 5.0;
+        const baseThreshold = Math.min(-1.0, -(avgReadVel * baseMultiplier));
 
-        // Trigger Check
-        if (latestInfo.vx !== null && latestInfo.vx < adaptiveThreshold) {
+        // --- 🌊 ADAPTIVE SURGE LOGIC (Heuristic-Free) ---
+        // Instead of fixed magic numbers, we derive acceleration limits from 'avgReadVel'.
+        // Logic: If acceleration (leftward) exceeds 2x the user's reading velocity per frame,
+        // it indicates a powerful ballistic checking movement (Return Sweep).
+
+        let activeThreshold = baseThreshold;
+        const prev = this.data[this.data.length - 2];
+
+        if (prev && prev.vx !== undefined) {
+            const acceleration = latestInfo.vx - prev.vx;
+            // Surge Limit: Acceleration magnitude > 2x Reading Velocity
+            const surgeLimit = -(avgReadVel * 2.0);
+
+            if (acceleration < surgeLimit) {
+                // Relax Threshold: If surging, we accept a lower velocity (60% of base)
+                // because we caught the movement in its early acceleration phase.
+                activeThreshold = baseThreshold * 0.6;
+                // console.log(`[RS] 🚀 Surge! Acc:${acceleration.toFixed(2)} < ${surgeLimit.toFixed(2)} -> Relaxed Thresh:${activeThreshold.toFixed(2)}`);
+            }
+        }
+
+        // Final Trigger Check with Adaptive Threshold
+        if (latestInfo.vx !== null && latestInfo.vx < activeThreshold) {
             // Consistency Check: Ensure it's not a single-frame glitch
-            const prev = this.data[this.data.length - 2];
             if (prev && (prev.vx || 0) < 0) {
-                latestInfo.debugThreshold = adaptiveThreshold;
+                latestInfo.debugThreshold = activeThreshold;
                 latestInfo.didFire = true;
-                console.log(`[RS] Adaptive Trigger! VX:${latestInfo.vx.toFixed(2)} < Thresh:${adaptiveThreshold.toFixed(2)} (ReadVel:${avgReadVel.toFixed(2)})`);
+                console.log(`[RS] Trigger! VX:${latestInfo.vx.toFixed(2)} < Thresh:${activeThreshold.toFixed(2)} (ReadVel:${avgReadVel.toFixed(2)})`);
                 return true;
             }
         }
