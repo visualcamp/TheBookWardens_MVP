@@ -119,6 +119,14 @@
             <canvas id="chart1"></canvas>
         </div>
         <div class="card">
+            <h2>📊 Chart 4: Comprehensive Trigger Analysis (Raw X, Y, Vel X)</h2>
+            <p style="color:#666; font-size:0.9em;">
+                Green: Raw X (Left Axis) | Purple: Raw Y (Left Axis) | Blue: Velocity X (Right Axis) | Star: Trigger
+                Event
+            </p>
+            <canvas id="chart4"></canvas>
+        </div>
+        <div class="card">
             <h2>🗺️ Chart 2: Spatial Path</h2>
             <canvas id="chart2"></canvas>
         </div>
@@ -130,7 +138,7 @@
 
     <script>
         // --- Global Chart Instances ---
-        let chart1, chart2, chart3;
+        let chart1, chart2, chart3, chart4;
 
         // --- Init ---
         window.onload = function () {
@@ -262,9 +270,11 @@
             if (chart1) chart1.destroy();
             if (chart2) chart2.destroy();
             if (chart3) chart3.destroy();
+            if (chart4) chart4.destroy();
 
             const labels = data.map(d => d.t);
-            const triggers = data.map(d => d.didFire || d.realtimeRS ? d.vx : null);
+            const triggers = data.map(d => d.didFire ? d.vx : null);
+            // Note: Triggers on Vel X chart should align with Vel X values
 
             // Chart 1: MAD Analysis
             chart1 = new Chart(document.getElementById('chart1'), {
@@ -278,6 +288,90 @@
                     ]
                 },
                 options: { animation: false, interaction: { mode: 'index', intersect: false } }
+            });
+
+            // Chart 4: Comprehensive Trigger Analysis
+            const triggerPointsForRaw = data.map(d => d.didFire ? d.x : null); // Trigger on X axis
+
+            chart4 = new Chart(document.getElementById('chart4'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        // Left Axis: Position
+                        {
+                            label: 'Raw X (Position)',
+                            data: data.map(d => d.x),
+                            borderColor: '#28a745',
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            yAxisID: 'yPos'
+                        },
+                        {
+                            label: 'Raw Y',
+                            data: data.map(d => d.y),
+                            borderColor: '#6f42c1',
+                            borderWidth: 1,
+                            pointRadius: 0,
+                            borderDash: [2, 2],
+                            yAxisID: 'yPos',
+                            hidden: false
+                        },
+                        // Right Axis: Velocity
+                        {
+                            label: 'Velocity X',
+                            data: data.map(d => d.vx),
+                            borderColor: 'rgba(54, 162, 235, 0.5)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            borderWidth: 1,
+                            pointRadius: 0,
+                            fill: true,
+                            yAxisID: 'yVel'
+                        },
+                        // Events: Stars on X Position
+                        {
+                            label: 'Trigger (on X)',
+                            data: data.map(d => d.didFire ? d.x : null),
+                            type: 'scatter',
+                            pointStyle: 'star',
+                            radius: 10,
+                            backgroundColor: 'gold',
+                            borderColor: 'black',
+                            borderWidth: 1,
+                            yAxisID: 'yPos'
+                        },
+                        // Events: Stars on Velocity (optional, to see relation)
+                        {
+                            label: 'Trigger (on Vel)',
+                            data: data.map(d => d.didFire ? d.vx : null),
+                            type: 'scatter',
+                            pointStyle: 'crossRot',
+                            radius: 6,
+                            backgroundColor: 'red',
+                            borderColor: 'red',
+                            yAxisID: 'yVel'
+                        }
+                    ]
+                },
+                options: {
+                    animation: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        yPos: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Position (px)' }
+                        },
+                        yVel: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: { drawOnChartArea: false }, // Avoid grid clutter
+                            title: { display: true, text: 'Velocity (px/frame)' }
+                        }
+                    }
+                }
             });
 
             // Chart 2: Spatial

@@ -11,7 +11,7 @@
 
 class TextRenderer {
     constructor(containerId, options = {}) {
-        // v2026-02-05-1140: Fix Return Effect Pos
+        // v2026-02-05-1155: Final Robust Overlay
         this.containerId = containerId;
         this.container = document.getElementById(containerId);
 
@@ -29,26 +29,23 @@ class TextRenderer {
         this.lines = [];       // Array of Line Objects: { y, top, bottom, wordIndices[] }
         this.isLayoutLocked = false;
 
+        // Visual Elements
+        this.cursor = null;
+        this.impactElement = null;
+
         this.initStyles();
     }
 
     initStyles() {
         if (!this.container) return;
-        this.container.style.position = "relative"; // For absolute positioning overlays if needed
+        this.container.style.position = "relative";
         this.container.style.fontFamily = this.options.fontFamily;
         this.container.style.fontSize = this.options.fontSize;
         this.container.style.lineHeight = this.options.lineHeight;
         this.container.style.padding = this.options.padding;
         this.container.style.textAlign = "left";
-        // Prevent scrolling shifts by default (container height should be fixed or managed)
     }
 
-    /**
-     * Parses the raw text containing '/' separators into structural data.
-     * Renders invisible spans to the DOM.
-     * 
-     * @param {string} rawText - Text with '/' for chunk delimiters.
-     */
     prepare(rawText) {
         if (!this.container) return;
 
@@ -60,46 +57,30 @@ class TextRenderer {
         this.isLayoutLocked = false;
 
         // 2. Parse
-        // Split by chunks first
         const rawChunks = rawText.split("/");
-
         let globalWordIndex = 0;
 
         rawChunks.forEach((chunkText, chunkIndex) => {
-            // Clean trim
             const cleanChunk = chunkText.trim();
             if (!cleanChunk) return;
 
             const chunkWordIndices = [];
-            // Split chunk into words
             const rawWords = cleanChunk.split(/\s+/);
 
             rawWords.forEach((w) => {
-                // Create Span
                 const span = document.createElement("span");
-                span.className = "tr-word"; // Base class
-                // FORCE STYLES for Debugging/Visibility
+                span.className = "tr-word";
                 span.style.color = "#ffffff";
-                span.style.opacity = "0"; // Start hidden
+                span.style.opacity = "0";
                 span.style.marginRight = this.options.wordSpacing;
                 span.style.display = "inline-block";
-
-                // CRITICAL FIX: Force line-height to be tight on the word element itself.
-                // This maximizes the bounding box accuracy to the actual glyphs.
-                // The parent container still handles the massive 2.5 line-height spacing.
                 span.style.lineHeight = "1.2";
-
-                // vertical-align: middle ensures this tight box sits in the middle of the tall line
                 span.style.verticalAlign = "middle";
-
                 span.dataset.index = globalWordIndex;
-
-                // 1. Text Content
                 span.textContent = w;
 
                 this.container.appendChild(span);
 
-                // Store Metadata
                 this.words.push({
                     index: globalWordIndex,
                     text: w,
@@ -111,33 +92,44 @@ class TextRenderer {
                 chunkWordIndices.push(globalWordIndex);
                 globalWordIndex++;
             });
-
             this.chunks.push(chunkWordIndices);
         });
 
         // 3. Add a "cursor" element
-        // Remove existing cursor if any (to prevent duplicates on re-prepare)
         const oldCursor = document.querySelector('.tr-cursor');
         if (oldCursor) oldCursor.remove();
 
+        // Remove existing impact element (cleanup)
+        if (this.impactElement && this.impactElement.parentNode) {
+            this.impactElement.parentNode.removeChild(this.impactElement);
+            this.impactElement = null;
+        }
+
         this.cursor = document.createElement("span");
         this.cursor.className = "tr-cursor";
-
-        // CRITICAL FIX: Remove cursor from document flow immediately.
-        // This prevents it from sitting "below the text" if JS updates fail.
         this.cursor.style.position = "fixed";
-        this.cursor.style.top = "-1000px"; // Hide off-screen initially
+        this.cursor.style.top = "-1000px";
         this.cursor.style.left = "-1000px";
-        this.cursor.style.zIndex = "9999"; // Ensure it floats above text
-        this.cursor.style.pointerEvents = "none"; // Click-through
+        this.cursor.style.zIndex = "9999";
+        this.cursor.style.pointerEvents = "none";
 
-        // APPEND TO BODY to escape any CSS Stacking Context / Transform issues in container
         document.body.appendChild(this.cursor);
 
-        // FIX: Force cursor to first word position immediately if words exist
+        // 4. Pre-create Impact Element
+        this.impactElement = document.createElement('div');
+        this.impactElement.id = "tr-impact-effect";
+        this.impactElement.style.position = "fixed";
+        this.impactElement.style.borderRadius = "50%";
+        this.impactElement.style.backgroundColor = "magenta";
+        this.impactElement.style.boxShadow = "0 0 15px magenta";
+        this.impactElement.style.zIndex = "999999";
+        this.impactElement.style.pointerEvents = "none";
+        this.impactElement.style.opacity = "0"; // Initially hidden
+        this.impactElement.style.width = "10px";
+        this.impactElement.style.height = "10px";
+        document.body.appendChild(this.impactElement);
+
         if (this.words.length > 0) {
-            // Need to wait for DOM layout? text content is already appended.
-            // Force a slight delay to ensure layout is ready
             setTimeout(() => {
                 this.updateCursor(this.words[0], 'start');
                 this.cursor.style.opacity = '1';
@@ -146,27 +138,15 @@ class TextRenderer {
         }
     }
 
-    /**
-     * Locks the layout by calculating and caching the geometry of every word.
-     * MUST be called after 'prepare' and before any interaction.
-     */
     lockLayout() {
         if (this.words.length === 0) return;
-
-        // Force a reflow
         const containerRect = this.container.getBoundingClientRect();
-
-        // --- 1. Cache Word Rects ---
         let currentLineY = -9999;
         let lineBuffer = [];
 
         this.words.forEach(word => {
             const r = word.element.getBoundingClientRect();
-
-            // C. TYPOGRAPHIC CENTER STRATEGY
-            // Geometric Center (0.5) is visually too low.
-            // User Feedback: 0.35 was STILL too low.
-            // Very Aggressive Correction: Shift to 0.25 (Top Quartile).
+            // Typographic Center Correction (Top Quartile)
             const visualCenterY = r.top + (r.height * 0.25);
 
             word.rect = {
@@ -177,21 +157,15 @@ class TextRenderer {
                 width: r.width,
                 height: r.height,
                 centerX: r.left + r.width / 2,
-                centerY: r.top + r.height / 2, // Geometric Center (for debug)
-                visualCenterY: visualCenterY   // Typographic Center (for cursor)
+                centerY: r.top + r.height / 2,
+                visualCenterY: visualCenterY
             };
 
-            // --- 2. Line Detection ---
-            // Simple logic: if this word's top is significantly lower than previous, new line.
-            // But since elements are now vertically aligned middle, their top might vary slightly.
-            // Use a threshold relative to the *Container's* effective line height (approx 60px)
-            // Or just check if 'top' jumped more than the element's height.
+            // Use larger threshold for line detection
             if (Math.abs(word.rect.top - currentLineY) > (word.rect.height * 1.5)) {
-                // Commit previous line
                 if (lineBuffer.length > 0) {
                     this.lines.push(this._finalizeLine(lineBuffer));
                 }
-                // Start new line
                 lineBuffer = [word];
                 currentLineY = word.rect.top;
             } else {
@@ -199,43 +173,33 @@ class TextRenderer {
             }
         });
 
-        // Commit last line
         if (lineBuffer.length > 0) {
             this.lines.push(this._finalizeLine(lineBuffer));
         }
 
         this.isLayoutLocked = true;
-        console.log(`[TextRenderer] Layout Locked (Range-Based): ${this.words.length} words, ${this.lines.length} lines.`);
+        console.log(`[TextRenderer] Layout Locked: ${this.words.length} words, ${this.lines.length} lines.`);
     }
 
     _finalizeLine(words) {
-        // Calculate bounding box of the line
         const first = words[0].rect;
         const last = words[words.length - 1].rect;
-
-        // Define lineIndex derived from current lines count
         const lineIndex = this.lines.length;
-
-        // Find min top and max bottom in this line
         const minTop = Math.min(...words.map(w => w.rect.top));
         const maxBottom = Math.max(...words.map(w => w.rect.bottom));
 
-        // Assign Line Index to Words for precise lookup
-        // Also calculate Average Visual Center for the Line
         let sumVisualY = 0;
         words.forEach(w => {
             w.lineIndex = lineIndex;
             sumVisualY += w.rect.visualCenterY;
         });
 
-        const avgVisualY = sumVisualY / words.length;
-
         return {
             index: lineIndex,
             startIndex: words[0].index,
             endIndex: words[words.length - 1].index,
             wordIndices: words.map(w => w.index),
-            visualY: avgVisualY, // NEW: The mathematically derived visual center
+            visualY: sumVisualY / words.length,
             rect: {
                 left: first.left,
                 right: last.right,
@@ -247,255 +211,154 @@ class TextRenderer {
         };
     }
 
-    /**
-     * Resets cursor to the start of the first word (Left side).
-     * Used for the initial 3-second ready phase.
-     */
     resetToStart() {
         if (this.words.length > 0) {
             this.updateCursor(this.words[0], 'start');
         }
     }
 
-    /**
-     * Visually reveals words in the chunk sequentially (Typing Effect).
-     * @param {number} chunkIndex 
-     * @param {number} interval - ms between words (default 150ms, relaxed pace)
-     * @returns {Promise} - Resolves when animation finishes
-     */
     revealChunk(chunkIndex, interval = 150) {
-        if (!this.isLayoutLocked) {
-            this.lockLayout();
-        }
-
+        if (!this.isLayoutLocked) this.lockLayout();
         if (chunkIndex < 0 || chunkIndex >= this.chunks.length) return Promise.resolve();
 
         const indices = this.chunks[chunkIndex];
-
         return new Promise((resolve) => {
-            // Check if this chunk starts a new line
-            // If so, we shift the timeline to allow cursor to "jump" to the start first
             const firstW = this.words[indices[0]];
             const chunkStartsLine = this.lines.some(l => l.startIndex === firstW.index);
-
             let timeOffset = 0;
-            if (chunkStartsLine && chunkIndex > 0) {
-                timeOffset = 400; // ms for cursor return sweep
-                // Trigger the move to start immediately (at t=0 relative to this call)
-                this.updateCursor(firstW, 'start');
 
-                // Note: We removed the automatic "expectingReturnSweep" arming here.
-                // We now rely on "Always-On" Gaze Detection in Game.js with a Cooldown.
+            if (chunkStartsLine && chunkIndex > 0) {
+                timeOffset = 400;
+                this.updateCursor(firstW, 'start');
             }
 
             indices.forEach((wordIdx, i) => {
                 const w = this.words[wordIdx];
                 const delay = i * interval + timeOffset;
-
-                // Check Line Start for internal words
                 const isLineStart = this.lines.some(l => l.startIndex === w.index);
 
-                // CRITICAL: "Cursor moves first" logic for Line Breaks
                 if (isLineStart && i > 0) {
                     const leadTime = Math.min(interval * 0.8, 300);
-                    setTimeout(() => {
-                        this.updateCursor(w, 'start');
-                        // Internal line break: Rely on global gaze detection
-                    }, delay - leadTime);
+                    setTimeout(() => this.updateCursor(w, 'start'), delay - leadTime);
                 }
 
-                // Staggered Timeout
                 setTimeout(() => {
-                    // Force Opacity 1
                     w.element.style.opacity = "1";
-                    w.element.style.visibility = "visible"; // Extra safety
+                    w.element.style.visibility = "visible";
                     w.element.classList.add("revealed");
-
-                    // Move cursor along with words (Standard: End of word)
                     this.updateCursor(w, 'end');
                 }, delay);
             });
 
-            // Resolve after total duration
             setTimeout(resolve, indices.length * interval + timeOffset);
         });
     }
 
     updateCursor(wordObj, align = 'end') {
         if (!this.cursor || !wordObj || !wordObj.element) return;
-
         try {
-            // LIVE TRACKING STRATEGY
-            // Do not use cached 'this.lines' or 'wordObj.rect' for cursor positioning.
-            // The text container might have animated/shifted (e.g. translateY) after lockLayout.
-            // We must measure the element's CURRENT position on screen.
             const currentRect = wordObj.element.getBoundingClientRect();
-
-            // Offset logic: Top of the tight box + 52% of height
-            // User requested "slightly lower than center"
             let visualY = currentRect.top + (currentRect.height * 0.52);
+            if (!wordObj.element.classList.contains("revealed")) visualY -= 10;
 
-            // COMPENSATE for CSS Transform on unrevealed words
-            // The .tr-word class has 'transform: translateY(10px)' initially.
-            // When revealed, it moves to 0.
-            // If we are positioning the cursor BEFORE reveal, we must subtract this 10px
-            // to align with the FINAL line position.
-            if (!wordObj.element.classList.contains("revealed")) {
-                visualY -= 10;
-            }
-
-            // X Position based on Alignment
             let visualX;
-            if (align === 'start' || align === 'left') {
-                visualX = currentRect.left - 4; // Start of word
-            } else {
-                visualX = currentRect.right + 2; // End of word
-            }
+            if (align === 'start' || align === 'left') visualX = currentRect.left - 4;
+            else visualX = currentRect.right + 2;
 
-            // Apply Styles
             this.cursor.style.position = "fixed";
             this.cursor.style.left = visualX + "px";
             this.cursor.style.top = visualY + "px";
             this.cursor.style.opacity = "1";
-
         } catch (e) {
             console.error("[TextRenderer] Cursor Update Error:", e);
         }
     }
 
-    /**
-     * Fades out a specific chunk by adding a CSS class.
-     * @param {number} chunkIndex 
-     */
     fadeOutChunk(chunkIndex) {
         if (chunkIndex < 0 || chunkIndex >= this.chunks.length) return;
-
         const indices = this.chunks[chunkIndex];
         indices.forEach((wordIdx, i) => {
             const w = this.words[wordIdx];
             if (w && w.element) {
-                // Staggered Fade Out (Left to Right within chunk)
                 setTimeout(() => {
-                    // FORCE RESOLUTION: Remove the 'revealed' class
                     w.element.classList.remove("revealed");
-                    // Add fade-out class
                     w.element.classList.add("chunk-fade-out");
-                }, i * 50); // 50ms stagger per word
+                }, i * 50);
             }
         });
     }
 
-    /**
-     * Schedules a chunk to fade out after a certain delay.
-     * Creates a continuous flow independent of the reading cursor pauses.
-     * @param {number} chunkIndex 
-     * @param {number} delayMs 
-     */
     scheduleFadeOut(chunkIndex, delayMs) {
-        setTimeout(() => {
-            this.fadeOutChunk(chunkIndex);
-        }, delayMs);
+        setTimeout(() => this.fadeOutChunk(chunkIndex), delayMs);
     }
 
-    /**
-     * Performs a high-performance hit test against the cached layout.
-     * @param {number} gx - Gaze X
-     * @param {number} gy - Gaze Y
-     * @returns {object|null} - { type: 'word'|'line', data: ... }
-     */
     hitTest(gx, gy) {
         if (!this.isLayoutLocked) return null;
-
-        // 1. Optimize: First find the LINE.
-        // Gaze Y is usually the primary filter.
-        // Expand hit area slightly (padding)
-        const LINE_PADDING = 20; // px
-
-        const line = this.lines.find(l =>
-            gy >= (l.rect.top - LINE_PADDING) &&
-            gy <= (l.rect.bottom + LINE_PADDING)
-        );
-
+        const LINE_PADDING = 20;
+        const line = this.lines.find(l => gy >= (l.rect.top - LINE_PADDING) && gy <= (l.rect.bottom + LINE_PADDING));
         if (!line) return null;
 
-        // 2. Find WORD within Line
-        // Expand X padding
-        const WORD_PADDING = 15; // px
-
+        const WORD_PADDING = 15;
         const wordIndex = line.wordIndices.find(idx => {
             const w = this.words[idx];
-            return gx >= (w.rect.left - WORD_PADDING) &&
-                gx <= (w.rect.right + WORD_PADDING);
+            return gx >= (w.rect.left - WORD_PADDING) && gx <= (w.rect.right + WORD_PADDING);
         });
 
-        if (wordIndex !== undefined) {
-            return {
-                type: 'word',
-                word: this.words[wordIndex],
-                line: line
-            };
-        }
-
-        // Hit line but not specific word (whitespace or margin)
-        return {
-            type: 'line',
-            line: line
-        };
+        if (wordIndex !== undefined) return { type: 'word', word: this.words[wordIndex], line: line };
+        return { type: 'line', line: line };
     }
 
     triggerReturnEffect() {
         if (!this.cursor) return false;
 
         const now = Date.now();
-        const COOLDOWN = 1500; // ms
+        const COOLDOWN = 1500;
 
-        // Visual Cooldown
-        if (this.lastReturnTime && (now - this.lastReturnTime < COOLDOWN)) {
-            return false;
-        }
+        if (this.lastReturnTime && (now - this.lastReturnTime < COOLDOWN)) return false;
 
         this.lastReturnTime = now;
-        console.log("[TextRenderer] 🔥 Return Spark at Line Height!");
+        console.log("[TextRenderer] 🔥 Return Spark!");
 
         // 1. Calculate Position based on CURRENT CURSOR Y
-        // This ensures the spark appears on the line the user is looking at (or just moved to)
         const rect = this.cursor.getBoundingClientRect();
         const targetY = rect.top + (rect.height / 2);
 
-        // Create a separate element for the effect logic
-        const impact = document.createElement('div');
+        // SAFETY: Lazy-create if missing
+        if (!this.impactElement || !document.contains(this.impactElement)) {
+            console.warn("[TextRenderer] Impact element missing, recreating.");
+            this.impactElement = document.createElement('div');
+            this.impactElement.style.position = "fixed";
+            this.impactElement.style.borderRadius = "50%";
+            this.impactElement.style.backgroundColor = "magenta";
+            this.impactElement.style.boxShadow = "0 0 15px magenta";
+            this.impactElement.style.zIndex = "999999";
+            this.impactElement.style.pointerEvents = "none";
+            this.impactElement.style.opacity = "0";
+            document.body.appendChild(this.impactElement);
+        }
 
-        // Force Inline Styles for Visibility
-        impact.style.position = "fixed";
-        impact.style.left = "20px"; // Fixed Left Margin (Visual Anchor)
-        impact.style.top = targetY + "px"; // Dynamic Y
-        impact.style.width = "10px"; // Start small
+        const impact = this.impactElement;
+
+        // Reset Style
+        impact.style.transition = "none";
+        impact.style.width = "10px";
         impact.style.height = "10px";
-        impact.style.borderRadius = "50%";
-        impact.style.backgroundColor = "magenta";
-        impact.style.boxShadow = "0 0 10px magenta, 0 0 20px white";
-        impact.style.zIndex = "999999";
-        impact.style.pointerEvents = "none";
+        impact.style.opacity = "1";
+        impact.style.left = "20px"; // Fixed Left Margin
+        impact.style.top = targetY + "px";
         impact.style.transform = "translate(-50%, -50%) scale(1)";
-        impact.style.transition = "transform 0.5s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.5s ease-out";
 
-        // Add to body
-        document.body.appendChild(impact);
+        // Force Reflow
+        void impact.offsetWidth;
 
-        // Animate: Expands like a ripple/sonar ping
+        // Animate
+        impact.style.transition = "transform 0.5s ease-out, opacity 0.5s ease-out";
         requestAnimationFrame(() => {
-            impact.style.transform = "translate(-50%, -50%) scale(6)"; // Expand wide
+            impact.style.transform = "translate(-50%, -50%) scale(5)";
             impact.style.opacity = "0";
         });
-
-        // Remove after animation
-        setTimeout(() => {
-            if (impact.parentNode) impact.parentNode.removeChild(impact);
-        }, 600);
 
         return true;
     }
 }
-
-// Export for module usage or global
 window.TextRenderer = TextRenderer;
