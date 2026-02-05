@@ -716,37 +716,35 @@ Game.typewriter = {
         // 1. Hit Test against Fixed Layout
         const hit = this.renderer.hitTest(x, y);
 
-        // --- GAZE-DRIVEN RETURN SPARK LOGIC ---
-        if (this.renderer.expectingReturnSweep) {
-            // Visual Debug: Armed State (Green Border)
-            // document.body.style.border = "4px solid rgba(0, 255, 0, 0.3)";
+        // --- GAZE-DRIVEN RETURN SPARK LOGIC (ALWAYS ON) ---
+        if (window.gazeDataManager) {
+            // Check for real-time Returnsweep (K=1.5 logic)
+            const isRS = window.gazeDataManager.detectRealtimeReturnSweep(600); // Look back 600ms
 
-            const now = Date.now();
-            // Timeout check (1.5s)
-            if (now - (this.renderer.rsStartTime || 0) > 1500) {
-                console.log("[Game] Return Sweep window expired.");
-                this.renderer.expectingReturnSweep = false;
-                // document.body.style.border = "none";
-            } else if (window.gazeDataManager) {
+            // Visual Debug: Armed State (Always watching)
+            // document.body.style.border = "4px solid rgba(0, 0, 255, 0.1)"; 
+
+            if (isRS) {
+                console.log("[Game] RETURN SWEEP DETECTED! FIRE!");
+
                 // UPDATE DEBUG STATE FOR CSV
-                window.gazeDataManager.logDebugEvent('isArmed', true);
+                window.gazeDataManager.logDebugEvent('didFire', true);
 
-                // Check for real-time Returnsweep (K=1.5 logic)
-                const isRS = window.gazeDataManager.detectRealtimeReturnSweep(600); // Look back 600ms
-                if (isRS) {
-                    console.log("[Game] RETURN SWEEP DETECTED! FIRE!");
-                    // Visual Debug: Fire State (Red Border Flash)
-                    // document.body.style.border = "4px solid red";
-                    // setTimeout(() => document.body.style.border = "none", 200);
+                // Trigger Effect (Renderer handles Cooldown)
+                this.renderer.triggerReturnEffect();
 
-                    // UPDATE DEBUG STATE FOR CSV
-                    window.gazeDataManager.logDebugEvent('didFire', true);
-
-                    this.renderer.triggerReturnEffect();
-                }
+                // Visual Feedback
+                /*
+                const flash = document.createElement("div");
+                flash.style.position = "fixed";
+                flash.style.top = "0"; flash.style.left = "0"; flash.style.width = "100%"; flash.style.height = "100%";
+                flash.style.border = "10px solid red";
+                flash.style.pointerEvents = "none";
+                flash.style.zIndex = "9999";
+                document.body.appendChild(flash);
+                setTimeout(() => flash.remove(), 200);
+                */
             }
-        } else {
-            // document.body.style.border = "none";
         }
 
         if (hit) {

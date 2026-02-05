@@ -266,18 +266,14 @@ class TextRenderer {
             const firstW = this.words[indices[0]];
             const chunkStartsLine = this.lines.some(l => l.startIndex === firstW.index);
 
-            // If it's a new line (and not the very first intro chunk which is handled by game.js),
-            // we insert a "Travel Time"
             let timeOffset = 0;
             if (chunkStartsLine && chunkIndex > 0) {
-                // RHYTHM IMPACT: Trigger "Pop" Animation
-                // GAZE-DRIVEN: We no longer fire automatically.
-                // We set a flag to expect a User Return Sweep Gaze soon.
-                setTimeout(() => {
-                    this.expectingReturnSweep = true;
-                    this.rsStartTime = Date.now();
-                    console.log("[TextRenderer] Armed for Return Sweep Impact");
-                }, 100);
+                timeOffset = 400; // ms for cursor return sweep
+                // Trigger the move to start immediately (at t=0 relative to this call)
+                this.updateCursor(firstW, 'start');
+
+                // Note: We removed the automatic "expectingReturnSweep" arming here.
+                // We now rely on "Always-On" Gaze Detection in Game.js with a Cooldown.
             }
 
             indices.forEach((wordIdx, i) => {
@@ -288,19 +284,11 @@ class TextRenderer {
                 const isLineStart = this.lines.some(l => l.startIndex === w.index);
 
                 // CRITICAL: "Cursor moves first" logic for Line Breaks
-                // If this word starts a new line, flip cursor to the LEFT 
-                // slightly before the word appears.
                 if (isLineStart && i > 0) {
                     const leadTime = Math.min(interval * 0.8, 300);
                     setTimeout(() => {
                         this.updateCursor(w, 'start');
-
-                        // RHYTHM IMPACT: Pulse for internal line breaks
-                        // GAZE-DRIVEN: Arm trigger
-                        setTimeout(() => {
-                            this.expectingReturnSweep = true;
-                            this.rsStartTime = Date.now();
-                        }, 100);
+                        // Internal line break: Rely on global gaze detection
                     }, delay - leadTime);
                 }
 
