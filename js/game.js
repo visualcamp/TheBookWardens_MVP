@@ -742,15 +742,18 @@ Game.typewriter = {
             }
         }
 
+        // --- PREPARE DATA ---
+        if (typeof this.lineIndexOffset === 'undefined') this.lineIndexOffset = 0;
+        if (typeof this.prevRawLineIndex === 'undefined') this.prevRawLineIndex = -1;
+
         let activeLine = null;
         let activeWord = null;
 
+        // 1. Get Geometrically Closest Line (Infinite Snap)
         if (hit && hit.line) {
             activeLine = hit.line;
             if (hit.type === 'word') activeWord = hit.word;
         } else {
-            // FALLBACK: Manual Infinite Snap if hitTest missed
-            // (Crucial for Data Logging continuity)
             if (this.renderer.lines.length > 0) {
                 let minDist = Infinity;
                 let closest = null;
@@ -765,62 +768,91 @@ Game.typewriter = {
             }
         }
 
-        // CONTEXT HOLDING (Strong Latch Logic)
-        if (activeLine) {
+        const rawLineIndex = activeLine ? activeLine.index : (this.prevRawLineIndex > -1 ? this.prevRawLineIndex : 0);
+
+        // 2. AUTO-CORRECTION: Return Sweep Detection
+        // If we detect a return sweep, but the Line Index didn't increase, FORCE it.
+        // This solves the "Stuck at Line 0" issue due to vertical calibration offset.
+        if (window.gazeDataManager) {
+            const isRS = window.gazeDataManager.detectRealtimeReturnSweep(800);
+            if (isRS) {
+                // Check cooldown to prevent double-counting the same sweep
+                const now = Date.now();
+                if (!this.lastSweepTime || (now - this.lastSweepTime > 1000)) {
+                    // If physically stuck on same line (or went back), but detected a sweep...
+                    if (rawLineIndex <= this.prevRawLineIndex) {
+                        // Heuristic: Likely a new line, but Y is offset.
+                        // But we must be careful not to trigger on regressions.
+                        // Return Sweep usually implies forward progress.
+                        console.log(`[Game] 🛠️ Auto-Correcting Line Index: Detected Sweep but RawLine stuck at ${rawLineIndex}. Offset++`);
+                        this.lineIndexOffset++;
+                        this.lastSweepTime = now;
+                    }
+                }
+            }
+        }
+
+        // 3. Reset Offset if we actually moved down physically
+        // If the raw gaze finally catches up to the offset, we can reduce the offset.
+        // (Optional refinement, but for now let's just add).
+
+        // Calculate Final Index
+        let finalLineIndex = rawLineIndex + this.lineIndexOffset;
+
+        // Safety Clamp
+        if (this.renderer.lines.length > 0) {
+            finalLineIndex = Math.min(finalLineIndex, this.renderer.lines.length - 1);
+        }
+
+        // Store for next frame
+        this.prevRawLineIndex = rawLineIndex;
+
+        // 4. Update Context (Latching)
+        if (activeLine || finalLineIndex >= 0) {
+            // Find the "Logical Line" object if offset changed
+            // If offset makes us point to a line different from activeLine, we should try to find that line object for TargetY
+            let logicalLine = activeLine;
+            if (this.lineIndexOffset !== 0 && this.renderer.lines[finalLineIndex]) {
+                logicalLine = this.renderer.lines[finalLineIndex];
+            }
+
             this.lastValidContext = {
-                lineIndex: activeLine.index,
-                targetY: activeLine.visualY,
+                lineIndex: finalLineIndex,
+                targetY: logicalLine ? logicalLine.visualY : (activeLine ? activeLine.visualY : null),
                 paraIndex: this.currentParaIndex,
                 wordIndex: activeWord ? activeWord.index : null
             };
         }
-        // REMOVED: The logic that resets context on paragraph mismatch.
-        // REASON: It caused data gaps (LineIndex dropped to 0) in the graph.
-        // We now persist the last known line INDEFINITELY until a new valid line is found
-        // or the page explicitly resets it (handled in reset logic).
 
-        // SYNC TO GAZE DATA MANAGER
+        // 5. Send to Data Manager
         if (window.gazeDataManager) {
             let ctx = {};
-
-            if (activeLine) {
-                ctx = {
-                    lineIndex: activeLine.index,
-                    targetY: activeLine.visualY,
-                    paraIndex: this.currentParaIndex,
-                    wordIndex: activeWord ? activeWord.index : null,
-                    charIndex: 0
-                };
-            } else if (this.lastValidContext) {
-                // Strong Persistence: Use last known good data
+            if (this.lastValidContext) {
                 ctx = { ...this.lastValidContext };
+                // Override word/char if we have a direct hit? 
+                // If we offset, the word hit might be mismatching. 
+                // Let's keep it simple: Trust lastValidContext (which uses logical line).
+                if (activeWord && this.lineIndexOffset === 0) {
+                    ctx.wordIndex = activeWord.index;
+                }
             } else {
-                // Only if we have NEVER found a line since reset
                 ctx = {
-                    lineIndex: null,
-                    targetY: null,
-                    paraIndex: this.currentParaIndex,
-                    wordIndex: null
+                    lineIndex: null, targetY: null, paraIndex: this.currentParaIndex, wordIndex: null
                 };
             }
-
             window.gazeDataManager.setContext(ctx);
         }
 
-        // VISUAL INTERACTIONS (Only on strict hit)
+        // VISUAL INTERACTIONS (Only on strict hit, ignore offset for highlighting to prevent ghost highlights)
         if (hit && hit.type === 'word') {
+            // ... existing visual logic ...
             const word = hit.word;
-            const line = hit.line;
-
-            // Highlight Effect
             if (word.element && !word.element.classList.contains("read")) {
                 word.element.classList.add("read");
                 word.element.style.color = "#fff";
                 word.element.style.textShadow = "0 0 8px var(--primary-accent)";
             }
-
-            // Track Line Progress
-            this.trackLineProgress(line, word.index);
+            if (hit.line) this.trackLineProgress(hit.line, word.index);
         }
     },
 
