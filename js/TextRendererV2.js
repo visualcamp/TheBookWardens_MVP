@@ -11,6 +11,7 @@
 
 class TextRenderer {
     constructor(containerId, options = {}) {
+        // v2026-02-05-1054: Force Deploy
         this.containerId = containerId;
         this.container = document.getElementById(containerId);
 
