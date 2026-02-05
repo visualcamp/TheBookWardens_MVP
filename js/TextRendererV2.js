@@ -11,7 +11,7 @@
 
 class TextRenderer {
     constructor(containerId, options = {}) {
-        // v2026-02-05-1054: Force Deploy
+        // v2026-02-05-1140: Fix Return Effect Pos
         this.containerId = containerId;
         this.container = document.getElementById(containerId);
 
@@ -146,7 +146,10 @@ class TextRenderer {
         }
     }
 
-
+    /**
+     * Locks the layout by calculating and caching the geometry of every word.
+     * MUST be called after 'prepare' and before any interaction.
+     */
     lockLayout() {
         if (this.words.length === 0) return;
 
@@ -439,6 +442,7 @@ class TextRenderer {
             line: line
         };
     }
+
     triggerReturnEffect() {
         if (!this.cursor) return false;
 
@@ -451,42 +455,43 @@ class TextRenderer {
         }
 
         this.lastReturnTime = now;
-        console.log("[TextRenderer] 🔥 Triggering Return Spark Effect (Overlay Check)!");
+        console.log("[TextRenderer] 🔥 Return Spark at Line Height!");
+
+        // 1. Calculate Position based on CURRENT CURSOR Y
+        // This ensures the spark appears on the line the user is looking at (or just moved to)
+        const rect = this.cursor.getBoundingClientRect();
+        const targetY = rect.top + (rect.height / 2);
 
         // Create a separate element for the effect logic
         const impact = document.createElement('div');
-        // impact.className = "impact-pulse"; 
 
         // Force Inline Styles for Visibility
         impact.style.position = "fixed";
-        impact.style.left = "10vw"; // Target Area
-        impact.style.top = "50vh";  // Center Vertically
-        impact.style.width = "50px";
-        impact.style.height = "50px";
+        impact.style.left = "20px"; // Fixed Left Margin (Visual Anchor)
+        impact.style.top = targetY + "px"; // Dynamic Y
+        impact.style.width = "10px"; // Start small
+        impact.style.height = "10px";
         impact.style.borderRadius = "50%";
-        impact.style.backgroundColor = "rgba(255, 0, 255, 0.8)";
-        impact.style.boxShadow = "0 0 30px magenta, 0 0 60px white";
+        impact.style.backgroundColor = "magenta";
+        impact.style.boxShadow = "0 0 10px magenta, 0 0 20px white";
         impact.style.zIndex = "999999";
         impact.style.pointerEvents = "none";
-        impact.style.transform = "translate(-50%, -50%) scale(0)";
-        impact.style.transition = "transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease-out";
+        impact.style.transform = "translate(-50%, -50%) scale(1)";
+        impact.style.transition = "transform 0.5s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.5s ease-out";
 
         // Add to body
         document.body.appendChild(impact);
 
-        // Animate
+        // Animate: Expands like a ripple/sonar ping
         requestAnimationFrame(() => {
-            impact.style.transform = "translate(-50%, -50%) scale(1.5)";
-            setTimeout(() => {
-                impact.style.opacity = "0";
-                impact.style.transform = "translate(-50%, -50%) scale(2)";
-            }, 300);
+            impact.style.transform = "translate(-50%, -50%) scale(6)"; // Expand wide
+            impact.style.opacity = "0";
         });
 
         // Remove after animation
         setTimeout(() => {
             if (impact.parentNode) impact.parentNode.removeChild(impact);
-        }, 700);
+        }, 600);
 
         return true;
     }
