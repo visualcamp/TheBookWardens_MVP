@@ -306,6 +306,7 @@
                     labels: labels,
                     datasets: [
                         { label: 'Raw X', data: data.map(d => d.x), borderColor: '#28a745', borderWidth: 1.5, pointRadius: 0, yAxisID: 'yPos' },
+                        { label: 'Line Index', data: data.map(d => d.lineIndex), borderColor: '#fd7e14', borderWidth: 2, pointRadius: 0, stepped: true, yAxisID: 'yLine' },
                         { label: 'Raw Y', data: data.map(d => d.y), borderColor: '#6f42c1', borderWidth: 1, pointRadius: 0, borderDash: [2, 2], yAxisID: 'yPos', hidden: true },
                         { label: 'Velocity X', data: data.map(d => d.vx), borderColor: 'rgba(54, 162, 235, 0.5)', backgroundColor: 'rgba(54, 162, 235, 0.1)', borderWidth: 1, pointRadius: 0, fill: true, yAxisID: 'yVel' },
                         {
@@ -327,7 +328,8 @@
                     scales: {
                         x: { ticks: { maxTicksLimit: 20 } },
                         yPos: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Position (px)' } },
-                        yVel: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Velocity (px/frame)' } }
+                        yVel: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Velocity (px/frame)' } },
+                        yLine: { type: 'linear', display: true, position: 'right', min: 0, max: 10, grid: { drawOnChartArea: false }, title: { display: true, text: 'Line Index' } }
                     },
                     plugins: {
                         tooltip: {
