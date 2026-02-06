@@ -317,9 +317,38 @@
                         { label: 'Line Index', data: data.map(d => d.lineIndex), borderColor: '#fd7e14', borderWidth: 2, pointRadius: 0, stepped: true, yAxisID: 'yLine', datalabels: { display: false } },
                         { label: 'Raw Y', data: data.map(d => d.y), borderColor: '#6f42c1', borderWidth: 1, pointRadius: 0, borderDash: [2, 2], yAxisID: 'yPos', hidden: true, datalabels: { display: false } },
                         { label: 'Velocity X', data: data.map(d => d.vx), borderColor: 'rgba(54, 162, 235, 0.5)', backgroundColor: 'rgba(54, 162, 235, 0.1)', borderWidth: 1, pointRadius: 0, fill: true, yAxisID: 'yVel', datalabels: { display: false } },
+
+                        // NEW: Negative Velocity Highlights (Scatter)
+                        {
+                            label: 'Neg Vel X (<0)',
+                            data: data.map(d => (d.vx < 0 ? d.vx : null)),
+                            type: 'scatter',
+                            pointStyle: 'cross',
+                            radius: 2,
+                            borderColor: 'rgba(255, 99, 132, 1)', // Red
+                            backgroundColor: 'rgba(255, 99, 132, 1)',
+                            borderWidth: 1,
+                            yAxisID: 'yVel',
+                            datalabels: { display: false }
+                        },
+                        // NEW: MAD Threshold Line (Connects debug points)
+                        {
+                            label: 'MAD Threshold (K=1.5)',
+                            data: data.map(d => d.dbgThresh),
+                            type: 'line',
+                            borderColor: '#ff0000',
+                            borderDash: [4, 4],
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            spanGaps: true, // Connect gaps between checks
+                            yAxisID: 'yVel',
+                            datalabels: { display: false }
+                        },
+
                         {
                             label: 'Trigger Event',
                             data: data.map(d => d.didFire ? d.x : null),
+
                             type: 'scatter',
                             pointStyle: 'circle',
                             radius: 3,

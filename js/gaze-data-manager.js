@@ -899,38 +899,41 @@ export class GazeDataManager {
         // We use K=1.5 as requested by user.
         const threshold = median + (mad * -1.5);
 
-        // C. Check Current Frame against Threshold
-        // We check a small window (3 frames) to catch the peak
-        const checkWindow = 3;
-        let foundSpike = false;
-        let minVel = 0;
+        // C. Check Current Frame against Threshold (PEAK DETECTION)
+        // ---------------------------------------------------------
+        // We look for the "inflection point" where the velocity hits bottom and starts to recover.
+        // This ensures we trigger exactly once per sweep, at the strongest point.
 
-        for (let i = 0; i < checkWindow; i++) {
-            const idx = this.data.length - 1 - i;
-            if (idx < 0) break;
-            const d = this.data[idx];
-            if (d.t < cutoff) break;
+        const d0 = this.data[this.data.length - 1]; // Current (t)
+        const d1 = this.data[this.data.length - 2]; // Previous (t-1)
 
-            // Debug Data Injection
-            d.debugMedian = median;
-            d.debugThreshold = threshold;
-            d.debugVX = d.vx;
+        if (!d1) return false;
 
-            if (d.vx !== undefined && d.vx < threshold) {
-                foundSpike = true;
-                minVel = d.vx;
-            }
+        // Ensure VX exists
+        const v0 = d0.vx !== undefined ? d0.vx : 0;
+        const v1 = d1.vx !== undefined ? d1.vx : 0;
+
+        // Debug Data Injection
+        d0.debugMedian = median;
+        d0.debugThreshold = threshold;
+        d0.debugVX = v0;
+
+        // LOGIC:
+        // 1. The previous frame (v1) must be a significant outlier (below threshold).
+        // 2. The current frame (v0) must be "slower" (closer to 0) than v1. 
+        //    This means v1 was the peak (bottom) of the V-shape, and we are now turning.
+
+        const isDeepSpike = v1 < threshold; // Was deeply negative
+        const isTurning = v0 > v1;          // Is recovering (v0 is less negative than v1)
+
+        if (isDeepSpike && isTurning) {
+            // --- TRIGGER CONFIRMED (Peak Detected) ---
+            latestInfo.didFire = true;
+            console.log(`[RS] 💥 CLEAN TRIGGER (PEAK)! Prev:${v1.toFixed(2)} < Thresh:${threshold.toFixed(2)} | Curr:${v0.toFixed(2)}`);
+            return true;
         }
 
-        if (!foundSpike) return false;
-
-        // --- TRIGGER CONFIRMED (Displacement Check Removed) ---
-        // We rely solely on MAD statistics.
-        latestInfo.didFire = true;
-        latestInfo.debugThreshold = threshold;
-        console.log(`[RS] 💥 CLEAN TRIGGER (MAD ONLY)! VX:${minVel.toFixed(2)} < Thresh:${threshold.toFixed(2)}`);
-
-        return true;
+        return false;
     }
 
 
