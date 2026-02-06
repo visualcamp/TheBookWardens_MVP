@@ -924,36 +924,14 @@ export class GazeDataManager {
 
         if (!foundSpike) return false;
 
-        // 3. Displacement Verification (The Physical Check)
-        // ---------------------------------------------------------
-        // Even if statistically it's a spike (velocity is high),
-        // physically it must move the eye a significant distance.
-        // 80px = ~2cm on screen = clear line change.
-
-        let startX = this.data[this.data.length - 1].x;
-        let endX = startX;
-
-        // Find movement range in the lookback window
-        for (let i = this.data.length - 1; i >= 0; i--) {
-            const d = this.data[i];
-            if (d.t < cutoff) break;
-            if (d.x > startX) startX = d.x;
-            if (d.x < endX) endX = d.x;
-        }
-
-        const displacement = startX - endX;
-        const MIN_DISPLACEMENT = 80;
-
-        if (displacement < MIN_DISPLACEMENT) return false;
-
-        // --- TRIGGER CONFIRMED ---
+        // --- TRIGGER CONFIRMED (Displacement Check Removed) ---
+        // We rely solely on MAD statistics.
         latestInfo.didFire = true;
         latestInfo.debugThreshold = threshold;
-        console.log(`[RS] 💥 CLEAN TRIGGER! VX:${minVel.toFixed(2)} < Thresh:${threshold.toFixed(2)} | Disp:${displacement.toFixed(0)}px`);
+        console.log(`[RS] 💥 CLEAN TRIGGER (MAD ONLY)! VX:${minVel.toFixed(2)} < Thresh:${threshold.toFixed(2)}`);
 
         return true;
     }
-
 
 
     /**
