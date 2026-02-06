@@ -580,6 +580,17 @@ Game.typewriter = {
         // WPM Monitor
         if (this.wpmMonitor) clearInterval(this.wpmMonitor);
         this.wpmMonitor = setInterval(() => this.updateWPM(), 1000);
+
+        // --- NEW: Periodic Cloud Upload for Live Dashboard (Every 3s) ---
+        if (this.uploadMonitor) clearInterval(this.uploadMonitor);
+        this.uploadMonitor = setInterval(() => {
+            if (window.gazeDataManager && Game.sessionId) {
+                // Only upload if we have data
+                if (window.gazeDataManager.data.length > 5) {
+                    window.gazeDataManager.uploadToCloud(Game.sessionId);
+                }
+            }
+        }, 3000);
     },
 
     playNextParagraph() {
@@ -743,6 +754,11 @@ Game.typewriter = {
                         // Log SINGLE DEBUG EVENT
                         window.gazeDataManager.logDebugEvent('didFire', true);
 
+                        // Instant Upload on Trigger (for Live Dashboard responsiveness)
+                        if (window.gazeDataManager && Game.sessionId) {
+                            window.gazeDataManager.uploadToCloud(Game.sessionId);
+                        }
+
                         // Trigger Effect
                         this.renderer.triggerReturnEffect();
 
@@ -845,6 +861,10 @@ Game.typewriter = {
 
     startBossBattle() {
         console.log("Entering Boss Battle!");
+        if (this.uploadMonitor) clearInterval(this.uploadMonitor); // Stop auto-upload
+        if (window.gazeDataManager && Game.sessionId) {
+            window.gazeDataManager.uploadToCloud(Game.sessionId); // Final Upload
+        }
         Game.confrontVillain();
     },
 
