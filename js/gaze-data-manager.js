@@ -84,6 +84,20 @@ export class GazeDataManager {
                     }
                 }
 
+                // --- NEW: Pending Sweep Resolution (Null -> Valid Line) ---
+                // If we have a pending trigger waiting for context, check if context arrived.
+                if (this.pendingReturnSweep && entry.lineIndex !== undefined && entry.lineIndex !== null) {
+                    // Check if the pending sweep is still fresh (< 1000ms)
+                    if ((t - this.pendingReturnSweep.t) < 1000) {
+                        this._fireEffect("Delayed", this.pendingReturnSweep.vx);
+                        if (this.data.length > 0) this.data[this.data.length - 1].rsState = "Delayed_Success";
+                        this.pendingReturnSweep = null;
+                        // console.log("[RS] ✅ Delayed Trigger Fired (Context Restored)");
+                    } else {
+                        this.pendingReturnSweep = null; // Expired
+                    }
+                }
+
                 // --- Execute Realtime Detection ---
                 this.detectRealtimeReturnSweep();
             } catch (logicErr) {
@@ -542,8 +556,10 @@ export class GazeDataManager {
             if (isVelValley && isDeepEnough) {
                 const timeSincePeak = d1.t - this.lastPosPeakTime;
 
-                // 1. Is it a valid potential return sweep? (Peak check)
-                if (timeSincePeak > 0 && timeSincePeak < 500) {
+                // 1. Cascade Check: Relaxed Timing (±600ms)
+                // Allow peak to be slightly after valley (due to smoothing lag) or normally before.
+                // Key is that they are temporal neighbors.
+                if (Math.abs(timeSincePeak) < 600) {
 
                     // -- STEP D: RHYTHM CHECK (±600ms Line Change) --
                     // Increased from 300ms to 600ms for broader tolerance
