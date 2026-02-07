@@ -401,10 +401,10 @@ class TextRenderer {
         // Priority: Explicit Line Index (from GazeDataManager)
         if (lineIndex !== null && typeof lineIndex === 'number' && this.lines[lineIndex]) {
             // FIX: Use 0.52 to ALLIGN EXACTLY with the purple cursor's logic.
-            // Single Source of Truth for visual vertical alignment.
+            // AND apply the -10px offset because Return Sweeps happen before the word is revealed.
             const l = this.lines[lineIndex];
             const VERTICAL_ALIGN_FACTOR = 0.52;
-            targetY = l.rect.top + (l.rect.height * VERTICAL_ALIGN_FACTOR);
+            targetY = (l.rect.top + (l.rect.height * VERTICAL_ALIGN_FACTOR)) - 10;
         } else {
             // Fallback: Current Cursor Position
             const rect = this.cursor.getBoundingClientRect();
