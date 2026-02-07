@@ -28,51 +28,83 @@ export class GazeDataManager {
     processGaze(gazeInfo) {
         if (!gazeInfo) return;
 
-        // Initialize start time
-        if (this.firstTimestamp === null) {
-            this.firstTimestamp = gazeInfo.timestamp;
+        // EMERGENCY CHECK: Ensure storage exists
+        if (!this.data || !Array.isArray(this.data)) {
+            console.warn("[GazeDataManager] Data array missing/corrupt. Re-initializing.");
+            this.data = [];
         }
 
-        const t = Math.floor(gazeInfo.timestamp - this.firstTimestamp);
-        const x = gazeInfo.x;
-        const y = gazeInfo.y;
+        try {
+            // Initialize start time
+            if (this.firstTimestamp === null) {
+                this.firstTimestamp = gazeInfo.timestamp;
+            }
 
-        let type = 'Unknown';
-        if (gazeInfo.eyemovementState === 0) type = 'Fixation';
-        else if (gazeInfo.eyemovementState === 2) type = 'Saccade';
+            const t = Math.floor(gazeInfo.timestamp - this.firstTimestamp);
+            const x = gazeInfo.x;
+            const y = gazeInfo.y;
 
-        const entry = {
-            t, x, y,
-            gx: null, gy: null,
-            vx: null, vy: null,
-            targetY: null, avgY: null,
-            type,
-            sdkFixationX: gazeInfo.fixationX,
-            sdkFixationY: gazeInfo.fixationY,
-            ...(this.context || {}),
-            // New Debug Fields
-            rsState: null,     // 'Pending', 'Immediate', 'Delayed', 'Missed', 'Timeout'
-            rsTriggerType: null // 'Immediate', 'Delayed'
-        };
+            let type = 'Unknown';
+            if (gazeInfo.eyemovementState === 0) type = 'Fixation';
+            else if (gazeInfo.eyemovementState === 2) type = 'Saccade';
 
-        this.data.push(entry);
+            const entry = {
+                t, x, y,
+                gx: null, gy: null,
+                vx: null, vy: null,
+                targetY: null, avgY: null,
+                type,
+                sdkFixationX: gazeInfo.fixationX,
+                sdkFixationY: gazeInfo.fixationY,
+                ...(this.context || {}),
+                // New Debug Fields
+                rsState: null,     // 'Pending', 'Immediate', 'Delayed', 'Missed', 'Timeout'
+                rsTriggerType: null // 'Immediate', 'Delayed'
+            };
 
-        // REAL-TIME VELOCITY CALC
-        if (this.data.length > 1) {
-            const prev = this.data[this.data.length - 2];
-            const curr = this.data[this.data.length - 1];
-            const dt = curr.t - prev.t;
-            if (dt > 0) {
-                curr.vx = (curr.x - prev.x) / dt;
-                curr.vy = (curr.y - prev.y) / dt;
-            } else {
-                curr.vx = 0;
-                curr.vy = 0;
+            // CRITICAL: Always push raw data
+            this.data.push(entry);
+
+            // REAL-TIME LOGIC (Isolated Safety Net)
+            try {
+                // VELOCITY CALC
+                if (this.data.length > 1) {
+                    const prev = this.data[this.data.length - 2];
+                    const curr = this.data[this.data.length - 1];
+                    // Safety check
+                    if (prev && curr) {
+                        const dt = curr.t - prev.t;
+                        if (dt > 0) {
+                            curr.vx = (curr.x - prev.x) / dt;
+                            curr.vy = (curr.y - prev.y) / dt;
+                        } else {
+                            curr.vx = 0;
+                            curr.vy = 0;
+                        }
+                    }
+                }
+
+                // --- Execute Realtime Detection ---
+                this.detectRealtimeReturnSweep();
+            } catch (logicErr) {
+                console.error("[GazeDataManager] Logic Error (Data preserved):", logicErr);
+            }
+
+        } catch (criticalErr) {
+            console.error("[GazeDataManager] CRITICAL: Main Process Failed!", criticalErr);
+            // LAST RESORT: Save raw data anyway
+            try {
+                this.data.push({
+                    t: Date.now(),
+                    x: gazeInfo.x,
+                    y: gazeInfo.y,
+                    type: 'Emergency_Backup',
+                    error: criticalErr.message
+                });
+            } catch (e) {
+                console.error("[GazeDataManager] FATAL: Storage unavailable.");
             }
         }
-
-        // --- Execute Realtime Detection (Moved here to ensure it runs every frame) ---
-        this.detectRealtimeReturnSweep();
     }
 
     /**
