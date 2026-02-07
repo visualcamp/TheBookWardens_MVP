@@ -400,7 +400,10 @@ class TextRenderer {
         // 1. Calculate Target Y
         // Priority: Explicit Line Index (from GazeDataManager)
         if (lineIndex !== null && typeof lineIndex === 'number' && this.lines[lineIndex]) {
-            targetY = this.lines[lineIndex].visualY;
+            // FIX: Use geometric center instead of visualY (which is top-biased 0.25)
+            // This ensures the bang always happens in the middle of the line height.
+            const l = this.lines[lineIndex];
+            targetY = l.rect.top + (l.rect.height * 0.5);
         } else {
             // Fallback: Current Cursor Position
             const rect = this.cursor.getBoundingClientRect();

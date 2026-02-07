@@ -607,7 +607,7 @@ export class GazeDataManager {
 
         if (window.Game && window.Game.typewriter && window.Game.typewriter.renderer &&
             typeof window.Game.typewriter.renderer.triggerReturnEffect === 'function') {
-            window.Game.typewriter.renderer.triggerReturnEffect();
+            window.Game.typewriter.renderer.triggerReturnEffect(d0.lineIndex);
         }
     }
 }
