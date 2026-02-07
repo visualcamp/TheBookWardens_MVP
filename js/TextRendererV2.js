@@ -228,42 +228,57 @@ class TextRenderer {
 
         const indices = this.chunks[chunkIndex];
         return new Promise((resolve) => {
-            const firstW = this.words[indices[0]];
-            const chunkStartsLine = this.lines.some(l => l.startIndex === firstW.index);
-            let timeOffset = 0;
-
-            if (chunkStartsLine && chunkIndex > 0) {
-                timeOffset = 400;
-                this.updateCursor(firstW, 'start');
-            }
+            let cumulativeDelay = 0; // Cumulative time tracker
 
             indices.forEach((wordIdx, i) => {
                 const w = this.words[wordIdx];
-                const delay = i * interval + timeOffset;
+                // Check if this word starts a new visual line
                 const isLineStart = this.lines.some(l => l.startIndex === w.index);
 
-                if (isLineStart && i > 0) {
-                    const leadTime = Math.min(interval * 0.8, 300);
-                    setTimeout(() => this.updateCursor(w, 'start'), delay - leadTime);
+                // --- LINE CHANGE PAUSE (450ms) ---
+                // If it's a new line (and not the very first word of the text), 
+                // add a "breathing pause" to allow the eye to catch up.
+                if (isLineStart && w.index > 0) {
+                    cumulativeDelay += 450;
                 }
 
+                // Calculate execution time for this word
+                const revealTime = cumulativeDelay;
+
+                // 1. Move Cursor Early (Visual Cue)
+                // If it's a line start, move the cursor BEFORE the text appears.
+                // This guides the eye to the new line.
+                if (isLineStart) {
+                    const cursorMoveTime = Math.max(0, revealTime - 200); // 200ms lead
+                    setTimeout(() => {
+                        this.updateCursor(w, 'start');
+                        // console.log(`[TextRenderer] Cursor to Line Start (Word ${w.index})`);
+                    }, cursorMoveTime);
+                }
+
+                // 2. Reveal Word
                 setTimeout(() => {
                     w.element.style.opacity = "1";
                     w.element.style.visibility = "visible";
                     w.element.classList.add("revealed");
 
-                    // UPDATE CURRENT LINE INDEX (Ground Truth)
+                    // Update Line Index Context
                     if (typeof w.lineIndex === 'number') {
                         this.currentVisibleLineIndex = Math.max(this.currentVisibleLineIndex || 0, w.lineIndex);
                     }
 
-                    if (!isLineStart || i === 0) {
+                    // Move Cursor to End of Word (unless it's a line start handled above)
+                    if (!isLineStart) {
                         this.updateCursor(w, 'end');
                     }
-                }, delay);
+                }, revealTime);
+
+                // Increment base time for next word (if not paused)
+                cumulativeDelay += interval;
             });
 
-            setTimeout(resolve, indices.length * interval + timeOffset);
+            // Resolve Promise after the last word is shown
+            setTimeout(resolve, cumulativeDelay + 100);
         });
     }
 
