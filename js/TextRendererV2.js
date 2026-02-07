@@ -314,6 +314,9 @@ class TextRenderer {
             this.cursor.style.left = visualX + "px";
             this.cursor.style.top = visualY + "px";
             this.cursor.style.opacity = "1";
+
+            // STORE TRUTH: Save exact Y for Pang Event
+            this.latestCursorY = visualY;
         } catch (e) {
             console.error("[TextRenderer] Cursor Update Error:", e);
         }
@@ -398,28 +401,14 @@ class TextRenderer {
         let targetY;
 
         // 1. Calculate Target Y
-        // Priority: Explicit Line Index (from GazeDataManager)
-        if (lineIndex !== null && typeof lineIndex === 'number' && this.lines[lineIndex]) {
-            const l = this.lines[lineIndex];
-            // Find the first word of this line
-            const firstWordIdx = l.wordIndices[0];
-            const firstWord = this.words[firstWordIdx];
-
-            if (firstWord && firstWord.element) {
-                // Ultimate Truth: The DOM Rect of the word itself
-                const rect = firstWord.element.getBoundingClientRect();
-                const VERTICAL_ALIGN_FACTOR = 0.52;
-                // Apply -10px to match cursor's pre-reveal offset
-                targetY = (rect.top + (rect.height * VERTICAL_ALIGN_FACTOR)) - 10;
-            } else {
-                // Fallback
-                const VERTICAL_ALIGN_FACTOR = 0.52;
-                targetY = (l.rect.top + (l.rect.height * VERTICAL_ALIGN_FACTOR)) - 10;
-            }
+        // "Single Source of Truth": Reuse the cursor's last known Y position.
+        // This guarantees 100% visual match.
+        if (this.latestCursorY !== undefined && this.latestCursorY !== null) {
+            targetY = this.latestCursorY;
         } else {
-            // Fallback: Current Cursor Position
+            // Fallback: Current Cursor Position (Read from DOM)
             const rect = this.cursor.getBoundingClientRect();
-            targetY = rect.top + (rect.height / 2);
+            targetY = rect.top + (rect.height * 0.52);
         }
 
         // SAFETY: Lazy-create if missing
