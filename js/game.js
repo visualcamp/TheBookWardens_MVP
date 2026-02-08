@@ -119,11 +119,11 @@ const Game = {
         const m = document.createElement("div");
         m.className = "meteor";
 
-        // Spawn Area: Top-Right to Top-Center
-        // X: 20% to 120% of screen width (more inwards)
-        // Y: -50px to 100px (top area)
-        const startX = window.innerWidth * 0.2 + Math.random() * window.innerWidth;
-        const startY = -Math.random() * 100;
+        // Spawn Area: Top-Left to Top-Center for Diagonal Fall (Top-Left -> Bottom-Right)
+        // X: -20% to 80% (Left side mostly)
+        // Y: -50px to -200px (Above top)
+        const startX = (Math.random() * window.innerWidth * 1.0) - (window.innerWidth * 0.2);
+        const startY = -Math.random() * 200;
 
         m.style.left = startX + "px";
         m.style.top = startY + "px";

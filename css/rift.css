@@ -95,7 +95,8 @@
 /* Fly across the screen diagonally */
 @keyframes meteorFly {
     0% {
-        transform: translate(100vw, -20vh) rotate(45deg) scaleX(0.5);
+        transform: translate(-20vw, -20vh) rotate(45deg) scaleX(0.5);
+        /* Start from Top-Left */
         opacity: 0;
     }
 
@@ -104,7 +105,8 @@
     }
 
     100% {
-        transform: translate(-50vw, 120vh) rotate(45deg) scaleX(1.5);
+        transform: translate(120vw, 120vh) rotate(45deg) scaleX(1.5);
+        /* End at Bottom-Right */
         opacity: 0;
     }
 }
