@@ -134,6 +134,18 @@ body {
   white-space: nowrap;
 }
 
+/* Stable Number Display (Prevent Jitter) */
+.resource-item span[id$="-count"],
+.resource-item span[id="wpm-display"] {
+  min-width: 24px;
+  /* Ensure space for 2-3 digits */
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  /* Monospace-like numbers */
+  display: inline-block;
+  letter-spacing: 0.5px;
+}
+
 /* Mobile HUD Optimization */
 @media (max-width: 600px) {
   .game-header {
