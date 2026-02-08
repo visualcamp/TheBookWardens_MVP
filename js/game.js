@@ -786,7 +786,7 @@ Game.typewriter = {
             } else {
                 // Final Boss Battle Trigger (Game Over for text)
                 setTimeout(() => {
-                    this.startBossBattle();
+                    this.triggerFinalBossBattle();
                 }, 1000);
             }
         }
