@@ -851,47 +851,13 @@ Game.typewriter = {
             contentTargetY = this.renderer.lines[contentLineIndex].visualY;
         }
 
-        // 3. Return Sweep Logic
-        if (window.gazeDataManager) {
-            const isRS = window.gazeDataManager.detectRealtimeReturnSweep(600); // Look back 600ms
-
-            if (isRS) {
-                // Rule 1: No Return Sweep on First Line (Index 0)
-                // We only trigger when moving TO the 2nd line (Index 1) or later.
-                if (contentLineIndex > 0) {
-
-                    // Check Cooldown using timestamp
-                    const now = Date.now();
-                    const isCooldownReady = !this.lastReturnFireTime || (now - this.lastReturnFireTime > 1500);
-
-                    // Rule 2: Limit to ONCE per line index
-                    const isNewRefresh = this.lastTriggeredLineIndex !== contentLineIndex;
-
-                    if (isCooldownReady && isNewRefresh) {
-                        console.log(`[Game] RETURN SWEEP FIRE! (Line ${contentLineIndex})`);
-
-                        // Log SINGLE DEBUG EVENT
-                        window.gazeDataManager.logDebugEvent('didFire', true);
-
-                        // Instant Upload on Trigger (for Live Dashboard responsiveness)
-                        if (window.gazeDataManager && Game.sessionId) {
-                            window.gazeDataManager.uploadToCloud(Game.sessionId);
-                        }
-
-                        // Trigger Effect
-                        this.renderer.triggerReturnEffect();
-
-                        this.lastReturnFireTime = now;
-                        this.lastTriggeredLineIndex = contentLineIndex; // Lock this line
-                    }
-                }
-            }
-        }
+        // 3. Return Sweep Logic is handled entirely by GazeDataManager's internal processGaze loop.
+        // We only need to provide the context (current line index) so it can detect changes.
 
         // 4. Sync Context to Data Manager
         if (window.gazeDataManager) {
             const ctx = {
-                lineIndex: contentLineIndex,
+                lineIndex: contentLineIndex, // Essential for RS detection
                 targetY: contentTargetY,
                 paraIndex: this.currentParaIndex,
                 wordIndex: null
@@ -938,32 +904,12 @@ Game.typewriter = {
         // Threshold: 60% of words in line read
         if (ratio > 0.6 && !line.completed) {
             line.completed = true; // Flag in renderer's line object (runtime only)
-            this.spawnInkReward(line);
+            // Deprecated: spawnInkReward(line); // Visual effect removed as per request
         }
     },
 
-    spawnInkReward(line) {
-        // Spawn Ink Drop at end of line
-        const r = line.rect; // Viewport coordinates
+    // spawnInkReward(line) - DELETED (Deprecated feature)
 
-        const ink = document.createElement("div");
-        ink.textContent = "💧";
-        ink.className = "ink-drop";
-        ink.style.position = "absolute"; // or fixed if using viewport coords directly
-
-        // Use FIXED for Viewport Coords to be safe against any scrolling
-        ink.style.position = "fixed";
-        ink.style.left = (r.right + 10) + "px";
-        ink.style.top = (r.centerY - 10) + "px"; // Centered vertically
-        ink.style.zIndex = "2000";
-        ink.style.fontSize = "1.5rem";
-        ink.style.animation = "popIn 0.5s ease-out";
-
-        document.body.appendChild(ink);
-
-        // Note: Score is now handled by GazeDataManager's _fireEffect calling Game.addInk()
-        // We only show the visual effect here.
-    },
 
     updateWPM() {
         const disp = document.getElementById("wpm-display");
@@ -1011,9 +957,14 @@ Game.typewriter = {
             Game.addGems(10); // +10 Gem (Mid-Boss)
             Game.spawnFloatingText(document.querySelector(".boss-dialog-box"), "+10 Gems! CLEAR!", "bonus"); // Feedback
 
-            // Hide Boss UI immediately
+            // Hide Boss UI immediately (Force)
             const villainScreen = document.getElementById("villain-screen");
-            if (villainScreen) villainScreen.classList.remove("active");
+            if (villainScreen) {
+                villainScreen.classList.remove("active");
+                villainScreen.style.display = "none"; // Hard hide to prevent loop
+                // Restore display property after transition so it can reappear later
+                setTimeout(() => { villainScreen.style.display = ""; }, 2000);
+            }
 
             // Check if this was the Last Paragraph
             if (this.currentParaIndex >= this.paragraphs.length - 1) {
