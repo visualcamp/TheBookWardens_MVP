@@ -263,7 +263,11 @@ class TextRenderer {
         }
 
         this.isLayoutLocked = true;
-        this.currentVisibleLineIndex = 0; // Reset on layout lock
+
+        // [CRITICAL] Reset Line Index for NEW Page / Layout Lock
+        // When we lock layout (usually means page start), the index MUST start at 0.
+        this.currentVisibleLineIndex = 0;
+
         console.log(`[TextRenderer] Layout Locked: ${this.words.length} words, ${this.lines.length} lines.`);
     }
 
@@ -356,13 +360,15 @@ class TextRenderer {
 
                     // Update Line Index Context
                     if (typeof w.lineIndex === 'number') {
-                        const newLineIdx = Math.max(this.currentVisibleLineIndex || 0, w.lineIndex);
-                        if (newLineIdx !== this.currentVisibleLineIndex) {
-                            this.currentVisibleLineIndex = newLineIdx;
-                            if (window.Game && window.Game.gazeManager && this.lines[newLineIdx]) {
+                        // [SIMPLIFIED] Direct Assignment. No Math.max.
+                        // If the word has a valid line index, that IS our current line index.
+                        // This handles page resets (0) and normal progression (1, 2...) naturally.
+                        if (w.lineIndex !== this.currentVisibleLineIndex) {
+                            this.currentVisibleLineIndex = w.lineIndex;
+                            if (window.Game && window.Game.gazeManager && this.lines[w.lineIndex]) {
                                 window.Game.gazeManager.setContext({
-                                    lineIndex: newLineIdx,
-                                    lineY: this.lines[newLineIdx].visualY
+                                    lineIndex: w.lineIndex,
+                                    lineY: this.lines[w.lineIndex].visualY
                                 });
                             }
                         }
