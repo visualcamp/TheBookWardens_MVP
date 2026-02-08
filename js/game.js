@@ -957,7 +957,13 @@ Game.typewriter = {
             // SUCCESS
             // alert("Shadow Defeated! The Rift clears..."); // Deleted: Interrupts flow
             Game.addGems(10); // +10 Gem (Mid-Boss)
-            Game.spawnFloatingText(document.querySelector(".boss-dialog-box"), "+10 Gems! CLEAR!", "bonus"); // Feedback
+
+            const bossDialog = document.querySelector(".boss-dialogue"); // FIXED: Correct class name
+            if (bossDialog && typeof Game.spawnFloatingText === 'function') {
+                Game.spawnFloatingText(bossDialog, "+10 Gems! CLEAR!", "bonus"); // Feedback
+            } else {
+                console.log("Boss Defeated! +10 Gems");
+            }
 
             // Hide Boss UI immediately (Force)
             const villainScreen = document.getElementById("villain-screen");
