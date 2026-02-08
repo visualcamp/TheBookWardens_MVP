@@ -206,9 +206,36 @@
 
     <!-- Top Navigation Header -->
     <header class="game-header">
-      <div class="user-level">Rank: Apprentice</div>
-      <div class="currency-badge">
-        💎 <span id="gem-count">0</span> | 🖋️ <span id="ink-count">0</span>
+      <div class="user-level" style="font-family: 'Cinzel', serif; color: #ffd700;">Rank: Warden</div>
+
+      <!-- Expanded Resource HUD (Ink, Rune, Gem, WPM) -->
+      <div class="hud-container" style="display: flex; gap: 15px; align-items: center;">
+
+        <!-- Ink -->
+        <div class="resource-item" title="Ink Collected">
+          <img src="./Ink.png" class="res-icon" alt="Ink">
+          <span id="ink-count">0</span>
+        </div>
+
+        <!-- Rune -->
+        <div class="resource-item" title="Runes Deciphered">
+          <img src="./rune.png" class="res-icon" alt="Rune">
+          <span id="rune-count">0</span>
+        </div>
+
+        <!-- Gem -->
+        <div class="resource-item" title="Gems Earned">
+          <img src="./gem.png" class="res-icon" alt="Gem">
+          <span id="gem-count">0</span>
+        </div>
+
+        <!-- WPM (Speed) -->
+        <div class="resource-item wpm-badge" title="Reading Speed">
+          <span style="font-size: 0.8rem; color: #aaa; margin-right: 5px;">⚡</span>
+          <span id="wpm-display">0</span>
+          <small style="font-size: 0.7rem; color: #888; margin-left: 2px;">WPM</small>
+        </div>
+
       </div>
     </header>
 
@@ -449,10 +476,9 @@
         </p>
       </div>
 
-      <!-- Footer Info: WPM only -->
+      <!-- Footer Info: Removed WPM (Moved to Top HUD) -->
       <div style="position: absolute; bottom: 10px; width: 100%; text-align: center; left: 0;">
         <div id="gaze-feedback-label" style="font-size: 1rem; font-weight: bold; height: 1.5em; display:none;"></div>
-        <span id="wpm-display" style="color: #f0c420; font-size: 1.0rem; font-weight: bold; opacity: 0.7;">0 WPM</span>
       </div>
 
       <button id="btn-confront-villain" class="btn-primary"

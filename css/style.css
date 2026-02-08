@@ -109,20 +109,47 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  background: rgba(20, 15, 30, 0.9);
+  background: rgba(15, 10, 25, 0.95);
+  /* Darker, slightly opaque bg */
   border-bottom: 1px solid rgba(139, 47, 201, 0.3);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  /* Ensure header stays on top */
 }
 
-.currency-badge {
-  background: rgba(139, 47, 201, 0.2);
-  border: 1px solid var(--primary-accent);
-  padding: 5px 12px;
-  border-radius: 20px;
-  font-weight: bold;
-  color: #fff;
+/* New Resource Item Style */
+.resource-item {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-weight: bold;
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.resource-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.05);
+}
+
+.res-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5));
+}
+
+/* Specific Badge Colors (Optional subtle hints) */
+.wpm-badge span#wpm-display {
+  color: #f0c420;
+  min-width: 30px;
+  text-align: right;
+  display: inline-block;
 }
 
 /* --- Screens State Manager --- */

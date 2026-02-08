@@ -192,11 +192,29 @@ const Game = {
     },
 
     updateUI() {
+        // 1. Gem (Existing)
         const gemEl = document.getElementById("gem-count");
-        if (gemEl) gemEl.textContent = this.state.gems;
+        if (gemEl) gemEl.textContent = this.state.gems || 0;
 
+        // 2. Ink (Existing)
         const inkEl = document.getElementById("ink-count");
         if (inkEl) inkEl.textContent = this.state.ink || 0;
+
+        // 3. Rune (New) - Logic: Runes = Ink / 10 (Demo)
+        const runeEl = document.getElementById("rune-count");
+        if (runeEl) {
+            const runes = Math.floor((this.state.ink || 0) / 10);
+            runeEl.textContent = runes;
+        }
+
+        // 4. WPM (New) - From GazeDataManager
+        const wpmEl = document.getElementById("wpm-display");
+        if (wpmEl) {
+            const wpm = (window.gazeDataManager && window.gazeDataManager.wpm)
+                ? Math.round(window.gazeDataManager.wpm)
+                : 0;
+            wpmEl.textContent = wpm;
+        }
     },
 
     // --- 1. Word Forge ---
