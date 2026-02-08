@@ -931,13 +931,23 @@ Game.typewriter = {
     },
 
     updateWPM() {
-        // Simple WPM estimation
-        if (!this.startTime) return;
-        const elapsedMin = (Date.now() - this.startTime) / 60000;
-        if (elapsedMin <= 0) return;
-        const wpm = Math.round((this.chunkIndex * 3) / elapsedMin);
         const disp = document.getElementById("wpm-display");
-        if (disp) disp.textContent = `${wpm} WPM`;
+        if (!disp) return;
+
+        // Priority 1: GazeDataManager (Accurate)
+        if (window.gazeDataManager && window.gazeDataManager.wpm > 0) {
+            disp.textContent = Math.round(window.gazeDataManager.wpm);
+            return;
+        }
+
+        // Priority 2: Simple estimation (Fallback)
+        if (this.startTime && this.chunkIndex > 0) {
+            const elapsedMin = (Date.now() - this.startTime) / 60000;
+            if (elapsedMin > 0) {
+                const wpm = Math.round((this.chunkIndex * 3) / elapsedMin);
+                disp.textContent = wpm; // Fix: Only number, no suffix
+            }
+        }
     },
 
     startBossBattle() {
