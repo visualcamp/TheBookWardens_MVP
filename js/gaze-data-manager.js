@@ -342,9 +342,15 @@ export class GazeDataManager {
             if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
             this.preprocessData();
 
+            // [FIXED] Define deviceType for uploadToCloud context
+            const ua = navigator.userAgent.toLowerCase();
+            let deviceType = "desktop";
+            if (/mobile|android|iphone|ipod|blackberry|iemobile|opera mini/i.test(ua)) deviceType = "smartphone";
+            else if (/tablet|ipad|playbook|silk/i.test(ua)) deviceType = "tablet";
+
             // [MODIFIED] Capture Chart Image cropped to content start
             const chartStartTime = (this.firstContentTime !== null) ? this.firstContentTime : 0;
-            this.exportChartImage(deviceType, chartStartTime, endTime);
+            this.exportChartImage(deviceType, chartStartTime, Infinity);
 
             const rawPayload = {
                 meta: {
