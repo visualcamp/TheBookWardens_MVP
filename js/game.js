@@ -74,7 +74,7 @@ const Game = {
         introScreen.classList.remove("scene-warning");
         introScreen.classList.add("scene-invasion");
 
-        this.showStoryText("The Rift opens!");
+        this.showStoryText("The Rift opens!", "villain");
         villainContainer.style.opacity = 1;
 
         // Start light meteors
@@ -118,18 +118,22 @@ const Game = {
         this.switchScreen("screen-word");
     },
 
-    showStoryText(message) {
-        const overlay = document.getElementById("rift-story-overlay");
-        if (!overlay) return;
-
-        overlay.innerText = message;
-        overlay.classList.add("show");
-
-        // Hide after 3s
-        setTimeout(() => {
-            overlay.classList.remove("show");
-        }, 3500);
+    showStoryText(message, type = "overlay") {
+        if (type === "villain") {
+            const bubble = document.getElementById("rift-villain-speech");
+            if (!bubble) return;
+            bubble.innerText = message;
+            bubble.classList.add("show");
+            setTimeout(() => bubble.classList.remove("show"), 3000);
+        } else {
+            const overlay = document.getElementById("rift-story-overlay");
+            if (!overlay) return;
+            overlay.innerText = message;
+            overlay.classList.add("show");
+            setTimeout(() => overlay.classList.remove("show"), 3500);
+        }
     },
+
 
 
 
