@@ -20,6 +20,9 @@ export class GazeDataManager {
         this.lastLineChangeTime = -9999;
         this.prevLineIndex = -1;
         this.pendingReturnSweep = null; // { t: timestamp, vx: velocity }
+
+        // NEW: Start time of actual content (first valid line index)
+        this.firstContentTime = null;
     }
 
     /**
@@ -72,6 +75,11 @@ export class GazeDataManager {
 
             // CRITICAL: Always push raw data
             this.data.push(entry);
+
+            // [NEW] Capture Start of Content (First valid Line Index)
+            if (this.firstContentTime === null && typeof entry.lineIndex === 'number' && entry.lineIndex >= 0) {
+                this.firstContentTime = entry.t;
+            }
 
             // REAL-TIME LOGIC (Isolated Safety Net)
             try {
@@ -333,12 +341,18 @@ export class GazeDataManager {
         try {
             if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
             this.preprocessData();
+
+            // [MODIFIED] Capture Chart Image cropped to content start
+            const chartStartTime = (this.firstContentTime !== null) ? this.firstContentTime : 0;
+            this.exportChartImage(deviceType, chartStartTime, endTime);
+
             const rawPayload = {
                 meta: {
                     timestamp: Date.now(),
                     userAgent: navigator.userAgent,
                     lineMetadata: this.lineMetadata,
-                    totalSamples: this.data.length
+                    totalSamples: this.data.length,
+                    firstContentTime: this.firstContentTime // [NEW] Pass this info to Cloud
                 },
                 data: this.data
             };
