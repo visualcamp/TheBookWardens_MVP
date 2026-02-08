@@ -1022,32 +1022,31 @@ Game.typewriter = {
     updateGazeStats(x, y) {
         if (!this.renderer || !this.renderer.isLayoutLocked) return;
 
-        // 1. Hit Test against Fixed Layout
+        // 1. Hit Test (Visual Feedback Only)
+        // Used only to highlight words, NOT to change the Line Index context.
         const hit = this.renderer.hitTest(x, y);
 
-        // 2. Define Content Context (Source of Truth)
-        // [FIXED] Priority: Gaze Hit Line > Current Visible Line
-        let contentLineIndex = this.renderer.currentVisibleLineIndex || 0;
-
-        // If we hit a specific line with gaze, USE IT.
-        if (hit && hit.line && typeof hit.line.index === 'number') {
-            contentLineIndex = hit.line.index;
-        }
+        // 2. Define Content Context (Ground Truth)
+        // [CORRECTED PRINCIPLE] Line Index counts up automatically as text appears.
+        // It is INDEPENDENT of gaze.
+        const contentLineIndex = (typeof this.renderer.currentVisibleLineIndex === 'number')
+            ? this.renderer.currentVisibleLineIndex
+            : 0;
 
         let contentTargetY = null;
 
-        // Find the Y coordinate of the current content line
+        // Find the Y coordinate of the *Current Text Line* (Context)
         if (this.renderer.lines && this.renderer.lines[contentLineIndex]) {
             contentTargetY = this.renderer.lines[contentLineIndex].visualY;
         }
 
         // 3. Return Sweep Logic is handled entirely by GazeDataManager's internal processGaze loop.
-        // We only need to provide the context (current line index) so it can detect changes.
+        // We only provide the context.
 
         // 4. Sync Context to Data Manager
         if (window.gazeDataManager) {
             const ctx = {
-                lineIndex: contentLineIndex, // Essential for RS detection
+                lineIndex: contentLineIndex, // Strictly Typewriter-driven
                 targetY: contentTargetY,
                 paraIndex: this.currentParaIndex,
                 wordIndex: null
