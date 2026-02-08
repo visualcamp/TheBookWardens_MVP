@@ -726,6 +726,10 @@ Game.typewriter = {
             console.log("Chunk Sequence Finished for current Page/Flow.");
 
             // Check if there are more pages in this paragraph!
+            // [BUGFIX] If all chunks are shown, force finish regardless of 'pages'.
+            // The renderer's page count might include trailing empty pages or logic issues.
+            // Since chunkIndex >= chunks.length means *ALL* text is visible, we should proceed to end the paragraph.
+            /*
             const renderer = this.renderer;
             if (renderer && renderer.currentPageIndex < renderer.pages.length - 1) {
                 console.log("[Typewriter] Moving to Next Page...");
@@ -747,6 +751,7 @@ Game.typewriter = {
                 }, 2000); // Wait 2s before flipping page
                 return;
             }
+            */
 
             console.log("Paragraph Fully Revealed (All Pages). Clearing tail...");
 
