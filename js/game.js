@@ -707,9 +707,14 @@ Game.typewriter = {
             // This ensures a smooth, independent pipeline regardless of whether the cursor pauses.
             this.renderer.scheduleFadeOut(this.chunkIndex, 3000); // 3 seconds lifetime
 
-            // Wait for Animation to Finish (Promise-based)
-            this.renderer.revealChunk(this.chunkIndex).then(() => {
-                // Animation Done. Now wait for the "Reading Pause" delay.
+            // Wait for Animation to Finish (Promise-based) with Timeout Safety
+            const revealPromise = this.renderer.revealChunk(this.chunkIndex);
+
+            // Safety timeout: If animation gets stuck, proceed anyway after 2s
+            const timeoutPromise = new Promise(resolve => setTimeout(resolve, 2000));
+
+            Promise.race([revealPromise, timeoutPromise]).then(() => {
+                // Animation Done (or timed out). Now wait for the "Reading Pause" delay.
                 this.chunkIndex++;
 
                 // Calculate Delay (Pause AFTER valid reading)
