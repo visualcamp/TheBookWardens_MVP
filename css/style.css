@@ -168,8 +168,9 @@ body {
   }
 
   .res-icon {
-    width: 16px;
-    height: 16px;
+    width: 22px;
+    /* Increased from 16px */
+    height: 22px;
   }
 
   /* WPM: Remove Bolt, Keep Text */
@@ -194,8 +195,9 @@ body {
 }
 
 .res-icon {
-  width: 18px;
-  height: 18px;
+  width: 26px;
+  /* Increased from 18px for better visibility */
+  height: 26px;
   object-fit: contain;
   filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5));
 }
