@@ -641,7 +641,8 @@ Game.typewriter = {
 
     playNextParagraph() {
         if (this.currentParaIndex >= this.paragraphs.length) {
-            this.startBossBattle();
+            // All paragraphs done. Trigger FINAL BOSS.
+            this.triggerFinalBossBattle();
             return;
         }
 
@@ -787,18 +788,11 @@ Game.typewriter = {
                 }
             }, 3000);
 
-            if (this.currentParaIndex < this.paragraphs.length - 1) {
-                // [CHANGED] Don't go to next paragraph immediately.
-                // Trigger VILLAIN INTERVENTION for the current paragraph.
-                setTimeout(() => {
-                    this.triggerMidBossBattle();
-                }, 1000); // 1s delay for dramatic effect
-            } else {
-                // Final Boss Battle Trigger (Game Over for text)
-                setTimeout(() => {
-                    this.triggerFinalBossBattle();
-                }, 1000);
-            }
+            // [CHANGED] Always trigger Mid-Boss Battle after ANY paragraph (including the last one).
+            // Logic: P1 -> Mid -> P2 -> Mid -> P3 -> Mid -> Final
+            setTimeout(() => {
+                this.triggerMidBossBattle();
+            }, 1000); // 1s delay for dramatic effect
         }
     },
 
