@@ -971,6 +971,10 @@ Game.typewriter = {
                 }, 1500);
             } else {
                 // GO TO NEXT PARAGRAPH
+                // Force hide villain modal if exists
+                const villainModal = document.getElementById("villain-modal");
+                if (villainModal) villainModal.style.display = "none";
+
                 this.currentParaIndex++;
                 console.log(`[Game] Advancing to Stage ${this.currentParaIndex + 1}...`);
 
@@ -979,14 +983,15 @@ Game.typewriter = {
                 this.lineStats.clear();
                 // Note: Do NOT resume 'isPaused' here. It will be resumed inside playNextParagraph() after content is ready.
 
-                // Ensure clean transition
+                // Ensure clean transition with longer delay (3s)
                 setTimeout(() => {
                     Game.switchScreen("screen-read");
                     // Wait a bit for screen transition before starting text
                     setTimeout(() => {
+                        this.chunkIndex = 0; // Double ensure reset
                         this.playNextParagraph();
                     }, 500);
-                }, 1000);
+                }, 3000);
             }
         } else {
             // FAILURE
