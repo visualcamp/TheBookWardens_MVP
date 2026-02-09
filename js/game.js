@@ -1002,16 +1002,29 @@ Game.typewriter = {
                 return;
             }
 
-            const endTime = Date.now();
-            const rawData = window.gazeDataManager.data;
-            // Filter data relevant to this paragraph session
-            const sessionData = rawData.filter(d => d.t >= this.startTime && d.t <= endTime);
-
-            if (sessionData.length === 0) {
-                console.warn("No gaze data in current session range. Skipping.");
+            const gdm = window.gazeDataManager;
+            // [FIX] Convert Absolute Time to Relative Time (GazeDataManager stores relative 't')
+            if (!gdm.firstTimestamp) {
+                console.warn("[Replay] GazeDataManager has no firstTimestamp. Skipping.");
                 resolve();
                 return;
             }
+
+            const relativeStartTime = this.startTime - gdm.firstTimestamp;
+            const relativeEndTime = Date.now() - gdm.firstTimestamp;
+
+            console.log(`[Replay] Filtering Data: Range [${relativeStartTime.toFixed(0)} ~ ${relativeEndTime.toFixed(0)}] ms`);
+
+            const rawData = gdm.data;
+            const sessionData = rawData.filter(d => d.t >= relativeStartTime && d.t <= relativeEndTime);
+
+            if (sessionData.length === 0) {
+                console.warn(`[Replay] No gaze data found in range. Total Data: ${rawData.length}, Range: ${relativeStartTime.toFixed(0)}-${relativeEndTime.toFixed(0)}`);
+                resolve();
+                return;
+            }
+
+            console.log(`[Replay] Found ${sessionData.length} points.`);
 
             // Hide Cursor during replay for cleaner view
             if (this.renderer && this.renderer.cursor) this.renderer.cursor.style.opacity = "0";
@@ -1019,6 +1032,8 @@ Game.typewriter = {
             if (this.renderer && typeof this.renderer.playGazeReplay === 'function') {
                 this.renderer.playGazeReplay(sessionData, () => {
                     console.log("[triggerGazeReplay] Replay Done.");
+                    // Restore cursor opacity just in case (though screen switch follows)
+                    if (this.renderer.cursor) this.renderer.cursor.style.opacity = "1";
                     resolve();
                 });
             } else {
