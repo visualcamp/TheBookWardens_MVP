@@ -140,6 +140,7 @@ class TextRenderer {
         this.impactElement = document.createElement('div');
         this.impactElement.id = "tr-impact-effect";
         this.impactElement.style.position = "fixed";
+        this.impactElement.style.borderRadius = "50%";
         // [User Request] Revert: Pang Effect MUST be visible (Magenta)
         this.impactElement.style.backgroundColor = "magenta";
         this.impactElement.style.boxShadow = "0 0 15px magenta";
