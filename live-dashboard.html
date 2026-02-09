@@ -245,8 +245,25 @@
             }));
 
             // Second pass: Logic Simulation
+            // [NEW] Find Start of Actual Content to prevent pre-counting noise
+            let firstContentIndex = -1;
+            for (let k = 0; k < data.length; k++) {
+                if (typeof data[k].lineIndex === 'number' && data[k].lineIndex >= 0) {
+                    firstContentIndex = k;
+                    // Sync initial Sim Index with Actual to prevent offset
+                    simGazeLineIndex = data[k].lineIndex;
+                    break;
+                }
+            }
+
             for (let i = 2; i < data.length; i++) {
                 const d0 = data[i];
+                // [NEW] Guard: If content hasn't started, don't run simulation
+                if (firstContentIndex !== -1 && i < firstContentIndex) {
+                    d0.simGazeLineIndex = 0; // Keep at 0 (or null)
+                    continue;
+                }
+
                 const d1 = data[i - 1];
                 const d2 = data[i - 2];
                 const now = d0.t;
