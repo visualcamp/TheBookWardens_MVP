@@ -312,6 +312,8 @@ export class GazeDataManager {
         if (/mobile|android|iphone|ipod|blackberry|iemobile|opera mini/i.test(ua)) deviceType = "smartphone";
         else if (/tablet|ipad|playbook|silk/i.test(ua)) deviceType = "tablet";
 
+        // CSV Download Disabled per user request (Firebase upload only)
+        /*
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
@@ -321,6 +323,7 @@ export class GazeDataManager {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        */
         this.exportChartImage(deviceType, startTime, endTime);
     }
 

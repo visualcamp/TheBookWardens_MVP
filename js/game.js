@@ -62,7 +62,7 @@ const Game = {
         textContainer.style.transform = "translateY(0)";
 
         this.showStoryText("Every story holds a world within.");
-        await wait(4000);
+        await wait(2000);
 
         // --- SCENE 2: WARNING (5s - 10s) ---
         introScreen.classList.remove("scene-peace");
@@ -71,7 +71,7 @@ const Game = {
         this.showStoryText("But chaos seeks to consume it.");
         // Villain fades in
         villainContainer.style.opacity = 0.6;
-        await wait(4000);
+        await wait(2000);
 
         // --- SCENE 3: INVASION (10s - 15s) ---
         introScreen.classList.remove("scene-warning");
@@ -85,7 +85,7 @@ const Game = {
             if (Math.random() > 0.7) this.spawnMeteor(meteorLayer);
         }, 300);
 
-        await wait(4000);
+        await wait(2000);
         clearInterval(lightMeteorLoop);
 
         // --- SCENE 4: DESTRUCTION (15s - 20s) ---
@@ -101,7 +101,7 @@ const Game = {
             this.spawnMeteor(meteorLayer); // Double spawn
         }, 100);
 
-        await wait(2000);
+        await wait(1000);
 
         // Corrupt text
         // Corrupt Image (CSS handles this via classes)
@@ -111,12 +111,12 @@ const Game = {
         }
         */
 
-        await wait(3000);
+        await wait(1500);
         clearInterval(heavyMeteorLoop);
 
         // --- SCENE 5: TRANSITION ---
         this.showStoryText("Initializing Word Forge...");
-        await wait(1500);
+        await wait(1000);
 
         console.log("Rift Intro Done. Moving to Word Forge.");
         this.state.vocabIndex = 0;
