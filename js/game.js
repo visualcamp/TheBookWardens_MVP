@@ -981,11 +981,51 @@ Game.typewriter = {
             }, 3000);
 
             // [CHANGED] Always trigger Mid-Boss Battle after ANY paragraph (including the last one).
-            // Logic: P1 -> Mid -> P2 -> Mid -> P3 -> Mid -> Final
-            setTimeout(() => {
+            // Logic: P1 -> Replay -> Mid -> P2 -> Replay -> Mid -> ...
+            setTimeout(async () => {
+                // Play Gaze Replay before Villain appears
+                await this.triggerGazeReplay();
                 this.triggerMidBossBattle();
-            }, 1000); // 1s delay for dramatic effect
+            }, 1000); // 1s initial delay
         }
+    },
+
+    // --- NEW: Gaze Replay ---
+    triggerGazeReplay() {
+        return new Promise((resolve) => {
+            console.log("[triggerGazeReplay] Preparing Gaze Replay...");
+
+            // Check dependencies
+            if (!window.gazeDataManager || !this.startTime) {
+                console.warn("No GazeDataManager or StartTime found. Skipping Replay.");
+                resolve();
+                return;
+            }
+
+            const endTime = Date.now();
+            const rawData = window.gazeDataManager.data;
+            // Filter data relevant to this paragraph session
+            const sessionData = rawData.filter(d => d.t >= this.startTime && d.t <= endTime);
+
+            if (sessionData.length === 0) {
+                console.warn("No gaze data in current session range. Skipping.");
+                resolve();
+                return;
+            }
+
+            // Hide Cursor during replay for cleaner view
+            if (this.renderer && this.renderer.cursor) this.renderer.cursor.style.opacity = "0";
+
+            if (this.renderer && typeof this.renderer.playGazeReplay === 'function') {
+                this.renderer.playGazeReplay(sessionData, () => {
+                    console.log("[triggerGazeReplay] Replay Done.");
+                    resolve();
+                });
+            } else {
+                console.warn("Renderer does not support playGazeReplay.");
+                resolve();
+            }
+        });
     },
 
     // --- NEW: Mid-Boss Battle (After each paragraph) ---

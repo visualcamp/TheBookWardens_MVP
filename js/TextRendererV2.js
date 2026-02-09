@@ -573,5 +573,118 @@ class TextRenderer {
 
         return true;
     }
+
+    // --- NEW: Gaze Replay Visualization ---
+    playGazeReplay(gazeData, onComplete) {
+        if (!gazeData || gazeData.length < 2) {
+            console.warn("[TextRenderer] No gaze data for replay.");
+            if (onComplete) onComplete();
+            return;
+        }
+
+        console.log(`[TextRenderer] Starting Replay with ${gazeData.length} points...`);
+
+        // 1. Setup Canvas Overlay
+        const canvas = document.createElement('canvas');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        canvas.style.position = 'fixed';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.pointerEvents = 'none';
+        canvas.style.zIndex = '999999';
+        document.body.appendChild(canvas);
+
+        const ctx = canvas.getContext('2d');
+
+        // 2. Process Path (Raw Gaze -> Word Centers)
+        const path = [];
+        let lastWordIndex = -1;
+
+        gazeData.forEach(p => {
+            // Use hitTest to snap to words
+            // Note: Use smooth coordinates (gx, gy) if available, else raw (x, y)
+            const tx = (p.gx !== undefined) ? p.gx : p.x;
+            const ty = (p.gy !== undefined) ? p.gy : p.y;
+
+            const hit = this.hitTest(tx, ty);
+
+            if (hit && hit.type === 'word') {
+                const w = hit.word;
+                if (w.index !== lastWordIndex) {
+                    path.push({ x: w.rect.centerX, y: w.rect.centerY });
+                    lastWordIndex = w.index;
+                }
+            } else {
+                // Optional: Include non-word points for continuity?
+                // For now, let's keep it semantic-focused.
+            }
+        });
+
+        // Fallback: If semantic path is too sparse, use raw smoothed path
+        if (path.length < 5) {
+            console.log("[TextRenderer] Semantic path too short, using raw smoothed data.");
+            path.length = 0; // clear
+            gazeData.forEach(p => {
+                const tx = (p.gx !== undefined) ? p.gx : p.x;
+                const ty = (p.gy !== undefined) ? p.gy : p.y;
+                path.push({ x: tx, y: ty });
+            });
+        }
+
+        // 3. Animate
+        let startTime = null;
+        const duration = 2500; // 2.5 seconds replay
+
+        const animate = (timestamp) => {
+            if (!startTime) startTime = timestamp;
+            const progress = (timestamp - startTime) / duration;
+
+            if (progress >= 1) {
+                // Fade out canvas then remove
+                canvas.style.transition = "opacity 0.5s";
+                canvas.style.opacity = "0";
+                setTimeout(() => {
+                    canvas.remove();
+                    if (onComplete) onComplete();
+                }, 500);
+                return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Path up to current progress
+            const drawIndex = Math.floor(path.length * progress);
+
+            if (drawIndex > 0) {
+                // Draw Trace
+                ctx.beginPath();
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = 'rgba(255, 0, 255, 0.4)'; // Magenta trace
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                ctx.moveTo(path[0].x, path[0].y);
+                for (let i = 1; i < drawIndex; i++) {
+                    ctx.lineTo(path[i].x, path[i].y);
+                }
+                ctx.stroke();
+
+                // Draw Head (Current Position)
+                const head = path[drawIndex - 1];
+                ctx.beginPath();
+                ctx.fillStyle = '#ff00ff'; // Bright Magenta
+                ctx.shadowColor = '#ff00ff';
+                ctx.shadowBlur = 10;
+                ctx.arc(head.x, head.y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            requestAnimationFrame(animate);
+        };
+
+        requestAnimationFrame(animate);
+    }
 }
 window.TextRenderer = TextRenderer;
