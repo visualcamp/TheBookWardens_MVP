@@ -574,7 +574,7 @@ class TextRenderer {
         return true;
     }
 
-    // --- NEW: Gaze Replay Visualization (Direct Actual Line Index) ---
+    // --- NEW: Gaze Replay Visualization (GLI-based Segmentation & Scaling) ---
     playGazeReplay(gazeData, onComplete) {
         if (!gazeData || gazeData.length < 2) {
             console.warn("[TextRenderer] No gaze data for replay.");
@@ -607,16 +607,13 @@ class TextRenderer {
         forceVisibility();
 
         // 2. Continuous Enforcement (Anti-Async Guard)
-        // Run every 10ms during the wait period to override any pending fadeOut timers
         const safetyInterval = setInterval(forceVisibility, 10);
 
         console.log(`[TextRenderer] Text restored. Waiting 500ms, enforcing visibility...`);
 
-        // DELAY REPLAY START to ensure text is seen first
+        // DELAY REPLAY START
         setTimeout(() => {
-            clearInterval(safetyInterval); // Stop the interval, we'll move to frame-based enforcement
-
-            console.log(`[TextRenderer] Starting Direct Line-Locked Replay with ${gazeData.length} points...`);
+            clearInterval(safetyInterval);
 
             const visualLines = this.lines || [];
             if (visualLines.length === 0) {
@@ -625,57 +622,169 @@ class TextRenderer {
                 return;
             }
 
-            const processedPath = [];
-            let lastValidLineIndex = -1;
+            console.log(`[TextRenderer] Starting GLI-based Segmented Replay (v2.0)...`);
 
+            // ---------------------------------------------------------
+            // PHASE 1: Recalculate GLI (Offline Simulation)
+            // ---------------------------------------------------------
+            let simGLI = 0;
+            let hasContentStarted = false;
+            let lastTriggerTime = 0;
+            let lastPosPeakTime = 0;
+
+            // Helper to get Smooth X (Simple 3-tap or use existing if avail)
+            const getSmoothX = (arr, i) => {
+                if (typeof arr[i].gx === 'number') return arr[i].gx;
+                let sum = arr[i].x;
+                let count = 1;
+                if (i > 0) { sum += arr[i - 1].x; count++; }
+                if (i < arr.length - 1) { sum += arr[i + 1].x; count++; }
+                return sum / count;
+            };
+
+            // Pre-calculate derived data
             for (let i = 0; i < gazeData.length; i++) {
-                const p = gazeData[i];
-
-                // STRATEGY: Use Actual Line Index directly
-                let currentLineIndex = -1;
-
-                if (typeof p.lineIndex === 'number') currentLineIndex = p.lineIndex;
-                else if (typeof p.detectedLineIndex === 'number') currentLineIndex = p.detectedLineIndex;
-
-                // 1. Wait for First Valid Content
-                if (lastValidLineIndex === -1 && currentLineIndex < 0) {
-                    continue;
+                const d = gazeData[i];
+                d.t = Number(d.t);
+                d.x = Number(d.x);
+                if (i > 0) {
+                    const dt = d.t - gazeData[i - 1].t;
+                    if (dt > 0) d.vx = (d.x - gazeData[i - 1].x) / dt;
+                    else d.vx = 0;
+                } else {
+                    d.vx = 0;
                 }
-
-                // 2. Update Context
-                if (currentLineIndex >= 0) {
-                    lastValidLineIndex = currentLineIndex;
-                }
-
-                // 3. Fallback
-                if (lastValidLineIndex === -1) continue;
-
-                // 4. Map to Visual Y
-                const safeIndex = Math.min(Math.max(0, lastValidLineIndex), visualLines.length - 1);
-                const lineObj = visualLines[safeIndex];
-
-                if (!lineObj) continue;
-
-                const lineY = lineObj.visualY;
-                const rawX = p.x;
-
-                if (isNaN(rawX) || rawX === 0) continue;
-
-                processedPath.push({
-                    x: rawX,
-                    y: lineY,
-                    t: p.t
-                });
+                d.gx = getSmoothX(gazeData, i); // Ensure smooth X
+                d.refinedGLI = -1; // Init
             }
 
-            // Validation
+            // SIMULATION LOOP
+            for (let i = 2; i < gazeData.length; i++) {
+                const d0 = gazeData[i];
+                const d1 = gazeData[i - 1];
+                const d2 = gazeData[i - 2];
+                const now = d0.t;
+
+                // 1. Wait for Content
+                if (!hasContentStarted) {
+                    if (typeof d0.lineIndex === 'number' && d0.lineIndex >= 0) {
+                        hasContentStarted = true;
+                        simGLI = d0.lineIndex; // Sync Start
+                    }
+                    d0.refinedGLI = hasContentStarted ? simGLI : -1;
+                    continue; // Skip detection until started
+                }
+
+                // 2. Detect Logic
+                const sx0 = d0.gx;
+                const sx1 = d1.gx;
+                const sx2 = d2.gx;
+                const v0 = d0.vx;
+                const v1 = d1.vx;
+
+                // Peak
+                const isPosPeak = (sx1 >= sx2) && (sx1 > sx0);
+                if (isPosPeak) lastPosPeakTime = d1.t;
+
+                // Valley
+                const isVelValley = (d2.vx > v1) && (v1 < v0);
+                const isDeepEnough = v1 < -0.4;
+
+                if (isVelValley && isDeepEnough) {
+                    const timeSincePeak = d1.t - lastPosPeakTime;
+                    if (Math.abs(timeSincePeak) < 600) {
+                        if (now - lastTriggerTime >= 800) {
+                            // Constraint: Cannot exceed Actual Line Index
+                            if (typeof d0.lineIndex === 'number' && d0.lineIndex >= 0) {
+                                if (simGLI >= d0.lineIndex) {
+                                    // Block overshoot
+                                    d0.refinedGLI = simGLI;
+                                    continue;
+                                }
+                            }
+                            // Trigger!
+                            simGLI++;
+                            lastTriggerTime = now;
+                            lastPosPeakTime = 0;
+                        }
+                    }
+                }
+                d0.refinedGLI = simGLI;
+            }
+
+            // ---------------------------------------------------------
+            // PHASE 2 & 3: Segmentation & Mapping
+            // ---------------------------------------------------------
+
+            const processedPath = [];
+            // Group by GLI
+            const segments = {};
+
+            gazeData.forEach(d => {
+                if (typeof d.refinedGLI !== 'number' || d.refinedGLI < 0) return;
+                const gli = d.refinedGLI;
+
+                // Only consider valid lines that actually exist in visualLines
+                if (gli >= visualLines.length) return;
+
+                if (!segments[gli]) {
+                    segments[gli] = { points: [], minX: Infinity, maxX: -Infinity };
+                }
+                const seg = segments[gli];
+                seg.points.push(d);
+                if (d.x < seg.minX) seg.minX = d.x;
+                if (d.x > seg.maxX) seg.maxX = d.x;
+            });
+
+            // Process each segment to path
+            const sortedGLIs = Object.keys(segments).map(Number).sort((a, b) => a - b);
+
+            sortedGLIs.forEach((gli, idx) => {
+                const seg = segments[gli];
+                const lineObj = visualLines[gli];
+
+                const targetLeft = lineObj.rect.left;
+                const targetWidth = lineObj.rect.width;
+
+                const sourceWidth = seg.maxX - seg.minX;
+
+                // Push a "JUMP" marker if not first segment
+                if (idx > 0) {
+                    // Jump time is roughly between end of prev segment and start of this one
+                    processedPath.push({ isJump: true });
+                }
+
+                seg.points.forEach(p => {
+                    let mappedX = targetLeft;
+                    if (sourceWidth > 20) {
+                        let ratio = (p.x - seg.minX) / sourceWidth;
+                        // Avoid extreme jitter - clamp 0..1
+                        ratio = Math.max(0, Math.min(1, ratio));
+                        mappedX = targetLeft + (ratio * targetWidth);
+                    } else {
+                        // Tiny segment (e.g. single word/point)
+                        // Just place at start + minimal offset
+                        mappedX = targetLeft + 10;
+                    }
+
+                    processedPath.push({
+                        x: mappedX,
+                        y: lineObj.visualY, // Locked Y
+                        t: p.t,
+                        isJump: false
+                    });
+                });
+            });
+
+            // ---------------------------------------------------------
+            // VALIDATION & RENDER
+            // ---------------------------------------------------------
             if (processedPath.length < 2) {
-                console.warn("[TextRenderer] No valid line data found in replay segment.");
+                console.warn("[TextRenderer] No processed path generated.");
                 if (onComplete) onComplete();
                 return;
             }
 
-            // 2. Setup Canvas
             const canvas = document.createElement('canvas');
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -687,17 +796,17 @@ class TextRenderer {
             document.body.appendChild(canvas);
             const ctx = canvas.getContext('2d');
 
-            // 3. Animate
             const path = processedPath;
             let startTime = null;
             const duration = 5000; // Slowed down by 2x (was 2500)
 
             const animate = (timestamp) => {
-                // [SAFETY] Enforce visibility EVERY FRAME during replay
+                // Safety enforcement
                 forceVisibility();
 
                 if (!startTime) startTime = timestamp;
                 const progress = (timestamp - startTime) / duration;
+
                 if (progress >= 1) {
                     canvas.style.transition = "opacity 0.5s";
                     canvas.style.opacity = "0";
@@ -707,7 +816,9 @@ class TextRenderer {
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+                // Draw up to current progress
                 const maxIdx = Math.floor(path.length * progress);
+
                 if (maxIdx > 1) {
                     ctx.beginPath();
                     ctx.lineWidth = 4;
@@ -715,26 +826,42 @@ class TextRenderer {
                     ctx.lineCap = 'round';
                     ctx.lineJoin = 'round';
 
-                    ctx.moveTo(path[0].x, path[0].y);
-                    for (let i = 1; i < maxIdx; i++) {
+                    // Draw logic with jumps
+                    let hasStarted = false;
+                    for (let i = 0; i < maxIdx; i++) {
                         const p = path[i];
-                        ctx.lineTo(p.x, p.y);
+                        if (p.isJump) {
+                            ctx.stroke();
+                            ctx.beginPath();
+                            hasStarted = false;
+                            continue;
+                        }
+
+                        if (!hasStarted) {
+                            ctx.moveTo(p.x, p.y);
+                            hasStarted = true;
+                        } else {
+                            ctx.lineTo(p.x, p.y);
+                        }
                     }
                     ctx.stroke();
 
                     // Head
                     const head = path[maxIdx - 1];
-                    ctx.beginPath();
-                    ctx.fillStyle = '#ff00ff';
-                    ctx.shadowColor = '#ff00ff';
-                    ctx.shadowBlur = 10;
-                    ctx.arc(head.x, head.y, 8, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
+                    if (head && !head.isJump) {
+                        ctx.beginPath();
+                        ctx.fillStyle = '#ff00ff';
+                        ctx.shadowColor = '#ff00ff';
+                        ctx.shadowBlur = 10;
+                        ctx.arc(head.x, head.y, 8, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
+                    }
                 }
                 requestAnimationFrame(animate);
             };
             requestAnimationFrame(animate);
+
         }, 500);
     }
 }
