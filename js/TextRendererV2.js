@@ -131,6 +131,8 @@ class TextRenderer {
         this.cursor.style.left = "-1000px";
         this.cursor.style.zIndex = "9999";
         this.cursor.style.pointerEvents = "none";
+        this.cursor.style.opacity = "0"; // Force hidden (Guide Runner Invisible)
+        this.cursor.style.backgroundColor = "transparent"; // Ensure transparent
 
         document.body.appendChild(this.cursor);
 
@@ -138,7 +140,7 @@ class TextRenderer {
         this.impactElement = document.createElement('div');
         this.impactElement.id = "tr-impact-effect";
         this.impactElement.style.position = "fixed";
-        this.impactElement.style.borderRadius = "50%";
+        // [User Request] Revert: Pang Effect MUST be visible (Magenta)
         this.impactElement.style.backgroundColor = "magenta";
         this.impactElement.style.boxShadow = "0 0 15px magenta";
         this.impactElement.style.zIndex = "999999";
@@ -151,7 +153,8 @@ class TextRenderer {
         if (this.words.length > 0) {
             setTimeout(() => {
                 this.updateCursor(this.words[0], 'start');
-                this.cursor.style.opacity = '1';
+                this.cursor.style.opacity = '0'; // Keep hidden
+                this.cursor.style.backgroundColor = 'transparent';
                 console.log("[TextRenderer] Initial Cursor Posed at Word 0");
             }, 50);
         }
@@ -436,7 +439,8 @@ class TextRenderer {
             this.cursor.style.position = "fixed";
             this.cursor.style.left = visualX + "px";
             this.cursor.style.top = visualY + "px";
-            this.cursor.style.opacity = "1";
+            this.cursor.style.opacity = "0"; // Force Hidden (Guide Runner)
+            this.cursor.style.backgroundColor = "transparent";
 
             // STORE TRUTH: Save exact Y for Pang Event
             this.latestCursorY = visualY;
