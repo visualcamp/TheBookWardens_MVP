@@ -212,8 +212,8 @@
                 const val = snapshot.val();
                 if (val) {
                     document.getElementById('status').innerHTML = `✅ Data Received! Last Update: ${new Date(val.meta.timestamp).toLocaleTimeString()}`;
-                    // Process Data
-                    processData(val.data);
+                    // Process Data (Pass replayData if available)
+                    processData(val.data, val.replayData);
                 } else {
                     document.getElementById('status').innerText = `⚠️ Session [${sessionId}] not found or empty.`;
                 }
@@ -221,7 +221,7 @@
         }
 
         // --- Data Processing Setup ---
-        function processData(rawData) {
+        function processData(rawData, externalReplayData = []) {
             if (!rawData || !Array.isArray(rawData)) return;
 
             // 1. Simulation State
@@ -337,7 +337,8 @@
             }
 
             analyzeDataHealth(data);
-            renderCharts(data);
+            analyzeDataHealth(data);
+            renderCharts(data, externalReplayData);
             document.getElementById('dashboard').style.display = 'block';
         }
 
@@ -371,7 +372,7 @@
         }
 
         // --- Chart Rendering ---
-        function renderCharts(data) {
+        function renderCharts(data, externalReplayData = []) {
             if (window.ChartDataLabels) {
                 Chart.register(ChartDataLabels);
                 Chart.defaults.set('plugins.datalabels', { display: false });
@@ -592,12 +593,16 @@
                 document.getElementById('dashboard').appendChild(container);
             }
 
-            let realReplayData = [];
-            try {
-                if (window.opener && window.opener.dashboardReplayData) {
-                    realReplayData = window.opener.dashboardReplayData;
-                }
-            } catch (e) { }
+            let realReplayData = externalReplayData || [];
+
+            // Fallback: Try window.opener if not provided
+            if (realReplayData.length === 0) {
+                try {
+                    if (window.opener && window.opener.dashboardReplayData) {
+                        realReplayData = window.opener.dashboardReplayData;
+                    }
+                } catch (e) { }
+            }
 
             chart6 = new Chart(document.getElementById('chart6'), {
                 type: 'line',

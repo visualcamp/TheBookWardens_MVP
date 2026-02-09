@@ -788,6 +788,11 @@ class TextRenderer {
             try {
                 if (window.opener) window.opener.dashboardReplayData = processedPath;
                 window.dashboardReplayData = processedPath;
+
+                // [NEW] Pass to GazeDataManager for Cloud Upload
+                if (window.gazeDataManager && typeof window.gazeDataManager.setReplayData === 'function') {
+                    window.gazeDataManager.setReplayData(processedPath);
+                }
             } catch (e) {
                 console.warn("Could not expose replay data to opener", e);
             }

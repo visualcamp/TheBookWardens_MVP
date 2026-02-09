@@ -18,6 +18,9 @@ export class GazeDataManager {
 
         // NEW: Start time of actual content (first valid line index)
         this.firstContentTime = null;
+
+        // NEW: Replay Data Storage (Chart 6)
+        this.replayData = null;
     }
 
     /**
@@ -214,6 +217,10 @@ export class GazeDataManager {
         this.lineMetadata[lineIndex] = { ...this.lineMetadata[lineIndex], ...metadata };
     }
 
+    setReplayData(data) {
+        this.replayData = data;
+    }
+
     getFixations() {
         return this.data.filter(d => d.type === 'Fixation');
     }
@@ -355,7 +362,8 @@ export class GazeDataManager {
                     totalSamples: this.data.length,
                     firstContentTime: this.firstContentTime // [NEW] Pass this info to Cloud
                 },
-                data: this.data
+                data: this.data,
+                replayData: this.replayData // [NEW] Upload Replay Data
             };
             const payload = JSON.parse(JSON.stringify(rawPayload, (key, value) => {
                 if (typeof value === 'number' && isNaN(value)) return null;
