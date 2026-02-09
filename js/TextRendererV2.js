@@ -528,36 +528,30 @@ class TextRenderer {
 
         let targetY;
 
-        // 1. Calculate Target Y (NEXT LINE Logic)
-        // User Request: Pang should appear on the LEFT of the NEXT LINE where gaze lands.
-        // Current cursor is likely at the END of the PREVIOUS line.
+        // 1. Calculate Target Y
+        // Revert: User reported (+1) logic makes it appear one line TOO LOW.
+        // This implies internal state (lineIndex/cursor) is already up-to-date or 'latestCursorY' represents the correct line.
+        // We will strictly use the provided lineIndex or latestCursorY.
 
-        let nextLineIndex = -1;
+        let targetIndex = -1;
 
-        // Try to determine Next Line Index
         if (typeof lineIndex === 'number' && lineIndex >= 0) {
-            // If caller provided lineIndex (often current reading line), next is +1
-            nextLineIndex = lineIndex + 1;
+            targetIndex = lineIndex;
         } else if (this.currentVisibleLineIndex !== undefined) {
-            // Fallback to internal tracker
-            nextLineIndex = this.currentVisibleLineIndex + 1;
+            targetIndex = this.currentVisibleLineIndex;
         }
 
         // Attempt to get exact Visual Y from Line Objects
-        if (this.lines && this.lines[nextLineIndex]) {
-            targetY = this.lines[nextLineIndex].visualY;
+        if (this.lines && this.lines[targetIndex]) {
+            targetY = this.lines[targetIndex].visualY;
         } else {
-            // Fallback: Estimate Next Line Position based on current cursor
-            // Add approximate Line Height (e.g. 60px or derived from font size)
-            // Default font size 1.5rem * 2.5 line-height ~= 3.75rem ~= 60px
-            const estimatedLineHeight = 60;
-
+            // Fallback: Just use latestCursorY (Single Source of Truth)
             if (this.latestCursorY !== undefined && this.latestCursorY !== null) {
-                targetY = this.latestCursorY + estimatedLineHeight;
+                targetY = this.latestCursorY;
             } else {
-                // Last Resort: Current DOM Cursor + Line Height
+                // Last Resort: Current DOM Cursor
                 const rect = this.cursor.getBoundingClientRect();
-                targetY = rect.top + (rect.height * 0.52) + estimatedLineHeight;
+                targetY = rect.top + (rect.height * 0.52);
             }
         }
 
