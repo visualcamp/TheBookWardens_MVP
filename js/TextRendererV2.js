@@ -659,7 +659,7 @@ class TextRenderer {
     }
 
     // --- NEW: Gaze Replay Visualization (GLI-based Segmentation & Scaling) ---
-    // --- NEW: Gaze Replay Visualization (Pang Event Driven) ---
+    // --- NEW: Gaze Replay Visualization (Pang Event Driven + Combo System) ---
     playGazeReplay(gazeData, onComplete) {
         // [ROBUST] Sync Markers before starting replay to ensure visibility
         this.syncPangMarkers();
@@ -724,36 +724,29 @@ class TextRenderer {
             // [NEW] Source of Truth: Pang Logs
             // We ONLY replay lines that successfully triggered a Pang Event.
             const gm = (window.Game && window.Game.gazeManager) || window.gazeDataManager;
-            const pangLogs = (gm && typeof gm.getPangLogs === 'function') ? gm.getPangLogs() : [];
+            const rawPangLogs = (gm && typeof gm.getPangLogs === 'function') ? gm.getPangLogs() : [];
 
-            console.log(`[TextRenderer] Found ${pangLogs.length} Pang Events for Replay.`);
+            console.log(`[TextRenderer] Found ${rawPangLogs.length} Pang Events for Replay.`);
 
             const processedPath = [];
 
             // ---------------------------------------------------------
             // LOGIC: Filter data based on Pang Logs
             // ---------------------------------------------------------
-            // For each Successful Pang Event (Line N finished at Time T_end):
-            // 1. Identify Start Time T_start for this line.
-            //    - T_start is roughly when the gaze FIRST entered Line N.
-            // 2. Extract Data in [T_start, T_end].
-            // 3. Map Y to Line N's fixed Visual Y.
-            // 4. Map X to SmoothX.
-            // 5. Ignore lines without Pang Events.
 
-            if (pangLogs.length === 0) {
+            if (rawPangLogs.length === 0) {
                 console.log("[TextRenderer] No Pang Events recorded. Skipping Replay.");
                 if (onComplete) onComplete();
                 return;
             }
 
             // Sort Logs by Time (just in case)
-            pangLogs.sort((a, b) => a.t - b.t);
+            rawPangLogs.sort((a, b) => a.t - b.t);
 
-            // Iterate Logs
+            // Iterate Logs to build PATH
             let lastLogEndTime = 0; // To prevent overlap if needed, or track gaps
 
-            pangLogs.forEach((log, idx) => {
+            rawPangLogs.forEach((log, idx) => {
                 const targetLineIndex = log.lineIndex;
                 const endTime = log.t;
 
@@ -763,17 +756,6 @@ class TextRenderer {
                 // [ZERO-ERROR] Use the CURRENT Visual Y from the freshly locked layout
                 const targetLineObj = visualLines[targetLineIndex];
                 const fixedY = targetLineObj.visualY;
-
-                // Find Start Time for this Line
-                // We scan gazeData backwards from endTime until we find a different lineIndex
-                // OR we can just grab all data with (lineIndex == targetLineIndex) that is BEFORE endTime
-                // and AFTER the previous log's time.
-
-                // Let's use the GazeData's own timestamps.
-                // Filter condition:
-                // 1. lineIndex === targetLineIndex (Strict content match)
-                // 2. t <= endTime (Before the Pang happened)
-                // 3. t > lastLogEndTime (After previous event finished) - Optional but good for hygiene
 
                 const segmentData = gazeData.filter(d => {
                     return (
@@ -785,11 +767,8 @@ class TextRenderer {
                 });
 
                 if (segmentData.length < 5) {
-                    // Too short segment, maybe skip?
-                    // console.warn(`[Replay] Line ${targetLineIndex} segment too short (${segmentData.length} pts).`);
+                    // Too short segment
                 } else {
-                    // console.log(`[Replay] Adding Line ${targetLineIndex}: ${segmentData.length} pts.`);
-
                     // Add Jump Marker if this is not the first segment
                     if (processedPath.length > 0) {
                         processedPath.push({ isJump: true });
@@ -822,23 +801,16 @@ class TextRenderer {
                         if (sourceWidth > 10 && targetWidth > 0) {
                             // Normalize (0.0 ~ 1.0)
                             let ratio = (gx - sourceMinX) / sourceWidth;
-
-                            // Clamp (Optional but recommended to stay within bounds)
                             ratio = Math.max(0, Math.min(1, ratio));
-
-                            // Map to Target
                             scaledX = targetLeft + (ratio * targetWidth);
                         } else {
-                            // Fallback for single points or zero-width checks
-                            // Just center it or place at start?
-                            // Let's place it relative to start
                             scaledX = targetLeft + (gx - sourceMinX);
                         }
 
                         processedPath.push({
                             x: scaledX, // SCALED X
                             y: fixedY, // FORCE Y to Center of Line
-                            t: d.t,
+                            t: d.t, // Original Timestamp
                             isJump: false
                         });
                     });
@@ -861,7 +833,7 @@ class TextRenderer {
             }
 
             // ---------------------------------------------------------
-            // VALIDATION & RENDER
+            // VALIDATION & RENDER (CANVAS + COMBO)
             // ---------------------------------------------------------
             if (processedPath.length < 2) {
                 console.warn("[TextRenderer] No processed path generated (maybe no data matched Pang Logs).");
@@ -869,6 +841,7 @@ class TextRenderer {
                 return;
             }
 
+            // --- 1. Canvas Setup (Existing) ---
             const canvas = document.createElement('canvas');
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -881,15 +854,65 @@ class TextRenderer {
             const ctx = canvas.getContext('2d');
 
             const path = processedPath;
+
+            // --- 2. Combo System Setup (NEW) ---
+            // Sort Pang Logs relative to start time of the path
+            // The path might start later than 0 if first segment was filtered.
+            // But we used 'processedPath' which has 't'.
+            // Let's use the 't' inside processedPath for timing.
+            const pathStartTime = path[0].t;
+            const pathEndTime = path[path.length - 1].t;
+            const duration = 5000; // Fixed 5s Replay Scaling? Or use real time?
+
+            // The original code used a fixed 5s duration and mapped progress (0..1).
+            // We should stick to that visual pacing for consistency.
+
             let startTime = null;
-            const duration = 5000; // Fixed 5s Replay
+
+            // Prepare Combo Events:
+            // We need to map real 'pangLog.t' to the normalized duration (0..5000ms).
+            // This is tricky. 
+            // Better strategy: The CANVA LOOP uses 'progress' (0..1).
+            // We can match pang events based on their chronological order relative to the path.
+
+            // Remap logs to Progress (0..1)
+            const replayEvents = rawPangLogs.map(log => {
+                // Find where this log fits in terms of time relative to path start/end
+                // log.t is absolute timestamp.
+
+                // Clamp to path range
+                let t = log.t;
+                if (t < pathStartTime) t = pathStartTime;
+                if (t > pathEndTime) t = pathEndTime;
+
+                let ratio = (t - pathStartTime) / (pathEndTime - pathStartTime);
+                if (isNaN(ratio)) ratio = 0;
+
+                return {
+                    progressTrigger: ratio, // 0.0 ~ 1.0
+                    originalT: t,
+                    lineIndex: log.lineIndex,
+                    triggered: false
+                };
+            }).sort((a, b) => a.progressTrigger - b.progressTrigger);
+
+            // Combo State
+            this.comboState = {
+                current: 0,
+                lastLine: -1,
+                totalScore: 0
+            };
+            this._initScoreUI(); // Create UI Container
 
             const animate = (timestamp) => {
                 // Safety enforcement
                 forceVisibility();
 
                 if (!startTime) startTime = timestamp;
-                const progress = (timestamp - startTime) / duration;
+
+                // Normalizing time to fixed duration
+                const elapsed = timestamp - startTime;
+                const progress = elapsed / duration;
 
                 if (progress >= 1) {
                     canvas.style.transition = "opacity 0.5s";
@@ -900,6 +923,10 @@ class TextRenderer {
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+                // --- 3. Combo Check (NEW) ---
+                this._checkReplayCombo(progress, replayEvents, visualLines);
+
+                // --- 4. Draw Path (Existing) ---
                 // Calculate current frame index based on progress
                 // Since path contains jumps, we traverse it strictly by index ratio
                 const maxIdx = Math.floor(path.length * progress);
@@ -922,6 +949,137 @@ class TextRenderer {
             requestAnimationFrame(animate);
 
         }, 500);
+    }
+
+    // --- COMBO SYSTEM HELPERS ---
+
+    _initScoreUI() {
+        let container = document.getElementById('replay-score-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'replay-score-container';
+            container.style.position = 'fixed';
+            container.style.top = '0';
+            container.style.left = '0';
+            container.style.width = '100%';
+            container.style.height = '100%';
+            container.style.pointerEvents = 'none';
+            container.style.zIndex = '1000000'; // Above Canvas
+            document.body.appendChild(container);
+        }
+        this.scoreContainer = container;
+        this.scoreContainer.innerHTML = ''; // Start clean
+    }
+
+    _checkReplayCombo(progress, events, visualLines) {
+        // Trigger events slightly earlier than exact time for visual snap? 
+        // No, stay accurate. 
+
+        events.forEach(ev => {
+            if (!ev.triggered && progress >= ev.progressTrigger) {
+                ev.triggered = true;
+
+                // Logic
+                const lineIdx = ev.lineIndex;
+                let score = 10;
+                let isCombo = false;
+
+                // Continuity: line == last + 1
+                if (lineIdx === this.comboState.lastLine + 1) {
+                    this.comboState.current++;
+                    isCombo = true;
+                } else {
+                    // Reset, unless straight to 0 (First line)
+                    if (this.comboState.lastLine === -1 && lineIdx === 0) {
+                        this.comboState.current = 1;
+                        isCombo = true;
+                    } else {
+                        this.comboState.current = 1;
+                    }
+                }
+
+                // Combo Bonus
+                if (this.comboState.current > 1) {
+                    score += (this.comboState.current * 10); // +10, +20, +30...
+                }
+
+                this.comboState.totalScore += score;
+                this.comboState.lastLine = lineIdx;
+
+                // Visual
+                if (visualLines[lineIdx]) {
+                    const lineY = visualLines[lineIdx].visualY;
+                    this._showScorePopup(score, lineIdx, this.comboState.current, lineY);
+
+                    // Trigger Pang Marker Flash
+                    // (Reuse renderer's trigger effect logic visually?)
+                    // Let's just spawn a distinct Replay Flash
+                    this._spawnReplayPulse(lineY);
+                }
+
+                // Add Ink Real (Optional)
+                if (window.Game && typeof window.Game.addInk === 'function') {
+                    // window.Game.addInk(score); // Uncomment to enable real rewards
+                }
+            }
+        });
+    }
+
+    _showScorePopup(score, lineIndex, combo, yPos) {
+        if (!this.scoreContainer) return;
+
+        const el = document.createElement('div');
+        el.className = 'replay-score-popup';
+        el.innerHTML = `<span style="color:#ffff00; font-weight:bold; font-size:1.5rem;">+${score}</span>`;
+        if (combo > 1) {
+            el.innerHTML += `<br><span style="color:cyan; font-size:1rem; text-shadow:0 0 5px cyan;">COMBO x${combo}</span>`;
+        }
+
+        const xPos = window.innerWidth - 80; // Right side
+
+        el.style.position = 'absolute';
+        el.style.left = xPos + 'px';
+        el.style.top = yPos + 'px';
+        el.style.transform = 'translate(-50%, -50%)';
+        el.style.textAlign = 'center';
+        el.style.transition = 'top 1s ease-out, opacity 1s ease-in';
+        el.style.opacity = '1';
+        el.style.textShadow = '0 2px 4px rgba(0,0,0,0.8)';
+
+        this.scoreContainer.appendChild(el);
+
+        // Animate
+        requestAnimationFrame(() => {
+            el.style.top = (yPos - 50) + 'px'; // Float up
+            el.style.opacity = '0';
+        });
+
+        // Cleanup
+        setTimeout(() => { if (el.parentNode) el.remove(); }, 1000);
+    }
+
+    _spawnReplayPulse(yPos) {
+        const pulse = document.createElement('div');
+        pulse.style.position = 'fixed';
+        pulse.style.right = '20px';
+        pulse.style.top = yPos + 'px';
+        pulse.style.width = '10px';
+        pulse.style.height = '10px';
+        pulse.style.borderRadius = '50%';
+        pulse.style.backgroundColor = 'magenta';
+        pulse.style.boxShadow = '0 0 20px magenta';
+        pulse.style.zIndex = '999999';
+        pulse.style.transform = 'translate(50%, -50%) scale(1)';
+        pulse.style.transition = 'transform 0.3s ease-out, opacity 0.3s ease-out';
+
+        document.body.appendChild(pulse);
+
+        requestAnimationFrame(() => {
+            pulse.style.transform = 'translate(50%, -50%) scale(4)';
+            pulse.style.opacity = '0';
+        });
+
+        setTimeout(() => pulse.remove(), 300);
     }
 }
 window.TextRenderer = TextRenderer;
