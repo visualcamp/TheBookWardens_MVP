@@ -784,3 +784,32 @@ span.tr-word.chunk-fade-out {
 .villain-defeated {
   animation: villain-defeat 2.5s forwards ease-in-out;
 }
+
+/* --- Reward / Victory Screen Animations --- */
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+
+  70% {
+    transform: scale(1.1);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-15px);
+  }
+}

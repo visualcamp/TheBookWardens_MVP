@@ -762,6 +762,16 @@ const Game = {
 
     goToNewScore() {
         this.switchScreen("screen-new-score");
+
+        // Animated Count Up for Stats
+        // 1. WPM
+        let wpmVal = Math.round(this.state.wpmDisplay || 180);
+        if (wpmVal < 50) wpmVal = 150 + Math.floor(Math.random() * 100); // Fallback for debug
+        this.animateValue("report-wpm", 0, wpmVal, 1500);
+
+        // 2. Accuracy (Mock based on missing lines?)
+        const accVal = 88 + Math.floor(Math.random() * 11); // 88-99%
+        this.animateValue("report-acc", 0, accVal, 1500, "%");
     },
 
     goToNewSignup() {
@@ -769,7 +779,32 @@ const Game = {
     },
 
     goToNewShare() {
+        // Simulate Signup submission if coming from Signup screen
+        const emailInput = document.querySelector("#screen-new-signup input[type='email']");
+        if (emailInput && emailInput.value) {
+            console.log("Signup Email:", emailInput.value);
+            // Optionally show toast
+        }
         this.switchScreen("screen-new-share");
+    },
+
+    // Utilities
+    animateValue(id, start, end, duration, suffix = "") {
+        const obj = document.getElementById(id);
+        if (!obj) return;
+        let startTimestamp = null;
+        const step = (timestamp) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+            // Ease-out effect
+            const easeProgress = 1 - Math.pow(1 - progress, 3);
+
+            obj.innerHTML = Math.floor(easeProgress * (end - start) + start) + suffix;
+            if (progress < 1) {
+                window.requestAnimationFrame(step);
+            }
+        };
+        window.requestAnimationFrame(step);
     }
 };
 
