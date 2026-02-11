@@ -584,21 +584,9 @@ export class GazeDataManager {
             // Prevent triggers before the user has actually started reading (looked at a line).
             if (!this.firstContentTime || now < this.firstContentTime) return false;
 
-            // 2. GLOBAL GATE: Last Line Check
-            // A Return Sweep moves from Line N to N+1. If we are on the Last Line, there is no N+1.
-            // We disable detection if the user is currently reading the last line.
-            if (window.Game && window.Game.typewriter && window.Game.typewriter.renderer) {
-                const renderer = window.Game.typewriter.renderer;
-                if (renderer.lines && renderer.lines.length > 0) {
-                    const totalLines = renderer.lines.length;
-                    // Use current strict line index from data
-                    // If undefined/null, we assume we might be in transition, so we proceed (risky but needed for gaps).
-                    // But if we clearly see "Last Line", we STOP.
-                    if (d0.lineIndex === totalLines - 1) {
-                        return false;
-                    }
-                }
-            }
+            // 2. GLOBAL GATE: Last Line Check REMOVED
+            // We rely on 'Max Reach Check' to handle duplicate firing on the last line.
+            // The transition INTO the last line (N-1 -> N) is a valid sweep and should fire.
 
             // 3. COOLDOWN: 500ms (Reduced significantly since we have Logic Guard)
             if (this.lastTriggerTime && (now - this.lastTriggerTime < 500)) return false;
