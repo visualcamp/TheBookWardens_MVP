@@ -25,6 +25,13 @@ export class GazeDataManager {
         // NEW: Max Reach Line Guard (V9.5) - Tracks highest line index triggered
         this.maxLineIndexReached = -1; // Initialize to -1 so line 0 can fire (0 > -1)
         this.pangLog = []; // NEW: Log of successful Pang events
+
+        // NEW: Gaze-Based WPM State
+        this.wpm = 0;              // Real-time WPM
+        this.validWordSum = 0;     // Cumulative words from valid lines
+        this.validTimeSum = 0;     // Cumulative time from valid lines (ms)
+        this.lastRSTime = 0;       // Timestamp of last valid Return Sweep
+        this.lastRSLine = -1;      // Line Index of last valid Return Sweep
     }
 
     /**
@@ -252,6 +259,14 @@ export class GazeDataManager {
         this.pendingReturnSweep = null;
         this.maxLineIndexReached = -1; // Reset max reach guard
         this.pangLog = []; // NEW: Reset Pang Logs
+
+        // Reset WPM State
+        this.wpm = 0;
+        this.validWordSum = 0;
+        this.validTimeSum = 0;
+        this.lastRSTime = 0;
+        this.lastRSLine = -1;
+
         console.log("[GazeDataManager] Triggers Reset (New Content Started).");
     }
 
@@ -682,6 +697,84 @@ export class GazeDataManager {
         // 2. Game Reward (New: Ink +10)
         if (window.Game && typeof window.Game.addInk === 'function') {
             window.Game.addInk(10);
+        }
+
+        // --- 3. GAZE-BASED WPM CALCULATION (User Spec) ---
+        // Logic:
+        // 1. Only lines with Purple Circle (RS) are valid.
+        // 2. Measure Time Interval & Word Count for valid lines.
+        // 3. Accumulate and Calculate WPM.
+
+        if (window.Game && window.Game.typewriter && window.Game.typewriter.renderer) {
+            const renderer = window.Game.typewriter.renderer;
+            const lines = renderer.lines;
+
+            // Check 2.3: Skip Last Line
+            // If targetLine is the last line (or greater), we ignore it per user request.
+            // (Last line usually doesn't have a distinct RS to a "next" line, or ends the paragraph)
+            if (lines && lines.length > 0 && targetLine < lines.length - 1) {
+
+                // Get Word Count for this line
+                const lineObj = lines[targetLine];
+                const wordCount = (lineObj && lineObj.wordIndices) ? lineObj.wordIndices.length : 0;
+
+                let duration = 0;
+                const now = d0.t;
+
+                // Determine Time Interval
+                // Case 2.2: Continuous Chain (Previous line was also valid RS)
+                if (this.lastRSLine === targetLine - 1 && this.lastRSTime > 0) {
+                    duration = now - this.lastRSTime;
+                    // console.log(`[WPM] Chain: Line ${targetLine} (Duration: ${duration}ms)`);
+                }
+                // Case 2.1: Gap or First Line
+                else {
+                    // Find "First Char Time" -> Backward Search in Data for start of this line
+                    let startTime = now;
+                    // Look back up to 20 seconds
+                    const limit = Math.max(0, this.data.length - 1500);
+                    for (let i = this.data.length - 1; i >= limit; i--) {
+                        if (this.data[i].lineIndex === targetLine) {
+                            startTime = this.data[i].t;
+                        } else if (this.data[i].lineIndex < targetLine) {
+                            // Moved to previous line, stop
+                            break;
+                        }
+                    }
+
+                    // Fallback: If startTime is still now (scan failed), use firstContentTime for line 0
+                    if (startTime === now && targetLine === 0 && this.firstContentTime) {
+                        startTime = this.firstContentTime;
+                    }
+
+                    duration = now - startTime;
+                    // console.log(`[WPM] Gap/First: Line ${targetLine} (Start: ${startTime}, End: ${now}, Dur: ${duration}ms)`);
+                }
+
+                // Sanity Check: Ignore impossibly short lines (< 100ms) to prevent noise
+                if (duration > 100 && wordCount > 0) {
+                    this.validTimeSum += duration;
+                    this.validWordSum += wordCount;
+
+                    // 4. Calculate WPM
+                    const minutes = this.validTimeSum / 60000;
+                    if (minutes > 0) {
+                        this.wpm = Math.round(this.validWordSum / minutes);
+                        console.log(`[WPM] Updated: ${this.wpm} (Words: ${this.validWordSum}, Time: ${this.validTimeSum}ms)`);
+                    }
+
+                    // Update State
+                    this.lastRSTime = now;
+                    this.lastRSLine = targetLine;
+
+                    // 5. Real-time Update HUD
+                    if (window.Game && window.Game.typewriter && typeof window.Game.typewriter.updateWPM === 'function') {
+                        window.Game.typewriter.updateWPM();
+                    }
+                }
+            } else {
+                console.log(`[WPM] Skipping Last/Invalid Line: ${targetLine} (Total: ${lines.length})`);
+            }
         }
     }
 }
