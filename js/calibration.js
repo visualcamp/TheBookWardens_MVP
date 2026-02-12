@@ -273,12 +273,12 @@ export class CalibrationManager {
         ctx.rotate(this.rotationAngle);
 
         ctx.beginPath();
-        // Ellipse shape: Width 5, Height 1.6 (20% of previous 25x8)
-        ctx.ellipse(0, 0, 5, 1.6, 0, 0, Math.PI * 2);
-        ctx.lineWidth = 1.5; // Reduced from 4
+        // Ellipse shape: Width 7.5, Height 2.4 (1.5x of previous 5x1.6)
+        ctx.ellipse(0, 0, 7.5, 2.4, 0, 0, Math.PI * 2);
+        ctx.lineWidth = 2.25; // 1.5 * 1.5
         ctx.strokeStyle = color;
         // Optional: Add glow
-        ctx.shadowBlur = 4; // Reduced from 10
+        ctx.shadowBlur = 6; // 4 * 1.5 = 6
         ctx.shadowColor = color;
         ctx.stroke();
 
@@ -286,7 +286,7 @@ export class CalibrationManager {
 
         // 4. Draw Center Fixed Dot (For Gaze Fixation)
         ctx.beginPath();
-        ctx.arc(cx, cy, 2, 0, Math.PI * 2); // Reduced from 4 to 2
+        ctx.arc(cx, cy, 3, 0, Math.PI * 2); // 2 * 1.5 = 3
         ctx.fillStyle = "white";
         ctx.shadowBlur = 0; // Reset shadow for crisp dot
         ctx.fill();
