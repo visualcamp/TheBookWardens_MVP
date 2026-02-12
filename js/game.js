@@ -279,7 +279,7 @@ const Game = {
                 const loader = document.getElementById("loader-container");
                 const bar = document.getElementById("loader-bar");
                 if (loader && bar) {
-                    loader.style.visibility = "visible";
+                    loader.style.display = "block";
                     bar.getBoundingClientRect();
                     bar.style.width = "100%";
                 }
@@ -289,8 +289,8 @@ const Game = {
 
                 this.trackingInitPromise = (async () => {
                     try {
-                        // 1. Start Message (Only this one)
-                        this.updateSDKProgress(10, "Summoning Magic Eye...");
+                        // 1. Start Message (REMOVED per user request to avoid popup/layout shift)
+                        // this.updateSDKProgress(10, "Summoning Magic Eye...");
                         if (typeof window.startEyeTracking === "function") {
                             // Hook into window.onSDKProgress if available (we will add this to app.js later)
                             // For now, manual updates
