@@ -55,25 +55,25 @@ const Game = {
         // Helper for delays
         const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-        // --- SCENE 1: PEACE (0s - 5s) ---
+        // --- SCENE 1: PEACE (0s - 1.5s) ---
         // Text fades in smoothly
-        await wait(500);
+        await wait(250); // Faster start
         textContainer.style.opacity = 1;
         textContainer.style.transform = "translateY(0)";
 
         this.showStoryText("Every story holds a world within.");
-        await wait(2000);
+        await wait(1200); // 2000 -> 1200
 
-        // --- SCENE 2: WARNING (5s - 10s) ---
+        // --- SCENE 2: WARNING (1.5s - 3s) ---
         introScreen.classList.remove("scene-peace");
         introScreen.classList.add("scene-warning");
 
         this.showStoryText("But chaos seeks to consume it.");
         // Villain fades in
         villainContainer.style.opacity = 0.6;
-        await wait(2000);
+        await wait(1200); // 2000 -> 1200
 
-        // --- SCENE 3: INVASION (10s - 15s) ---
+        // --- SCENE 3: INVASION (3s - 4.5s) ---
         introScreen.classList.remove("scene-warning");
         introScreen.classList.add("scene-invasion");
 
@@ -85,10 +85,10 @@ const Game = {
             if (Math.random() > 0.7) this.spawnMeteor(meteorLayer);
         }, 300);
 
-        await wait(2000);
+        await wait(1200); // 2000 -> 1200
         clearInterval(lightMeteorLoop);
 
-        // --- SCENE 4: DESTRUCTION (15s - 20s) ---
+        // --- SCENE 4: DESTRUCTION (4.5s - 6s) ---
         introScreen.classList.remove("scene-invasion");
         introScreen.classList.add("scene-destruction");
 
@@ -101,7 +101,7 @@ const Game = {
             this.spawnMeteor(meteorLayer); // Double spawn
         }, 100);
 
-        await wait(1000);
+        await wait(600); // 1000 -> 600
 
         // Corrupt text
         // Corrupt Image (CSS handles this via classes)
@@ -111,12 +111,12 @@ const Game = {
         }
         */
 
-        await wait(1500);
+        await wait(800); // 1500 -> 800
         clearInterval(heavyMeteorLoop);
 
         // --- SCENE 5: TRANSITION ---
         this.showStoryText("Initializing Word Forge...");
-        await wait(1000);
+        await wait(500); // 1000 -> 500
 
         console.log("Rift Intro Done. Moving to Word Forge.");
         this.state.vocabIndex = 0;

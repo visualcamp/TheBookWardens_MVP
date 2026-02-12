@@ -78,34 +78,40 @@
 }
 
 /* Story Text Overlay (HUD Box) */
+/* Story Text Overlay (HUD Box - Lore Style) */
 #rift-story-overlay {
     position: absolute;
-    bottom: 15%;
+    bottom: 10%;
     left: 50%;
     transform: translateX(-50%) translateY(20px);
     width: auto;
-    min-width: 300px;
     max-width: 80%;
-    padding: 15px 30px;
-    background: rgba(0, 0, 0, 0.9);
-    /* Dark opaque */
-    border: 2px solid #ffd700;
-    /* Gold border */
-    border-radius: 30px;
-    /* Pill shape */
+    padding: 12px 40px;
+    background: rgba(0, 0, 0, 0.6);
+    /* Semi-transparent subtitle style */
+    border-top: 1px solid rgba(255, 215, 0, 0.4);
+    border-bottom: 1px solid rgba(255, 215, 0, 0.4);
+    border-left: none;
+    border-right: none;
+    /* border: 1px solid rgba(255, 215, 0, 0.3); */
+    border-radius: 4px;
+    /* Less rounded */
     text-align: center;
-    font-family: 'Roboto', sans-serif;
-    /* Clean font */
-    font-size: 1.5rem;
+    font-family: 'Cinzel', serif;
+    /* Game theme font */
+    font-size: 1.3rem;
+    /* Smaller font */
     color: #ffd700;
-    /* Gold text for Warden's message */
+    /* Gold text */
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
     opacity: 0;
     transition: opacity 0.5s, transform 0.5s;
     z-index: 99999;
-    /* Highest priority */
     pointer-events: none;
-    box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+    cursor: default;
+    /* Not clickable */
+    backdrop-filter: blur(2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
 }
 
 #rift-story-overlay.show {
