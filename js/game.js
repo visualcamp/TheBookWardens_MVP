@@ -498,21 +498,36 @@ const Game = {
     vocabList: [
         {
             word: "Luminous",
-            sentence: "The <b>luminous</b> mushroom lit up the dark cave.",
-            options: ["A. Very heavy and dark", "B. Full of light / Shining", "C. Related to the moon"],
-            answer: 1
+            sentence: '"The <b>luminous</b> mushroom lit up the dark cave."',
+            options: [
+                "A. Very heavy and dark",
+                "B. Full of light / Shining",
+                "C. Related to the moon"
+            ],
+            answer: 1,
+            image: "./rune_luminous.png"
         },
         {
-            word: "Cipher",
-            sentence: "Alice found a cryptic <b>cipher</b> hidden in the scroll.",
-            options: ["A. A delicious cake", "B. A secret code", "C. A type of flower"],
-            answer: 1
+            word: "Peculiar",
+            sentence: '"Alice felt a very <b>peculiar</b> change in her size."',
+            options: [
+                "A. Strange or odd",
+                "B. Common and boring",
+                "C. Sudden and fast"
+            ],
+            answer: 0,
+            image: "./rune_peculiar.png"
         },
         {
-            word: "Ethereal",
-            sentence: "The Cheshire Cat had an <b>ethereal</b> glow.",
-            options: ["A. Heavy and solid", "B. Delicate and light", "C. Angry and red"],
-            answer: 1
+            word: "Vanish",
+            sentence: '"The cat began to <b>vanish</b> slowly, starting with its tail."',
+            options: [
+                "A. To appear suddenly",
+                "B. To disappear completely",
+                "C. To become brighter"
+            ],
+            answer: 1,
+            image: "./rune_vanish.png"
         }
     ],
 
