@@ -84,8 +84,9 @@
     bottom: 5%;
     left: 50%;
     transform: translateX(-50%);
-    width: auto;
-    max-width: 90%;
+    width: 90%;
+    /* Increased width (1.8x equivalent) */
+    max-width: 1200px;
     padding: 10px 40px;
     background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.8), transparent);
     /* Subtitle Gradient */
@@ -94,8 +95,8 @@
     text-align: center;
     font-family: 'Cinzel', serif;
     /* Game theme font */
-    font-size: 1.1rem;
-    /* Smaller, elegant font */
+    font-size: 1.2rem;
+    /* Slightly larger for readability */
     color: #ffd700;
     /* Gold text */
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
@@ -107,6 +108,7 @@
     /* Not clickable */
     backdrop-filter: blur(1px);
     box-shadow: none;
+    line-height: 1.6;
 }
 
 #rift-story-overlay.show {
