@@ -361,6 +361,11 @@ const Game = {
                 }, 500);
             }
         }
+        // ELSE: Show non-intrusive Toast feedback
+        else {
+            // Only show significant updates or if user acts
+            this.showToast(`${status} (${progress}%)`, 2000);
+        }
     },
 
     showToast(msg, duration = 3000) {
@@ -370,9 +375,17 @@ const Game = {
             toast.id = "game-toast";
             document.body.appendChild(toast);
         }
+
+        // Clear existing timer if updating
+        if (this.toastTimer) clearTimeout(this.toastTimer);
+
         toast.textContent = msg;
         toast.classList.add("show");
-        setTimeout(() => toast.classList.remove("show"), duration);
+
+        this.toastTimer = setTimeout(() => {
+            toast.classList.remove("show");
+            this.toastTimer = null;
+        }, duration);
     },
 
     onCalibrationFinish() {
