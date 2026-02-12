@@ -331,6 +331,11 @@ class TextRenderer {
         this.currentVisibleLineIndex = 0;
 
         console.log(`[TextRenderer] Layout Locked: ${this.words.length} words (checked), ${this.lines.length} lines created.`);
+        if (this.lines.length > 0) {
+            console.log(`[TextRenderer] Line 0 Y: ${this.lines[0].rect.top.toFixed(1)}, Line ${this.lines.length - 1} Y: ${this.lines[this.lines.length - 1].rect.top.toFixed(1)}`);
+        } else {
+            console.warn("[TextRenderer] WARNING: No lines created! Check word visibility or threshold.");
+        }
     }
 
     _finalizeLine(words) {

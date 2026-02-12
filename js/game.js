@@ -1308,8 +1308,12 @@ Game.typewriter = {
         if (screenRead) screenRead.scrollTop = 0;
 
         // [CRITICAL FIX] Reset Pang Event Logic / First Content Time for new paragraph
+        console.log(`[Typewriter] Pre-Check: Resetting Triggers for Para ${this.currentParaIndex}...`);
         if (window.gazeDataManager && typeof window.gazeDataManager.resetTriggers === 'function') {
             window.gazeDataManager.resetTriggers();
+            console.log("[Typewriter] Triggers Reset Successfully.");
+        } else {
+            console.error("[Typewriter] Failed to reset triggers: GazeDataManager missing or invalid.");
         }
 
         if (this.currentParaIndex >= this.paragraphs.length) {
