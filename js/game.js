@@ -292,14 +292,13 @@ const Game = {
                     // this.switchScreen("screen-word");
                 }, 800);
 
-                // Initialize in background
                 this.trackingInitPromise = (async () => {
                     try {
-                        this.updateSDKProgress(10, "Starting Magic...");
+                        // 1. Start Message (Only this one)
+                        this.updateSDKProgress(10, "Summoning Magic Eye...");
                         if (typeof window.startEyeTracking === "function") {
                             // Hook into window.onSDKProgress if available (we will add this to app.js later)
                             // For now, manual updates
-                            setTimeout(() => this.updateSDKProgress(30, "Looking for You..."), 500);
 
                             const ok = await window.startEyeTracking();
 
@@ -307,8 +306,8 @@ const Game = {
                                 throw new Error("Permission denied or initialization failed.");
                             }
 
-                            this.updateSDKProgress(100, "Ready!");
-                            this.showToast("Magic Eye Ready!"); // Shortened message
+                            this.updateSDKProgress(100, "Connected!");
+                            this.showToast("Magic Eye Connected!"); // Shortened message
                             return true;
                         } else {
                             console.warn("window.startEyeTracking not found.");

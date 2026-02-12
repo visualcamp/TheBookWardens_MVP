@@ -631,7 +631,7 @@ function attachSeesoCallbacks() {
 
 async function initSeeso() {
   setState("sdk", "loading");
-  if (window.updateLoadingProgress) window.updateLoadingProgress(10, "Preparing Magic...");
+  // [REMOVED] Intermediate Toast: "Preparing Spells..."
 
   try {
     SDK = await loadWebpackModule("./seeso/dist/seeso.js");
@@ -643,13 +643,13 @@ async function initSeeso() {
 
     setState("sdk", "constructed");
     logI("sdk", "module loaded", { exportedKeys: Object.keys(SDK || {}) });
-    if (window.updateLoadingProgress) window.updateLoadingProgress(30, "Magic Found!");
+    // [REMOVED] Intermediate Toast: "Spells Loaded!"
 
   } catch (e) {
     setState("sdk", "load_failed");
     showRetry(true, "sdk load failed");
     logE("sdk", "Failed to load ./seeso/dist/seeso.js", e);
-    if (window.updateLoadingProgress) window.updateLoadingProgress(0, "Magic Failed :(");
+    if (window.updateLoadingProgress) window.updateLoadingProgress(0, "Spell Failed :(");
     return false;
   }
 
@@ -657,14 +657,14 @@ async function initSeeso() {
   attachSeesoCallbacks();
 
   try {
-    if (window.updateLoadingProgress) window.updateLoadingProgress(40, "Looking for You...");
+    // [REMOVED] Intermediate Toast: "Searching for Hero..."
     const userStatusOption = SDK?.UserStatusOption
       ? new SDK.UserStatusOption(true, true, true)
       : { useAttention: true, useBlink: true, useDrowsiness: true };
 
     logI("sdk", "initializing", { userStatusOption });
 
-    if (window.updateLoadingProgress) window.updateLoadingProgress(60, "Opening Eye...");
+    // [REMOVED] Intermediate Toast: "Opening the Eye..."
     const errCode = await seeso.initialize(LICENSE_KEY, userStatusOption);
     logI("sdk", "initialize returned", { errCode });
 
@@ -672,18 +672,18 @@ async function initSeeso() {
       setState("sdk", "init_failed");
       showRetry(true, "sdk init failed");
       logE("sdk", "initialize failed", { errCode });
-      if (window.updateLoadingProgress) window.updateLoadingProgress(0, "Eye Closed :(");
+      if (window.updateLoadingProgress) window.updateLoadingProgress(0, "Hero Not Found :(");
       return false;
     }
 
     setState("sdk", "initialized");
-    if (window.updateLoadingProgress) window.updateLoadingProgress(90, "Almost Ready!");
+    // [REMOVED] Intermediate Toast: "Focusing..."
     return true;
   } catch (e) {
     setState("sdk", "init_exception");
     showRetry(true, "sdk init exception");
     logE("sdk", "Exception during initialize()", e);
-    if (window.updateLoadingProgress) window.updateLoadingProgress(0, "Magic Error!");
+    if (window.updateLoadingProgress) window.updateLoadingProgress(0, "Eye Closed :(");
     return false;
   }
 }
