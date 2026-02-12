@@ -275,7 +275,7 @@ const Game = {
                 }
 
                 // 2. Normal Flow
-                startBtn.style.display = "none";
+                // Loader Animation
                 const loader = document.getElementById("loader-container");
                 const bar = document.getElementById("loader-bar");
                 if (loader && bar) {
@@ -284,16 +284,7 @@ const Game = {
                     bar.style.width = "100%";
                 }
 
-                setTimeout(() => {
-                    // Start Rift Intro Scene
-                    this.startRiftIntro();
-
-                    // Old Direct Jump:
-                    // this.state.vocabIndex = 0; // Reset
-                    // this.loadVocab(0);         // Load first word
-                    // this.switchScreen("screen-word");
-                }, 800);
-                // Start Rift Intro Scene immediately
+                // Start Rift Intro Scene immediately (Delay handled inside)
                 this.startRiftIntro();
 
                 this.trackingInitPromise = (async () => {
