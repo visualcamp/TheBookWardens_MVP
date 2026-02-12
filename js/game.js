@@ -276,13 +276,7 @@ const Game = {
 
                 // 2. Normal Flow
                 // Loader Animation
-                const loader = document.getElementById("loader-container");
-                const bar = document.getElementById("loader-bar");
-                if (loader && bar) {
-                    loader.style.display = "block";
-                    bar.getBoundingClientRect();
-                    bar.style.width = "100%";
-                }
+
 
                 // Start Rift Intro Scene immediately (Delay handled inside)
                 this.startRiftIntro();
