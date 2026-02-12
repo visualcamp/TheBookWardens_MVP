@@ -665,60 +665,72 @@ const Game = {
         if (!targetEl) return;
 
         const targetRect = targetEl.getBoundingClientRect();
+        // Target center coordinates
         const targetX = targetRect.left + targetRect.width / 2;
         const targetY = targetRect.top + targetRect.height / 2;
 
-        const particleCount = 6;
-        const colors = ["#ffd700", "#ffae00", "#ffffff"]; // Gold & White
+        const particleCount = 12; // Increased from 6
+        const colors = ["#ffd700", "#ffae00", "#ffffff", "#e0ffff"]; // Gold, Orange, White, Cyan Tint
 
         for (let i = 0; i < particleCount; i++) {
             const p = document.createElement("div");
             p.className = "rune-particle";
-            // Random initial offset
-            const offsetX = (Math.random() - 0.5) * 50;
-            const offsetY = (Math.random() - 0.5) * 50;
 
-            p.style.left = (startX + offsetX) + "px";
-            p.style.top = (startY + offsetY) + "px";
-            p.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-
-            // CSS for particle (dynamic injection or relies on style.css)
-            p.style.position = "fixed";
-            p.style.width = "8px";
-            p.style.height = "8px";
+            // Random size for variety
+            const size = 5 + Math.random() * 8;
+            p.style.width = size + "px";
+            p.style.height = size + "px";
             p.style.borderRadius = "50%";
+            p.style.position = "fixed";
             p.style.zIndex = "10000";
-            p.style.boxShadow = "0 0 10px " + p.style.backgroundColor;
-            p.style.transition = "transform 0.5s, opacity 0.5s"; // Initial burst
+
+            // Initial Position (Fixed to start point)
+            p.style.left = startX + "px";
+            p.style.top = startY + "px";
+
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            p.style.backgroundColor = color;
+            p.style.boxShadow = "0 0 10px " + color;
 
             document.body.appendChild(p);
 
-            // 1. Burst Out
-            setTimeout(() => {
-                p.style.transform = `translate(${offsetX * 2}px, ${offsetY * 2}px) scale(0.5)`;
-            }, 10);
+            // Calculate Burst Vector
+            const angle = Math.random() * Math.PI * 2;
+            const velocity = 40 + Math.random() * 60; // Explosion radius (stronger burst)
+            const burstX = Math.cos(angle) * velocity;
+            const burstY = Math.sin(angle) * velocity;
 
-            // 2. Fly to Target (Bezier Curve Simulation)
-            // Using WAAPI (Web Animations API) is cleaner for curves
+            // Delta to Target
+            const deltaX = targetX - startX;
+            const deltaY = targetY - startY;
+
+            // Animation: Burst -> Curve -> Target
+            // Increased duration by ~150% (was 800-1200, now 1200-1800)
+            const duration = 1200 + Math.random() * 600;
+
             const anim = p.animate([
-                { transform: `translate(0,0) scale(1)`, left: `${startX}px`, top: `${startY}px`, opacity: 1 },
-                { transform: `translate(0,0) scale(0.2)`, left: `${targetX}px`, top: `${targetY}px`, opacity: 0 } // Fade out at end
+                { transform: 'translate(0,0) scale(0.5)', opacity: 1, offset: 0 },
+                { transform: `translate(${burstX}px, ${burstY}px) scale(1.5)`, opacity: 1, offset: 0.15 }, // Quick Burst
+                { transform: `translate(${burstX * 0.8}px, ${burstY * 0.8}px) scale(1.2)`, offset: 0.3 }, // Hover slightly
+                { transform: `translate(${deltaX}px, ${deltaY}px) scale(0.2)`, opacity: 0, offset: 1 } // Fly to target
             ], {
-                duration: 800 + Math.random() * 400,
-                easing: "cubic-bezier(0.25, 1, 0.5, 1)", // Ease out
-                fill: "forwards",
-                delay: 100 // Wait for burst
+                duration: duration,
+                easing: "cubic-bezier(0.25, 0.1, 0.25, 1)", // Ease out cubic
+                fill: "forwards"
             });
 
             anim.onfinish = () => {
                 p.remove();
-                // Pump Effect on Target
-                targetEl.style.transform = "scale(1.5)";
-                targetEl.style.filter = "brightness(1.5)";
-                setTimeout(() => {
-                    targetEl.style.transform = "scale(1)";
-                    targetEl.style.filter = "brightness(1)";
-                }, 150);
+                // Pump Effect on Target (Trigger on first few for impact)
+                if (i === 0) {
+                    targetEl.style.transition = "transform 0.2s, filter 0.2s";
+                    targetEl.style.transform = "scale(1.6)";
+                    targetEl.style.filter = "brightness(2) drop-shadow(0 0 15px gold)";
+                    setTimeout(() => {
+                        targetEl.style.transform = "scale(1)";
+                        targetEl.style.filter = "brightness(1)";
+                    }, 300);
+                }
             };
         }
     },
