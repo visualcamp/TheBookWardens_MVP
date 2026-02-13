@@ -148,21 +148,43 @@
         // --- Global Chart Instances ---
         let chart1, chart2, chart3, chart4, chart5, chart6;
 
+        // --- Immediate Firebase Init ---
+        // Initialize immediately if possible to avoid waiting for heavy assets
+        try {
+            if (window.firebase && window.FIREBASE_CONFIG && !firebase.apps.length) {
+                console.log("[Dashboard] Initializing Firebase...");
+                firebase.initializeApp(window.FIREBASE_CONFIG);
+            }
+        } catch (e) {
+            console.error("[Dashboard] Firebase Init Error:", e);
+        }
+
         // --- Init ---
         window.onload = function () {
             if (!window.firebase || !window.FIREBASE_CONFIG) {
-                alert("Firebase Config Missing!");
+                alert("Firebase SDK or Config Missing! Check console.");
                 return;
             }
+
+            // Double check initialization
             if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
 
+            console.log("[Dashboard] Connecting to Database...");
+
             // Listen for Recent Sessions
+            console.log("[Dashboard] Querying 'sessions' node...");
             const db = firebase.database();
             const listRef = db.ref('sessions').orderByChild('meta/timestamp').limitToLast(10);
 
             listRef.on('value', (snapshot) => {
+                console.log("[Dashboard] Data received!", snapshot.val());
                 const listEl = document.getElementById('sessionList');
                 listEl.innerHTML = "";
+
+                if (!snapshot.exists()) {
+                    listEl.innerHTML = "<p>No sessions found in database.</p>";
+                    return;
+                }
 
                 const sessions = [];
                 snapshot.forEach(child => {
@@ -180,8 +202,10 @@
                     btn.onclick = () => loadSession(item.key);
                     listEl.appendChild(btn);
                 });
-
-                if (sessions.length === 0) listEl.innerText = "No sessions found yet. Play the game to upload data.";
+            }, (error) => {
+                console.error("[Dashboard] Read Error:", error);
+                const listEl = document.getElementById('sessionList');
+                listEl.innerHTML = `<p style="color:red"><b>Error loading list:</b> ${error.message}<br>Check Firebase Console > Database > Rules.</p>`;
             });
         };
 

@@ -1281,16 +1281,12 @@ Game.typewriter = {
         if (this.wpmMonitor) clearInterval(this.wpmMonitor);
         this.wpmMonitor = setInterval(() => this.updateWPM(), 1000);
 
-        // --- NEW: Periodic Cloud Upload for Live Dashboard (Every 3s) ---
-        if (this.uploadMonitor) clearInterval(this.uploadMonitor);
-        this.uploadMonitor = setInterval(() => {
-            if (window.gazeDataManager && Game.sessionId) {
-                // Only upload if we have data
-                if (window.gazeDataManager.data.length > 5) {
-                    window.gazeDataManager.uploadToCloud(Game.sessionId);
-                }
-            }
-        }, 3000);
+        // --- CHANGED: Periodic Cloud Upload REMOVED ---
+        // As per user request, we now upload ONLY when Replay starts (per paragraph).
+        if (this.uploadMonitor) {
+            clearInterval(this.uploadMonitor);
+            this.uploadMonitor = null;
+        }
     },
 
     playNextParagraph() {
@@ -1472,19 +1468,6 @@ Game.typewriter = {
                 cleanupDelay += 600;
             }
 
-            // AUTO-EXPORT TO FIREBASE
-            // Triggered automatically when the paragraphs is fully displayed + 3s reading time.
-            setTimeout(() => {
-                console.log("[Auto-Upload] ------------------------------------------------");
-                console.log("[Auto-Upload] Paragraph Complete. Uploading to Cloud.");
-                console.log("[Auto-Upload] ------------------------------------------------");
-
-                if (window.gazeDataManager && Game.sessionId) {
-                    // Upload instead of download
-                    window.gazeDataManager.uploadToCloud(Game.sessionId);
-                }
-            }, 3000);
-
             // [CHANGED] Always trigger Mid-Boss Battle after ANY paragraph (including the last one).
             // Logic: P1 -> Replay -> Mid -> P2 -> Replay -> Mid -> ...
             setTimeout(async () => {
@@ -1499,6 +1482,14 @@ Game.typewriter = {
     triggerGazeReplay() {
         return new Promise((resolve) => {
             console.log("[triggerGazeReplay] Preparing Gaze Replay...");
+
+            // [CHANGED] Upload Data to Firebase NOW (Background Sync)
+            // We do this here because Replay start signifies "Paragraph Done".
+            if (window.gazeDataManager && Game.sessionId) {
+                console.log("[Cloud] Uploading Paragraph Data...");
+                // No await needed, let it run in background
+                window.gazeDataManager.uploadToCloud(Game.sessionId);
+            }
 
             // Check dependencies
             if (!window.gazeDataManager || !this.startTime) {
