@@ -391,13 +391,21 @@ export class GazeDataManager {
 
             // 2. Upload Metadata (Always update to reflect latest stats)
             // Use 'update' instead of 'set' to avoid wiping other fields if any
-            await db.ref('sessions/' + sessionId + '/meta').set({
+            const metaData = {
                 timestamp: Date.now(),
                 userAgent: navigator.userAgent,
                 lineMetadata: this.lineMetadata,
                 totalSamples: this.data.length,
                 firstContentTime: this.firstContentTime
-            });
+            };
+
+            // A. Full Session Path (Heavy Data Context)
+            await db.ref('sessions/' + sessionId + '/meta').set(metaData);
+
+            // B. Lightweight List Path (Fast Retrieval)
+            // Storing metadata separately allows the dashboard to load the list instantly
+            // without downloading the massive gaze data array.
+            await db.ref('session_list/' + sessionId).set(metaData);
 
             // 3. Incremental Chunk Upload (Memory Safe)
             // Only upload data that hasn't been uploaded yet

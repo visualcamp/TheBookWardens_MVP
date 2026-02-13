@@ -172,9 +172,10 @@
             console.log("[Dashboard] Connecting to Database...");
 
             // Listen for Recent Sessions
-            console.log("[Dashboard] Querying 'sessions' node...");
+            console.log("[Dashboard] Querying 'session_list' node...");
             const db = firebase.database();
-            const listRef = db.ref('sessions').orderByChild('meta/timestamp').limitToLast(10);
+            // New structure: session_list/{sessionId}/timestamp
+            const listRef = db.ref('session_list').orderByChild('timestamp').limitToLast(10);
 
             listRef.on('value', (snapshot) => {
                 console.log("[Dashboard] Data received!", snapshot.val());
@@ -182,7 +183,7 @@
                 listEl.innerHTML = "";
 
                 if (!snapshot.exists()) {
-                    listEl.innerHTML = "<p>No sessions found in database.</p>";
+                    listEl.innerHTML = "<p>No sessions found in database (Try playing a new game).</p>";
                     return;
                 }
 
@@ -194,8 +195,10 @@
                 // Reverse to show newest first
                 sessions.reverse().forEach(item => {
                     const btn = document.createElement("button");
-                    const timeStr = item.val.meta ? new Date(item.val.meta.timestamp).toLocaleTimeString() : "???";
-                    const agent = item.val.meta && item.val.meta.userAgent ? getDeviceName(item.val.meta.userAgent) : "Unknown";
+                    // In session_list, metadata is direct
+                    const meta = item.val;
+                    const timeStr = meta && meta.timestamp ? new Date(meta.timestamp).toLocaleTimeString() : "???";
+                    const agent = meta && meta.userAgent ? getDeviceName(meta.userAgent) : "Unknown";
 
                     btn.innerHTML = `<b>${item.key}</b><br><small>${timeStr}</small><br><span style='font-size:0.8em; color:#ddd'>${agent}</span>`;
                     btn.style.cssText = "background:#555; text-align:left; line-height:1.2;";
@@ -477,8 +480,8 @@
                 data: {
                     labels: labels,
                     datasets: [
-                        // 1. Raw X (Reference) - Light Green
-                        { label: 'Raw X', data: data.map(d => d.x), borderColor: 'rgba(75, 192, 192, 0.3)', borderWidth: 1, pointRadius: 0, yAxisID: 'yPos', order: 10 },
+                        // 1. Raw X (Reference) - DARKER GREEN & THICKER
+                        { label: 'Raw X', data: data.map(d => d.x), borderColor: 'rgba(0, 150, 136, 1)', borderWidth: 2, pointRadius: 0, yAxisID: 'yPos', order: 10 },
 
                         // 2. Simulated GLD Index - PURPLE LINE (Solid)
                         {
@@ -547,8 +550,8 @@
                             order: 5
                         },
 
-                        // 7. Velocity X - Light Blue Fill (Background)
-                        { label: 'Velocity X', data: data.map(d => d.vx), borderColor: 'rgba(54, 162, 235, 0.3)', backgroundColor: 'rgba(54, 162, 235, 0.1)', borderWidth: 1, pointRadius: 0, fill: true, yAxisID: 'yVel', order: 20 }
+                        // 7. Velocity X - DARKER BLUE & THICKER
+                        { label: 'Velocity X', data: data.map(d => d.vx), borderColor: '#0056b3', backgroundColor: 'rgba(54, 162, 235, 0.2)', borderWidth: 2, pointRadius: 0, fill: true, yAxisID: 'yVel', order: 20 }
                     ]
                 },
                 options: {
