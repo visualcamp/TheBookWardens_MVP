@@ -1022,16 +1022,25 @@ const Game = {
                 // Ideally we pause here. For now let's proceed to calibration screen which usually handles it.
             }
 
-            // Ensure Tracking Init
+            // Ensure Tracking Init with Timeout (Max 3s)
             if (this.trackingInitPromise) {
-                const ok = await this.trackingInitPromise;
+                const timeout = new Promise(resolve => setTimeout(() => resolve(false), 3000));
+                try {
+                    await Promise.race([this.trackingInitPromise, timeout]);
+                } catch (e) {
+                    console.warn("[Game] Tracking init timeout or error", e);
+                }
             }
 
             this.switchScreen("screen-calibration");
             setTimeout(() => {
+                let calStarted = false;
                 if (typeof window.startCalibrationRoutine === "function") {
-                    window.startCalibrationRoutine();
-                } else {
+                    calStarted = window.startCalibrationRoutine();
+                }
+
+                if (!calStarted) {
+                    console.warn("[Game] Calibration failed to start, skipping to reading.");
                     this.switchScreen("screen-read");
                 }
             }, 500);
