@@ -271,12 +271,16 @@ export class GazeDataManager {
         this.maxLineIndexReached = -1; // Reset max reach guard
         this.pangLog = []; // NEW: Reset Pang Logs
 
-        // Reset WPM State
-        this.wpm = 0;
-        this.validWordSum = 0;
-        this.validTimeSum = 0;
+        // Reset WPM State (Partially)
+        // [FIX] Do NOT reset cumulative WPM stats (wpm, validWordSum, validTimeSum)
+        // This ensures WPM is averaged across the entire session, not per paragraph.
+        // this.wpm = 0; 
+        // this.validWordSum = 0;
+        // this.validTimeSum = 0;
+
         this.lastRSTime = 0;
         this.lastRSLine = -1;
+        this.pangCountInPara = 0; // [NEW] Track Pangs per Paragraph
 
         console.log("[GazeDataManager] Triggers Reset (New Content Started).");
 
@@ -789,12 +793,19 @@ export class GazeDataManager {
                 // Sanity Check: Ignore impossibly short lines (< 100ms) to prevent noise
                 if (duration > 100 && wordCount > 0) {
 
-                    // [FIX] Exclude Line 0 (Warm-up Line) from Cumulative WPM Calculation
-                    // Line 0 includes cognitive delay and fade-in time, lowering the average artificially.
-                    // We log it, but don't count it for the user's score.
-                    if (targetLine > 0) {
-                        this.validTimeSum += duration;
-                        this.validWordSum += wordCount;
+                    // [NEW] Ignore First Pang of Each Paragraph
+                    // The first transition (whether 0->1 or 0->2 skip) is often unstable or includes warm-up.
+                    this.pangCountInPara++;
+
+                    if (this.pangCountInPara > 1) {
+                        // [FIX] Exclude Line 0 logic is now redundant if we skip first pang, 
+                        // but kept for safety if pangCount logic changes.
+                        if (targetLine > 0) {
+                            this.validTimeSum += duration;
+                            this.validWordSum += wordCount;
+                        }
+                    } else {
+                        console.log(`[WPM] Skipping First Pang of Paragraph (Line ${targetLine})`);
                     }
 
                     // 4. Calculate WPM (Only if we have valid lines > 0)
