@@ -42,11 +42,6 @@ export class GazeDataManager {
 
         // [FIX] Search Boundary for WPM Calculation
         this.searchStartIndex = 0;
-
-        // --- RGT (Relative-Gaze Trigger) State ---
-        this.currentLineMinX = 99999;     // 'a' (Line Start)
-        this.globalMaxX = 0;              // 'b' (Line End / Screen Right)
-        this.isCollectingLineStart = false;
     }
 
     /**
@@ -102,16 +97,6 @@ export class GazeDataManager {
             // [NEW] Capture Start of Content (First valid Line Index)
             if (this.firstContentTime === null && typeof entry.lineIndex === 'number' && entry.lineIndex >= 0) {
                 this.firstContentTime = entry.t;
-                // [RGT] Initial Line Start Collection
-                this.isCollectingLineStart = true;
-                setTimeout(() => this.isCollectingLineStart = false, 200);
-            }
-
-            // [RGT] Collect Min X for 'a' (Start Point)
-            if (this.isCollectingLineStart) {
-                if (entry.x < this.currentLineMinX && entry.x > 0) {
-                    this.currentLineMinX = entry.x;
-                }
             }
 
             // REAL-TIME LOGIC (Isolated Safety Net)
@@ -302,11 +287,6 @@ export class GazeDataManager {
         // [FIX] Set Search Boundary for WPM Calculation
         // Prevents referencing old paragraph data (e.g. Line 0 of prev para)
         this.searchStartIndex = this.data ? this.data.length : 0;
-
-        // [RGT] Reset 'a' but keep 'b' (User Width Habit persists)
-        this.currentLineMinX = 99999;
-        this.isCollectingLineStart = true;
-        setTimeout(() => this.isCollectingLineStart = false, 200);
     }
 
     // NEW: Retrieve Pang Logs for Replay
@@ -757,21 +737,6 @@ export class GazeDataManager {
         if (bus) {
             bus.emit('pang');
         }
-
-        // --- RGT: Update 'b' (Global Max X) & Reset 'a' ---
-        // 1. Update Global Max (b) with current X (End of Line)
-        if (d0.x > this.globalMaxX) {
-            this.globalMaxX = d0.x;
-            // console.log(`[RGT] New Global Max (b): ${this.globalMaxX}`);
-        }
-
-        // 2. Start Collecting New Min X (a) for Next Line
-        this.currentLineMinX = 99999;
-        this.isCollectingLineStart = true;
-        setTimeout(() => {
-            this.isCollectingLineStart = false;
-            // console.log(`[RGT] Line Start (a) Locked: ${this.currentLineMinX}`);
-        }, 200);
 
         // --- 3. GAZE-BASED WPM CALCULATION (User Spec) ---
         // Logic:

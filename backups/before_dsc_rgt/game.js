@@ -1,10 +1,8 @@
 import { storyParagraphs } from './data/StoryContent.js';
-import { storyChapter1 } from './data/StoryContent_Dynamic.js';
 import { vocabList, midBossQuizzes, finalBossQuiz } from './data/QuizData.js';
 import { ScoreManager } from './managers/ScoreManager.js';
 import { SceneManager } from './managers/SceneManager.js';
 import { bus } from './core/EventBus.js';
-import { TextRenderer } from './TextRendererV2.js';
 
 const Game = {
     // Initialized in init()
@@ -198,17 +196,6 @@ const Game = {
 
         bus.on('rune_earned', (amount) => {
             this.scoreManager.addRunes(amount);
-        });
-
-        // [RGT] Handle Rune Word Trigger
-        bus.on('rune_touched', (runeId) => {
-            console.log(`[Game] Rune Triggered: ${runeId}`);
-            // Reward: +5 Runes
-            this.addRunes(5);
-            // FX: Spawn particles at last gaze position? Or at word position?
-            // TextRenderer handles visual pop. We just handle score.
-            // Maybe a sound effect?
-            // if (this.audioManager) this.audioManager.play('rune_collect');
         });
 
         // [COORDINATION] Link Gaze Data Manager
@@ -1015,15 +1002,6 @@ const Game = {
 
         this.wpm = wpm;
 
-        // [DSC Support] Re-render if currently reading? 
-        // For now, we assume this happens before reading. But if tweaked during reading:
-        if (Game.typewriter && Game.typewriter.renderer && Game.state.isTracking) {
-            // Optional: Trigger re-layout if live WPM change is needed
-            // const pIndex = Game.typewriter.currentParaIndex;
-            // const pData = Game.typewriter.paragraphs[pIndex];
-            // Game.typewriter.renderer.prepareDynamic({paragraphs:[pData]}, wpm);
-        }
-
         // --- CORE LOGIC: Reverse Calculation for Exact Timing ---
         this.wpmParams = this.calculateWPMAttributes(wpm);
         Game.targetChunkSize = this.wpmParams.chunkSize;
@@ -1143,11 +1121,6 @@ const Game = {
             if (typeof this.typewriter.checkGazeDistance === "function") {
                 this.typewriter.checkGazeDistance(x, y);
             }
-
-            // [RGT] Check Responsive Words
-            if (this.typewriter.renderer && typeof this.typewriter.renderer.checkRuneTriggers === 'function') {
-                this.typewriter.renderer.checkRuneTriggers(x, y);
-            }
         }
     },
 
@@ -1253,8 +1226,7 @@ Game.typewriter = {
     renderer: null,
 
     // Data (Content)
-    // Data (Content)
-    paragraphs: storyChapter1.paragraphs, // Use Dynamic Paragraphs
+    paragraphs: storyParagraphs,
     quizzes: midBossQuizzes,
 
     // --- FINAL BOSS DATA ---
@@ -1358,14 +1330,11 @@ Game.typewriter = {
             return;
         }
 
-        const paraData = this.paragraphs[this.currentParaIndex];
+        const text = this.paragraphs[this.currentParaIndex];
         console.log(`[Typewriter] Playing Para ${this.currentParaIndex}`);
 
-        // 1. Prepare Content (Dynamic DSC Mode)
-        // Wrap single paragraph in chapter structure for renderer
-        const currentWPM = Game.wpm || 150;
-        this.renderer.prepareDynamic({ paragraphs: [paraData] }, currentWPM);
-
+        // 1. Prepare Content
+        this.renderer.prepare(text);
         this.chunkIndex = 0;
         this.lineStats.clear(); // Reset reading stats for new page
 

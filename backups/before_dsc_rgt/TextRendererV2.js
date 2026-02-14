@@ -9,9 +9,8 @@
  * 3. Hit-Testing: Provides O(n) or optimized lookups for gaze-to-word mapping without browser recalculations.
  */
 import { bus } from "./core/EventBus.js";
-import { TextChunker } from "./utils/TextChunker.js";
 
-export class TextRenderer {
+class TextRenderer {
     constructor(containerId, options = {}) {
         // v2026-02-05-1215: Retroactive Animation
         this.containerId = containerId;
@@ -60,166 +59,10 @@ export class TextRenderer {
         this.container.style.textAlign = "left";
     }
 
-    prepareDynamic(chapterData, wpm = 150) {
-        if (!this.container) return;
-        this.cancelAllAnimations();
-
-        // Clear state
-        this.container.innerHTML = "";
-        this.words = [];
-        this.chunks = [];
-        this.lines = [];
-        this.isLayoutLocked = false;
-
-        if (!chapterData || !chapterData.paragraphs) return;
-
-        // Flatten paragraphs into single token stream
-        let allTokens = [];
-        let allHighlights = [];
-        let tokenOffset = 0;
-
-        chapterData.paragraphs.forEach(p => {
-            // Add paragraph break if needed? Usually text flows.
-            // But we might want a visual break.
-            // For now, simple concatenation.
-
-            p.tokens.forEach(t => {
-                allTokens.push(t);
-            });
-
-            if (p.vocab_highlights) {
-                p.vocab_highlights.forEach(h => {
-                    allHighlights.push({
-                        ...h,
-                        target_token_index: h.target_token_index + tokenOffset,
-                        originalParagraphId: p.id
-                    });
-                });
-            }
-            tokenOffset += p.tokens.length;
-        });
-
-        // Use DSC Algorithm to chunk text
-        console.log(`[TextRenderer] Preparing Dynamic Text for WPM: ${wpm}`);
-        const groupedChunks = TextChunker.process(allTokens, wpm, allHighlights);
-
-        // Render Chunks to DOM
-        let globalWordIndex = 0;
-
-        // Create Highlight Map for O(1) Lookup
-        const highlightMap = new Map();
-        allHighlights.forEach(h => highlightMap.set(h.target_token_index, h));
-
-        groupedChunks.forEach((chunkTokens, chunkIdx) => {
-            const currentChunkIndices = [];
-
-            chunkTokens.forEach((tokenObj) => {
-                // Determine if this is a Rune Word
-                // tokenObj has 'originalIndex' relative to 'allTokens' if passed correctly?
-                // Wait, TextChunker loop uses 'i' from 0..tokens.length.
-                // So tokenObj.originalIndex IS the global index if we passed allTokens.
-                const isRuneWord = highlightMap.has(tokenObj.originalIndex);
-                const highlightData = highlightMap.get(tokenObj.originalIndex);
-
-                // Create Span
-                const span = document.createElement("span");
-                span.className = "tr-word";
-                if (isRuneWord) {
-                    span.classList.add("rune-word");
-                    span.dataset.wordId = highlightData.word_id;
-                    // Initial Style for Rune Word?
-                    // Bold? Glow? Handled by CSS or Logic later.
-                    // span.style.fontWeight = "bold"; // Example default
-                }
-
-                span.style.color = "#ffffff"; // Default
-                span.style.opacity = "0";
-                span.style.marginRight = this.options.wordSpacing;
-                span.style.display = "inline-block";
-                span.style.lineHeight = "1.2";
-                span.style.verticalAlign = "middle";
-                span.dataset.index = globalWordIndex;
-                span.textContent = tokenObj.t;
-
-                this.container.appendChild(span);
-
-                // Add to system
-                this.words.push({
-                    element: span,
-                    text: tokenObj.t,
-                    index: globalWordIndex,
-                    rect: null,
-                    isRuneWord: isRuneWord,
-                    runeId: isRuneWord ? highlightData.word_id : null
-                });
-
-                currentChunkIndices.push(globalWordIndex);
-                globalWordIndex++;
-            });
-
-            this.chunks.push(currentChunkIndices);
-        });
-
-        console.log(`[TextRenderer] Dynamic Layout: ${this.chunks.length} chunks from ${allTokens.length} tokens.`);
-
-        // Common Setup
-        this.addVisualAugments();
-        this.paginate();
-    }
-
-    addVisualAugments() {
-        // Reset Pagination State
-        this.pages = [];
-        this.currentPageIndex = 0;
-        this.validatedLines = new Set();
-
-        // Remove old layers
-        const oldLayer = document.getElementById("pang-marker-layer");
-        if (oldLayer) oldLayer.remove();
-
-        const oldCursor = document.querySelector('.tr-cursor');
-        if (oldCursor) oldCursor.remove();
-
-        // Create Cursor
-        this.cursor = document.createElement("span");
-        this.cursor.className = "tr-cursor";
-        this.cursor.style.position = "fixed";
-        this.cursor.style.top = "-1000px";
-        this.cursor.style.left = "-1000px";
-        this.cursor.style.zIndex = "9999";
-        this.cursor.style.pointerEvents = "none";
-        this.cursor.style.opacity = "0";
-        this.cursor.style.backgroundColor = "transparent";
-        document.body.appendChild(this.cursor);
-
-        // Create Impact
-        if (!this.impactElement) {
-            this.impactElement = document.createElement('div');
-            this.impactElement.id = "tr-impact-effect";
-            this.impactElement.style.position = "fixed";
-            this.impactElement.style.borderRadius = "50%";
-            this.impactElement.style.backgroundColor = "magenta";
-            this.impactElement.style.boxShadow = "0 0 15px magenta";
-            this.impactElement.style.zIndex = "999999";
-            this.impactElement.style.pointerEvents = "none";
-            this.impactElement.style.opacity = "0";
-            this.impactElement.style.width = "10px";
-            this.impactElement.style.height = "10px";
-            document.body.appendChild(this.impactElement);
-        }
-
-        if (this.words.length > 0) {
-            setTimeout(() => {
-                this.updateCursor(this.words[0], 'start');
-                this.cursor.style.opacity = '0';
-            }, 50);
-        }
-
-        this.lastReturnTime = Date.now() + 2000;
-    }
-
     prepare(rawText) {
         if (!this.container) return;
+
+        // 0. Safety First: Stop any previous rendering
         this.cancelAllAnimations();
 
         // Clear previous state
@@ -231,9 +74,7 @@ export class TextRenderer {
 
         if (!rawText) return;
 
-        // ... Legacy Logic ...
-
-        // --- DYNAMIC CHUNKING LOGIC (Legacy Mode) ---
+        // --- DYNAMIC CHUNKING LOGIC (Sync with WPM Preview) ---
         // 1. Get Target Chunk Size (Default to 4 if not set)
         const targetSize = (typeof Game !== 'undefined' && Game.targetChunkSize) ? Game.targetChunkSize : 4;
         console.log(`[TextRenderer] Preparing text with Chunk Size: ${targetSize}`);
@@ -248,7 +89,7 @@ export class TextRenderer {
         let wordCountInChunk = 0;
 
         rawWords.forEach((w, index) => {
-            // ... legacy rendering ...
+            // Create Span for Word
             const span = document.createElement("span");
             span.className = "tr-word";
             span.style.color = "#ffffff";
@@ -261,27 +102,106 @@ export class TextRenderer {
             span.textContent = w;
 
             this.container.appendChild(span);
-            this.words.push({ element: span, text: w, index: index, rect: null });
+            this.words.push({
+                element: span,
+                text: w,
+                index: index,
+                rect: null
+            });
 
+            // Add to current chunk
             currentChunkIndices.push(index);
             wordCountInChunk++;
 
+            // --- CHUNK CUTTING LOGIC ---
+            // Cut if: Punctuation OR Target Size reached
             const isPunctuation = w.includes('.') || w.includes('?') || w.includes('!') || w.includes(',') || w.includes(';') || w.includes(':');
 
             if (isPunctuation || wordCountInChunk >= targetSize) {
+                // Register this chunk
                 this.chunks.push(currentChunkIndices);
+
+                // Reset for next chunk
                 currentChunkIndices = [];
                 wordCountInChunk = 0;
             }
         });
 
-        if (currentChunkIndices.length > 0) this.chunks.push(currentChunkIndices);
+        // Register any remaining words as the last chunk
+        if (currentChunkIndices.length > 0) {
+            this.chunks.push(currentChunkIndices);
+        }
 
-        this.addVisualAugments();
+        console.log(`[TextRenderer] Created ${this.chunks.length} chunks from ${rawWords.length} words.`);
+
+        // Reset Pagination State
+        this.pages = [];
+        this.currentPageIndex = 0;
+
+        // [NEW] Track Validated Lines for Replay
+        this.validatedLines = new Set();
+
+        // Remove old marker layer if exists
+        const oldLayer = document.getElementById("pang-marker-layer");
+        if (oldLayer) oldLayer.remove();
+
+
+
+        // 3. Add a "cursor" element
+        const oldCursor = document.querySelector('.tr-cursor');
+        if (oldCursor) oldCursor.remove();
+
+        // Remove existing impact element (cleanup)
+        if (this.impactElement && this.impactElement.parentNode) {
+            this.impactElement.parentNode.removeChild(this.impactElement);
+            this.impactElement = null;
+        }
+
+        this.cursor = document.createElement("span");
+        this.cursor.className = "tr-cursor";
+        this.cursor.style.position = "fixed";
+        this.cursor.style.top = "-1000px";
+        this.cursor.style.left = "-1000px";
+        this.cursor.style.zIndex = "9999";
+        this.cursor.style.pointerEvents = "none";
+        this.cursor.style.opacity = "0"; // Force hidden (Guide Runner Invisible)
+        this.cursor.style.backgroundColor = "transparent"; // Ensure transparent
+
+        document.body.appendChild(this.cursor);
+
+        // 4. Pre-create Impact Element
+        this.impactElement = document.createElement('div');
+        this.impactElement.id = "tr-impact-effect";
+        this.impactElement.style.position = "fixed";
+        this.impactElement.style.borderRadius = "50%";
+        // [User Request] Revert: Pang Effect MUST be visible (Magenta)
+        this.impactElement.style.backgroundColor = "magenta";
+        this.impactElement.style.boxShadow = "0 0 15px magenta";
+        this.impactElement.style.zIndex = "999999";
+        this.impactElement.style.pointerEvents = "none";
+        this.impactElement.style.opacity = "0"; // Initially hidden
+        this.impactElement.style.width = "10px";
+        this.impactElement.style.height = "10px";
+        document.body.appendChild(this.impactElement);
+
+        if (this.words.length > 0) {
+            setTimeout(() => {
+                this.updateCursor(this.words[0], 'start');
+                this.cursor.style.opacity = '0'; // Keep hidden
+                this.cursor.style.backgroundColor = 'transparent';
+                console.log("[TextRenderer] Initial Cursor Posed at Word 0");
+            }, 50);
+        }
+
+        // FIX: Prevent immediate "false positive" return effect on game start
+        this.lastReturnTime = Date.now() + 2000;
+
+        // 5. Automatic Pagination
+        // We need to wait for layout to settle (rendering) before calculating height overflow.
+        // But since we want to hide overflow immediately, let's do it next frame.
+        // However, `prepare` is synchronous. Let's assume the caller will handle `showPage(0)`.
         this.paginate();
     }
-
-    /* paginate() { ... } */
 
     paginate() {
         if (!this.container || this.words.length === 0) return;
@@ -589,85 +509,6 @@ export class TextRenderer {
     scheduleFadeOut(chunkIndex, delayMs) {
         setTimeout(() => this.fadeOutChunk(chunkIndex), delayMs);
     }
-
-    // --- RGT (Relative Gaze Trigger) Logic ---
-    checkRuneTriggers(gazeX, gazeY) {
-        if (!this.lines || this.lines.length === 0) return;
-
-        const gdm = window.gazeDataManager;
-        if (!gdm) return;
-
-        // 1. Get 'a' and 'b' (User's Gaze Range)
-        const a = gdm.currentLineMinX;
-        const b = gdm.globalMaxX;
-
-        // Validation: If we don't have enough data yet, use conservative absolute hit test?
-        // Or just wait. 'a' defaults to 99999, 'b' to 0. 
-        if (a > 90000 || b <= a) {
-            // Not calibrated enough on this line/session.
-            // Fallback: Use viewport width as approximation?
-            // Let's just return to avoid false positives. 
-            // Standard hitTest (absolute) will handle click-like events if needed, 
-            // but for "responsive" effect, we want RGT.
-            return;
-        }
-
-        // 2. Normalized Gaze X (0.0 to 1.0)
-        let Gx_norm = (gazeX - a) / (b - a);
-        Gx_norm = Math.max(0, Math.min(1, Gx_norm)); // Clamp
-
-        // 3. Find Line near Gaze Y
-        // We expand the vertical tolerance because gaze Y is often inaccurate.
-        const LINE_TOLERANCE_Y = 60; // +/- 60px
-        const activeLine = this.lines.find(line => {
-            const midY = (line.rect.top + line.rect.bottom) / 2;
-            return Math.abs(gazeY - midY) < LINE_TOLERANCE_Y;
-        });
-
-        if (!activeLine) return;
-
-        // 4. Check Words in this Line
-        if (!this.containerRect) this.containerRect = this.container.getBoundingClientRect();
-        const containerWidth = this.containerRect.width;
-        const containerLeft = this.containerRect.left;
-
-        activeLine.wordIndices.forEach(idx => {
-            const word = this.words[idx];
-            if (!word.isRuneWord || word.activated) return; // Skip if normal or already done
-
-            // Calculate Word's Normalized Position in Container
-            // Center of word relative to container
-            const wordCenter = (word.rect.left + word.rect.right) / 2;
-            const Wx_norm = (wordCenter - containerLeft) / containerWidth;
-
-            // 5. Compare & Trigger
-            // Tolerance: How close/predictive? 
-            // 0.15 = 15% of screen width.
-            const diff = Math.abs(Gx_norm - Wx_norm);
-
-            // Heuristic: If gaze is 'ahead' or 'on', trigger.
-            // Overshoot handling is naturally done by 'a' and 'b' clamping.
-
-            if (diff < 0.15) {
-                this.activateRuneWord(word);
-            }
-        });
-    }
-
-    activateRuneWord(word) {
-        word.activated = true;
-        word.element.classList.add('active-rune'); // CSS Animation
-
-        console.log(`[RGT] Rune Word Triggered: "${word.text}" (ID: ${word.runeId})`);
-
-        // Emit Event for Game Logic (Score, FX)
-        // We use a small timeout to prevent blocking render loop
-        setTimeout(() => {
-            bus.emit('rune_touched', word.runeId);
-        }, 0);
-    }
-
-    // --- End RGT Logic ---
 
     hitTest(gx, gy) {
         // Must have lines

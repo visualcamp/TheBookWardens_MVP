@@ -980,3 +980,25 @@ span.tr-word.chunk-fade-out {
 .wpm-badge span#wpm-display {
   font-size: 1.2rem;
 }
+
+/* --- RGT (Responsive Words) Styles --- */
+.rune-word {
+  border-bottom: 2px dashed rgba(255, 215, 0, 0.4);
+  transition: all 0.3s ease;
+  cursor: help;
+  /* Indicate interactability */
+}
+
+/* Active State (Triggered by Gaze) */
+.rune-word.active-rune {
+  color: #ffd700 !important;
+  text-shadow: 0 0 10px gold;
+  border-bottom: 2px solid gold;
+  font-weight: bold;
+  transform: scale(1.1) !important;
+  /* Subtle Pop */
+  z-index: 10;
+  position: relative;
+  display: inline-block;
+  /* Ensure transform works */
+}
