@@ -10,57 +10,58 @@ export class TextChunker {
     static process(tokens, wpm, highlights = []) {
         const chunks = [];
         let currentChunk = [];
-        let targetSpan = Math.max(1, Math.round(wpm / 100)); // [ADJUSTED] Smaller chunks: 100 divisor (was 75)
 
-        // Safety constraint: Don't let chunks get too massive even at high speeds
-        const MAX_CHUNK_SIZE = 15;
+        // Define WPM Bands
+        let band = 'mid'; // Default
+        if (wpm < 150) band = 'low';       // Novice
+        else if (wpm < 250) band = 'mid';  // Apprentice (Target: 200)
+        else band = 'high';                // Master (300+)
 
         // Loop through tokens
         for (let i = 0; i < tokens.length; i++) {
             const token = tokens[i];
-            // Store original index for reference
             const tokenObj = { ...token, originalIndex: i };
             currentChunk.push(tokenObj);
 
             let shouldBreak = false;
+            const len = currentChunk.length;
 
-            // 1. Critical Break (Limit 4: Strongest Stop) - Always break
-            if (token.b === 4) {
-                shouldBreak = true;
+            // --- 0. Absolute Hard Breaks (Always Break) ---
+            if (token.b === 4) shouldBreak = true; // Paragraph/Sentence End
+
+            // --- 1. Band-Specific Logic ---
+            else if (band === 'low') {
+                // Novice: Very short chunks (1-2 words).
+                // Break on ANY pause (b>=1) if we have at least 1 word.
+                // Force break at 3 words.
+                if (len >= 3) shouldBreak = true;
+                else if (len >= 1 && token.b >= 1) shouldBreak = true;
             }
-            // 2. Check if we reached target size
-            else if (currentChunk.length >= targetSpan) {
-                // Adaptive Logic based on WPM band
-                if (wpm < 150) {
-                    // Low Speed: Break on any weak boundary (b >= 2)
-                    if (token.b >= 2) {
-                        shouldBreak = true;
-                    }
-                } else if (wpm < 300) {
-                    // Mid Speed: Break on medium boundary (b >= 3)
-                    if (token.b >= 3) {
-                        shouldBreak = true;
-                    }
-                } else {
-                    // High Speed: Ignore b=2,3. Just break on count (or b=4 caught above)
-                    // We simply break because we filled the span.
-                    shouldBreak = true;
-                }
+            else if (band === 'mid') {
+                // Apprentice (200 WPM): Sense Groups (3-4 words).
+                // [THE FIX]: Before, we waited for b>=3. Now we break on b>=2 (commas/phrases).
+                // Also, Force break at 5 words max.
+                if (len >= 5) shouldBreak = true; // Hard Limit
+                else if (len >= 3 && token.b >= 2) shouldBreak = true; // Normal flow
+                else if (len >= 2 && token.b >= 3) shouldBreak = true; // Short phrase end
+            }
+            else { // 'high'
+                // Master: Long chunks (6-8 words).
+                // Ignore small pauses. Break on strong pauses (b>=3).
+                if (len >= 10) shouldBreak = true; // Hard Limit
+                else if (len >= 6 && token.b >= 2) shouldBreak = true;
+                else if (len >= 4 && token.b >= 3) shouldBreak = true;
             }
 
-            // 3. Safety: Force break if too long
-            if (currentChunk.length >= MAX_CHUNK_SIZE) {
-                shouldBreak = true;
-            }
-
-            // 4. End of Data
-            if (i === tokens.length - 1) {
-                shouldBreak = true;
-            }
+            // --- 2. End of Data ---
+            if (i === tokens.length - 1) shouldBreak = true;
 
             if (shouldBreak) {
-                chunks.push([...currentChunk]);
-                currentChunk = [];
+                // Prevent empty chunks (sanity check)
+                if (currentChunk.length > 0) {
+                    chunks.push([...currentChunk]);
+                    currentChunk = [];
+                }
             }
         }
 
