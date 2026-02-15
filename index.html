@@ -13,12 +13,14 @@
   <link rel="stylesheet" href="./css/fx.css" />
   <link rel="stylesheet" href="./css/rift.css" />
   <link rel="stylesheet" href="./css/rift-book.css" />
+  <link rel="stylesheet" href="./css/alice-battle.css?v=5.00" />
   <link rel="stylesheet" href="./css/loading-modal.css" />
 
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <script src="./js/firebase-config.js"></script>
+  <script type="module" src="./js/game/alice-battle.js"></script>
 
   <script src="./coi-serviceworker.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -854,9 +856,74 @@
     </div>
   </div>
 
+  <!-- SCREEN: Alice Battlefield (Reordered Conflict) -->
+  <div id="screen-alice-battle" class="screen" style="display:none;">
+    <div id="alice-game-ui">
+      <!-- Top Entity Area (RED QUEEN) -->
+      <div class="entity-area villain">
+        <div class="avatar" id="villain-avatar">👑</div>
+        <div class="card-container">
+          <div id="v-card-queen" class="card"><i>♥️</i><span>QUEEN</span>
+            <div class="power-val" id="v-val-queen">100</div>
+          </div>
+          <div id="v-card-king" class="card"><i>♠️</i><span>KING</span>
+            <div class="power-val" id="v-val-king">60</div>
+          </div>
+          <div id="v-card-joker" class="card"><i>♣️</i><span>JOKER</span>
+            <div class="power-val" id="v-val-joker">40</div>
+          </div>
+        </div>
+        <div class="status-bar">
+          <div class="hp" id="villain-hp"></div>
+        </div>
+        <div class="entity-name" style="color: #ff4d4d;">RED QUEEN</div>
+      </div>
+
+      <div class="middle-text" id="alice-text">
+        "Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing to do: once
+        or twice she had peeped into the book her sister was reading..."
+      </div>
+
+      <!-- Bottom Entity Area (WARDEN ALICE) -->
+      <div class="entity-area warden">
+        <div class="entity-name" style="color: #4da6ff;">WARDEN ALICE</div>
+        <div class="status-bar">
+          <div class="hp" id="warden-hp"></div>
+        </div>
+        <div class="card-container">
+          <div id="card-ink" class="card" onclick="Game.AliceBattle.triggerAttack('ink')"><i>✒️</i><span>INK</span>
+            <div class="power-val" id="val-ink">190</div>
+          </div>
+          <div id="card-rune" class="card" onclick="Game.AliceBattle.triggerAttack('rune')"><i>🌀</i><span>RUNE</span>
+            <div class="power-val" id="val-rune">30</div>
+          </div>
+          <div id="card-gem" class="card" onclick="Game.AliceBattle.triggerAttack('gem')"><i>💎</i><span>GEM</span>
+            <div class="power-val" id="val-gem">50</div>
+          </div>
+        </div>
+        <div class="avatar" id="warden-avatar">👧</div>
+      </div>
+
+      <div class="battle-log" id="al-log">Battle started...</div>
+    </div>
+
+    <div id="alice-final-screen">
+      <div id="result-header" class="result-header">RESULT</div>
+      <div id="story-display" class="story-container"></div>
+      <button id="alice-restart-btn" onclick="Game.AliceBattle.resetGame()">Try Again</button>
+    </div>
+
+    <canvas id="alice-canvas"></canvas>
+  </div>
+
   <!-- Scripts -->
   <!-- 1. Eye Tracking Core -->
   <script type="module" src="./js/app.js?v=260214_1203"></script>
+  <script type="module">
+    import { AliceBattle } from './js/alice-battle.js';
+    // Expose to Global Game Object when it becomes available
+    window.AliceBattleRef = AliceBattle;
+  </script>
   <!-- 2. Game Logic -->
   <script src="./js/calibration.js?v=260214_1203"></script>
   <script type="module" src="./js/game.js?v=260214_1203"></script>
