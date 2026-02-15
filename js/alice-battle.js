@@ -31,7 +31,7 @@ export const AliceBattle = {
     },
 
     init() {
-        alert("Debug: AliceBattle.init() STARTED!");
+        // alert("Debug: AliceBattle.init() STARTED!");
         try {
             console.log("Initializing Alice Battle...");
             const container = document.getElementById('screen-alice-battle');
@@ -39,18 +39,18 @@ export const AliceBattle = {
                 container.style.display = 'flex';
                 container.classList.add('active');
             } else {
-                alert("CRITICAL: Container #screen-alice-battle NOT FOUND!");
+                console.error("CRITICAL: Container #screen-alice-battle NOT FOUND!");
             }
 
             this.canvas = document.getElementById('alice-canvas');
             if (!this.canvas) {
-                alert("CRITICAL: Canvas #alice-canvas NOT FOUND!");
+                console.error("CRITICAL: Canvas #alice-canvas NOT FOUND!");
                 return;
             }
             this.ctx = this.canvas.getContext('2d');
 
             this.ui.gameUi = document.getElementById('alice-game-ui');
-            if (!this.ui.gameUi) alert("CRITICAL: #alice-game-ui NOT FOUND!");
+            if (!this.ui.gameUi) console.error("CRITICAL: #alice-game-ui NOT FOUND!");
 
             this.ui.villainHp = document.getElementById('villain-hp');
             this.ui.wardenHp = document.getElementById('warden-hp');
@@ -64,17 +64,17 @@ export const AliceBattle = {
             window.addEventListener('resize', () => this.resize());
 
             // Reset State
-            alert("Debug: Resetting Game State...");
+            // alert("Debug: Resetting Game State...");
             this.resetGame();
 
             // Start Loop
             if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
             this.animate();
-            alert("Debug: AliceBattle Init COMPLETE! Loop Started.");
+            // alert("Debug: AliceBattle Init COMPLETE! Loop Started.");
 
         } catch (e) {
-            alert("CRITICAL INIT ERROR: " + e.message);
-            console.error(e);
+            console.error("CRITICAL INIT ERROR:", e);
+            alert("Error initializing Alice Battle: " + e.message);
         }
     },
 

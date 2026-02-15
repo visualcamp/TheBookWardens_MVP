@@ -48,8 +48,6 @@
     transition: opacity 1s ease;
     opacity: 1 !important;
     /* Safety fallback */
-    border: 2px solid rgba(255, 0, 0, 0.3);
-    /* Visual Debug */
 }
 
 #screen-alice-battle .entity-area {
