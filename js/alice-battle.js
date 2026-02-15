@@ -32,6 +32,12 @@ export const AliceBattle = {
 
     init() {
         console.log("Initializing Alice Battle...");
+        const container = document.getElementById('screen-alice-battle');
+        if (container) {
+            container.style.display = 'flex';
+            container.classList.add('active');
+        }
+
         this.canvas = document.getElementById('alice-canvas');
         if (!this.canvas) return;
         this.ctx = this.canvas.getContext('2d');
