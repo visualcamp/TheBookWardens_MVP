@@ -1192,6 +1192,7 @@ const Game = {
     // --- NEW: Enriched Game Flow (Debug / Implementation) ---
     // --- NEW: Alice Battlefield Integration ---
     debugFinalVillain() {
+        alert("Debug: debugFinalVillain() CALLED!");
         console.log("Starting Alice Battlefield...");
 
         // Switch to new screen
@@ -1199,12 +1200,15 @@ const Game = {
 
         // Initialize if available
         if (this.AliceBattle) {
+            alert("Debug: this.AliceBattle exists! Init...");
             this.AliceBattle.init();
         } else if (window.AliceBattleRef) {
+            alert("Debug: window.AliceBattleRef found! Assigning...");
             this.AliceBattle = window.AliceBattleRef;
             this.AliceBattle.init();
         } else {
-            alert("AliceBattle module not loaded! check index.html imports.");
+            alert("CRITICAL: AliceBattle module NOT loaded! Check console.");
+            console.error("AliceBattle missing. Window keys:", Object.keys(window));
         }
     },
     goToNewScore() {

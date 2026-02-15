@@ -31,6 +31,7 @@ export const AliceBattle = {
     },
 
     init() {
+        alert("Debug: AliceBattle.init() STARTED!");
         console.log("Initializing Alice Battle...");
         const container = document.getElementById('screen-alice-battle');
         if (container) {

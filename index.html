@@ -921,7 +921,11 @@
   <!-- Scripts -->
   <!-- 1. Eye Tracking Core -->
   <script type="module" src="./js/app.js?v=260214_1203"></script>
-  <script type="module" src="./js/alice-battle.js?v=5.01_FIX_PATH"></script>
+  <script type="module">
+    import { AliceBattle } from './js/alice-battle.js?v=5.02_DEBUG_ALERT';
+    window.AliceBattleRef = AliceBattle;
+    console.log("AliceBattle Module Loaded");
+  </script>
   <!-- 2. Game Logic -->
   <script src="./js/calibration.js?v=260214_1203"></script>
   <script type="module" src="./js/game.js?v=260214_1203"></script>
