@@ -1917,6 +1917,21 @@ Game.typewriter = {
                 // Initialize Battle Module Logic
                 if (window.AliceBattleRef) {
                     console.log("[Battle] Initializing AliceBattle Module...");
+
+                    // Expose to Game object for inline HTML handlers (if any remain active)
+                    if (window.Game) {
+                        window.Game.AliceBattle = window.AliceBattleRef;
+                    }
+
+                    // Force Canvas Display & Resize
+                    const canvas = document.getElementById('alice-canvas');
+                    if (canvas) {
+                        canvas.style.display = 'block';
+                        canvas.style.zIndex = '25'; // Ensure above UI (which is 10)
+                        canvas.width = window.innerWidth;
+                        canvas.height = window.innerHeight;
+                    }
+
                     window.AliceBattleRef.init();
                 } else {
                     console.warn("[Battle] AliceBattleRef not found! Fallback to manual binding.");
