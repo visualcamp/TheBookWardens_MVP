@@ -1123,10 +1123,16 @@
   <!-- Scripts -->
   <!-- 1. Eye Tracking Core -->
   <script type="module" src="./js/app.js?v=CLOSURE_FIX"></script>
-  <script type="module">
-    import { AliceBattle } from './js/alice-battle.js?v=CLOSURE_FIX';
-    window.AliceBattleRef = AliceBattle;
-    console.log("AliceBattle Module Loaded (DEBUG_FORCE_INIT)");
+  <!-- Alice Battle Logic (Simplifed Global) -->
+  <script src="./js/alice-battle-simple.js?v=GLOBAL_FIX"></script>
+  <script>
+    // Ensure Game.AliceBattle is linked if needed
+    window.addEventListener('load', () => {
+      if (window.Game && window.AliceBattleRef) {
+        window.Game.AliceBattle = window.AliceBattleRef;
+        console.log("Linked Game.AliceBattle to AliceBattleRef");
+      }
+    });
   </script>
   <!-- 2. Game Logic -->
   <script src="./js/calibration.js?v=DEBUG_FORCE_INIT"></script>
