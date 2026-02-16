@@ -5,7 +5,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SeeSo Eye Tracking Web Demo</title>
-  <link rel="stylesheet" href="./css/style.css?v=260216_2041" />
+  <link rel="stylesheet" href="./css/style.css?v=260216_2052" />
   <link rel="stylesheet" href="./css/rune-game.css" />
   <link rel="stylesheet" href="./css/rabbit.css" />
   <link rel="stylesheet" href="./css/splash.css" />
@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="./css/fx.css" />
   <link rel="stylesheet" href="./css/rift.css" />
   <link rel="stylesheet" href="./css/rift-book.css" />
-  <link rel="stylesheet" href="./css/alice-battle.css?v=5.05" />
+  <link rel="stylesheet" href="./css/alice-battle.css?v=5.06" />
   <link rel="stylesheet" href="./css/loading-modal.css" />
 
   <!-- Firebase SDK (Compat) -->
@@ -197,6 +197,132 @@
       transform: scale(0.95) !important;
       background: #444 !important;
       color: #fff !important;
+    }
+
+    /* --- [NEW] Visual-Only Alice Battle Mode Styles (Independent) --- */
+    #screen-final-boss.alice-battle-mode {
+      /* Override default column layout slightly */
+      justify-content: space-between !important;
+      padding-top: 20px;
+      padding-bottom: 20px;
+      box-sizing: border-box;
+    }
+
+    #screen-final-boss.alice-battle-mode .entity-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      position: relative;
+      z-index: 10;
+    }
+
+    #screen-final-boss.alice-battle-mode .avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 3px solid rgba(255, 255, 255, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 40px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    #screen-final-boss.alice-battle-mode .villain .avatar {
+      border-color: #ff4d4d;
+      color: #ff4d4d;
+      box-shadow: 0 0 20px rgba(255, 0, 0, 0.3);
+      animation: pulseRed 2s infinite;
+    }
+
+    @keyframes pulseRed {
+      0% {
+        transform: scale(1);
+        box-shadow: 0 0 20px rgba(255, 0, 0, 0.3);
+      }
+
+      50% {
+        transform: scale(1.05);
+        box-shadow: 0 0 30px rgba(255, 0, 0, 0.6);
+      }
+
+      100% {
+        transform: scale(1);
+        box-shadow: 0 0 20px rgba(255, 0, 0, 0.3);
+      }
+    }
+
+    #screen-final-boss.alice-battle-mode .warden .avatar {
+      border-color: #4da6ff;
+      color: #4da6ff;
+      box-shadow: 0 0 20px rgba(0, 200, 255, 0.3);
+    }
+
+    #screen-final-boss.alice-battle-mode .card-container {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin: 5px 0;
+    }
+
+    #screen-final-boss.alice-battle-mode .card {
+      width: 60px;
+      height: 85px;
+      background: rgba(20, 20, 25, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6);
+      position: relative;
+    }
+
+    #screen-final-boss.alice-battle-mode .card i {
+      font-size: 1.2rem;
+      margin-bottom: 2px;
+    }
+
+    #screen-final-boss.alice-battle-mode .card span {
+      font-size: 0.6rem;
+      font-weight: bold;
+      letter-spacing: 1px;
+      opacity: 0.8;
+    }
+
+    #screen-final-boss.alice-battle-mode .status-bar {
+      width: 150px;
+      height: 8px;
+      background: #333;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid #555;
+    }
+
+    #screen-final-boss.alice-battle-mode .hp {
+      height: 100%;
+      width: 100%;
+      /* Full HP for visual mode */
+    }
+
+    #screen-final-boss.alice-battle-mode .middle-text {
+      flex-grow: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.3);
+      /* Subtle */
+      font-family: 'Crimson Text', serif;
+      font-style: italic;
+      padding: 0 30px;
+      line-height: 1.6;
+      font-size: 1.1rem;
+      user-select: none;
     }
   </style>
 </head>
@@ -989,15 +1115,16 @@
 
   <!-- Scripts -->
   <!-- 1. Eye Tracking Core -->
-  <script type="module" src="./js/app.js?v=260214_1203"></script>
+  <script type="module" src="./js/app.js?v=260216_2052"></script>
   <script type="module">
-    import { AliceBattle } from './js/alice-battle.js?v=5.02_DEBUG_ALERT';
+    import { AliceBattle } from './js/alice-battle.js?v=5.06_FIXED';
     window.AliceBattleRef = AliceBattle;
-    console.log("AliceBattle Module Loaded");
+    // Game.AliceBattle is now handled in game.js import
+    console.log("AliceBattle Module Loaded (v5.06)");
   </script>
   <!-- 2. Game Logic -->
-  <script src="./js/calibration.js?v=260214_1203"></script>
-  <script type="module" src="./js/game.js?v=260214_1203"></script>
+  <script src="./js/calibration.js?v=260216_2052"></script>
+  <script type="module" src="./js/game.js?v=260216_2052"></script>
 </body>
 
 </html>
