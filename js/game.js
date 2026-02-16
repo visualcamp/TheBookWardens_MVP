@@ -1878,10 +1878,62 @@ Game.typewriter = {
         Game.switchScreen("screen-final-boss");
         console.log("[Game] Alice Battle Visual Mode Activated.");
 
+        // [DEBUG] Visual Inspector Tool for User
+        this.debugScreenState("screen-final-boss");
+
         // Optional: Trigger any entrance animation if needed
         const villainArea = document.querySelector("#screen-final-boss .villain");
         if (villainArea) {
             villainArea.style.animation = "float 3s infinite ease-in-out";
+        }
+    },
+
+    // [New] Debug Tool: Visual Inspector Overlay
+    debugScreenState(screenId) {
+        const el = document.getElementById(screenId);
+        if (!el) {
+            console.error(`[Debug] Element #${screenId} NOT FOUND!`);
+            return;
+        }
+
+        // Create Debug Overlay if not exists
+        let debugBox = document.getElementById("debug-inspector");
+        if (!debugBox) {
+            debugBox = document.createElement("div");
+            debugBox.id = "debug-inspector";
+            debugBox.style.cssText = "position:fixed; top:10px; left:10px; background:rgba(0,0,0,0.8); color:#0f0; border:2px solid #0f0; padding:10px; z-index:99999; font-family:monospace; font-size:12px; pointer-events:auto;";
+            document.body.appendChild(debugBox);
+        }
+
+        // Status Update Loop
+        const updateStatus = () => {
+            const style = window.getComputedStyle(el);
+            debugBox.innerHTML = `
+                <strong>Target: #${screenId}</strong><br>
+                Display: ${style.display} <br>
+                Opacity: ${style.opacity} <br>
+                Visibility: ${style.visibility} <br>
+                Z-Index: ${style.zIndex} <br>
+                Width: ${style.width} / Height: ${style.height} <br>
+                <br>
+                <button onclick="Game.forceShowScreen('${screenId}')" style="background:red; color:white; border:none; padding:5px; cursor:pointer;">FORCE SHOW</button>
+                <button onclick="this.parentElement.remove()" style="background:#444; color:white; border:none; padding:5px; margin-left:5px; cursor:pointer;">CLOSE</button>
+            `;
+            if (document.getElementById("debug-inspector")) requestAnimationFrame(updateStatus);
+        };
+        updateStatus();
+    },
+
+    // [New] Debug Action: Force Show
+    forceShowScreen(screenId) {
+        const el = document.getElementById(screenId);
+        if (el) {
+            el.style.display = "flex";
+            el.style.opacity = "1";
+            el.style.visibility = "visible";
+            el.style.zIndex = "30000"; // Ensure top layer
+            el.style.backgroundColor = "#222"; // Ensure background is visible
+            console.log(`[Debug] Forced Show on #${screenId}`);
         }
     },
 
