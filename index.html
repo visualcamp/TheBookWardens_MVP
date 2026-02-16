@@ -5,7 +5,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SeeSo Eye Tracking Web Demo</title>
-  <link rel="stylesheet" href="./css/style.css?v=260216_1835" />
+  <link rel="stylesheet" href="./css/style.css?v=260216_2041" />
   <link rel="stylesheet" href="./css/rune-game.css" />
   <link rel="stylesheet" href="./css/rabbit.css" />
   <link rel="stylesheet" href="./css/splash.css" />
@@ -13,13 +13,17 @@
   <link rel="stylesheet" href="./css/fx.css" />
   <link rel="stylesheet" href="./css/rift.css" />
   <link rel="stylesheet" href="./css/rift-book.css" />
-  <link rel="stylesheet" href="./css/alice-battle.css?v=5.04" />
+  <link rel="stylesheet" href="./css/alice-battle.css?v=5.05" />
   <link rel="stylesheet" href="./css/loading-modal.css" />
 
   <!-- Firebase SDK (Compat) -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <script src="./js/firebase-config.js"></script>
+  <script type="module">
+    import { AliceBattle } from './js/alice-battle.js?v=5.01_FIX_PATH';
+    window.AliceBattleRef = AliceBattle;
+  </script>
   <script src="./coi-serviceworker.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
@@ -568,24 +572,93 @@
       </div>
     </section>
 
-    <!-- SCREEN 3.5: FINAL BOSS (Comprehension Challenge) -->
-    <section id="screen-final-boss" class="screen"
-      style="background: linear-gradient(135deg, #000 0%, #2a0a38 100%); flex-direction: column;">
-      <!-- <h1 style="color: #ff0000; font-size: 2.5rem; text-shadow: 0 0 20px #ff0000; margin-bottom: 10px;">THE ARCH-VILLAIN</h1> -->
-      <!-- <p style="color: #ccc; margin-bottom: 20px;">"You have gathered the ink, but do you understand the story?"</p> -->
+    <!-- SCREEN 3.5: FINAL BOSS (Comprehension Challenge) -> REPLACED WITH ALICE BATTLE VISUAL -->
+    <section id="screen-final-boss" class="screen alice-battle-mode"
+      style="background: linear-gradient(135deg, #000 0%, #2a0a38 100%); flex-direction: column; display:none;">
 
-      <img src="./ink_shadow_boss.png" class="villain-img" alt="The Arch-Villain"
-        style="width: 180px; filter: hue-rotate(280deg) drop-shadow(0 0 20px red);">
+      <!-- INJECTED ALICE BATTLE STRUCTURE (VISUAL ONLY) -->
+      <div id="alice-game-ui"
+        style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 10px; box-sizing: border-box;">
 
-      <div class="boss-dialogue"
-        style="border: 2px solid #ff4444; background: rgba(50, 0, 0, 0.8); padding: 5px 10px; border-radius: 10px; max-width: 600px;">
-        <h3 style="margin: 0 0 5px 0; color: #ff4444;">Final Challenge:</h3>
-        <p id="final-boss-question" style="font-size: 1.2rem; margin: 5px 0;">...</p>
+        <!-- Top Entity Area (RED QUEEN) -->
+        <div class="entity-area villain"
+          style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+          <div class="avatar" id="villain-avatar" style="font-size: 3rem;">👑</div>
+          <div class="card-container" style="display: flex; gap: 5px; justify-content: center; margin: 5px 0;">
+            <!-- Static Cards (No Click) -->
+            <div class="card"
+              style="border: 1px solid #444; padding: 5px; background: #222; text-align: center; width: 60px;">
+              <i style="color:red;">♥️</i><span>QUEEN</span>
+              <div class="power-val" style="color:#aaa;">100</div>
+            </div>
+            <div class="card"
+              style="border: 1px solid #444; padding: 5px; background: #222; text-align: center; width: 60px;">
+              <i style="color:red;">♠️</i><span>KING</span>
+              <div class="power-val" style="color:#aaa;">60</div>
+            </div>
+            <div class="card"
+              style="border: 1px solid #444; padding: 5px; background: #222; text-align: center; width: 60px;">
+              <i style="color:red;">♣️</i><span>JOKER</span>
+              <div class="power-val" style="color:#aaa;">40</div>
+            </div>
+          </div>
+
+          <!-- Health Bar -->
+          <div class="status-bar"
+            style="width: 200px; height: 10px; background: #555; border-radius: 5px; overflow: hidden; margin-top: 5px;">
+            <div class="hp" style="width: 100%; height: 100%; background: #ff4d4d;"></div>
+          </div>
+          <div class="entity-name" style="color: #ff4d4d; font-weight: bold; margin-top: 5px;">RED QUEEN</div>
+        </div>
+
+        <!-- Middle Text -->
+        <div class="middle-text" id="alice-text"
+          style="text-align: center; color: #ccc; font-family: 'Crimson Text', serif; font-size: 1.1rem; padding: 20px; font-style: italic;">
+          "Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing to do: once
+          or twice she had peeped into the book her sister was reading..."
+        </div>
+
+        <!-- Bottom Entity Area (WARDEN ALICE) -->
+        <div class="entity-area warden"
+          style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+          <div class="entity-name" style="color: #4da6ff; font-weight: bold; margin-bottom: 5px;">WARDEN ALICE</div>
+
+          <!-- Health Bar -->
+          <div class="status-bar"
+            style="width: 200px; height: 10px; background: #555; border-radius: 5px; overflow: hidden; margin-bottom: 5px;">
+            <div class="hp" style="width: 100%; height: 100%; background: #4da6ff;"></div>
+          </div>
+
+          <div class="card-container" style="display: flex; gap: 5px; justify-content: center; margin: 5px 0;">
+            <!-- Static Cards (No Click) -->
+            <div class="card"
+              style="border: 1px solid #444; padding: 5px; background: #222; text-align: center; width: 60px; cursor: default;">
+              <i style="color:cyan;">✒️</i><span>INK</span>
+              <div class="power-val" style="color:#aaa;">190</div>
+            </div>
+            <div class="card"
+              style="border: 1px solid #444; padding: 5px; background: #222; text-align: center; width: 60px; cursor: default;">
+              <i style="color:cyan;">🌀</i><span>RUNE</span>
+              <div class="power-val" style="color:#aaa;">30</div>
+            </div>
+            <div class="card"
+              style="border: 1px solid #444; padding: 5px; background: #222; text-align: center; width: 60px; cursor: default;">
+              <i style="color:cyan;">💎</i><span>GEM</span>
+              <div class="power-val" style="color:#aaa;">50</div>
+            </div>
+          </div>
+          <div class="avatar" id="warden-avatar" style="font-size: 3rem;">👧</div>
+        </div>
+
+        <div class="battle-log" id="al-log"
+          style="text-align: center; color: #888; font-size: 0.8rem; margin-top: 10px;">Battle started...</div>
       </div>
 
-      <div id="final-boss-options" class="quiz-options" style="width: 100%; max-width: 600px; margin-top: 15px;">
-        <!-- Options injected via JS -->
-      </div>
+      <!-- Click to Win Trigger Overlay (Functionality Placeholder) -->
+      <div onclick="Game.endFinalBossDummy()"
+        style="position:absolute; top:0; left:0; width:100%; height:100%; z-index: 1000; cursor: pointer;"
+        title="Click to Proceed (Dummy Mode)"></div>
+
     </section>
 
     <!-- SCREEN 4: FINAL BOSS / VICTORY -->
@@ -916,15 +989,15 @@
 
   <!-- Scripts -->
   <!-- 1. Eye Tracking Core -->
-  <script type="module" src="./js/app.js?v=260216_1835"></script>
+  <script type="module" src="./js/app.js?v=260214_1203"></script>
   <script type="module">
-    import { AliceBattle } from './js/alice-battle.js?v=5.04_RELEASE';
+    import { AliceBattle } from './js/alice-battle.js?v=5.02_DEBUG_ALERT';
     window.AliceBattleRef = AliceBattle;
-    console.log("AliceBattle Module Loaded (v5.04)");
+    console.log("AliceBattle Module Loaded");
   </script>
   <!-- 2. Game Logic -->
-  <script src="./js/calibration.js?v=260216_1835"></script>
-  <script type="module" src="./js/game.js?v=260216_1835"></script>
+  <script src="./js/calibration.js?v=260214_1203"></script>
+  <script type="module" src="./js/game.js?v=260214_1203"></script>
 </body>
 
 </html>

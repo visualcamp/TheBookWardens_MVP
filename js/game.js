@@ -1873,108 +1873,39 @@ Game.typewriter = {
     },
 
     triggerFinalBossBattle() {
+        // [MODIFIED] Final Boss -> Alice Battle Visual Mode
+        // No Quiz logic. Just Visuals.
         Game.switchScreen("screen-final-boss");
+        console.log("[Game] Alice Battle Visual Mode Activated.");
 
-        // Load Final Quiz
-        const qData = this.finalQuiz;
-        const qEl = document.getElementById("final-boss-question");
-        const oEl = document.getElementById("final-boss-options");
-
-        if (qEl) qEl.textContent = `"${qData.q}"`;
-        if (oEl) {
-            oEl.innerHTML = "";
-            qData.o.forEach((optText, i) => {
-                const btn = document.createElement("button");
-                btn.className = "quiz-btn";
-                // Make final boss buttons look harder/different
-                btn.style.borderColor = "#ff4444";
-                btn.textContent = optText;
-                btn.onclick = () => this.checkFinalBossAnswer(i);
-                oEl.appendChild(btn);
-            });
+        // Optional: Trigger any entrance animation if needed
+        const villainArea = document.querySelector("#screen-final-boss .villain");
+        if (villainArea) {
+            villainArea.style.animation = "float 3s infinite ease-in-out";
         }
     },
 
-    checkFinalBossAnswer(index) {
-        if (index === this.finalQuiz.a) {
-            // TRUE VICTORY
-            // [CHANGED] Rich Particle Explosion (Loot Burst)
-            const btn = document.querySelectorAll("#final-boss-options .quiz-btn")[index];
-            if (btn) {
-                const rect = btn.getBoundingClientRect();
-                const centerX = rect.left + rect.width / 2;
-                const centerY = rect.top + rect.height / 2;
+    // [New] Dummy Trigger for Visual-Only Mode
+    endFinalBossDummy() {
+        console.log("[Game] Dummy Boss Battle Cleared. Proceeding...");
 
-                // 1. Screen Shake & Flash
-                const bossScreen = document.getElementById("screen-final-boss");
-                if (bossScreen) {
-                    bossScreen.style.animation = "shake 0.5s ease-in-out";
-                    // Add temporary white flash
-                    const flash = document.createElement("div");
-                    flash.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:white; opacity:0; pointer-events:none; z-index:20000; transition:opacity 0.2s;";
-                    document.body.appendChild(flash);
-
-                    // Trigger Flash
-                    requestAnimationFrame(() => {
-                        flash.style.opacity = "0.8";
-                        setTimeout(() => {
-                            flash.style.opacity = "0";
-                            setTimeout(() => flash.remove(), 500);
-                        }, 100);
-                    });
-                }
-
-                // 2. Spawn Fountain of Gems (30 particles x 2 Gems = +60 Total Reward)
-                // Staggered Burst for "Rich" feel
-                let particleCount = 20;
-                let delay = 0;
-
-                for (let i = 0; i < particleCount; i++) {
-                    setTimeout(() => {
-                        // Randomize Start Position slightly for "Explosion" look
-                        const offsetX = (Math.random() * 100) - 50;
-                        const offsetY = (Math.random() * 60) - 30;
-
-                        // Mix of Gem and Ink (Gold & Cyan) 
-                        const type = Math.random() > 0.3 ? 'gem' : 'ink';
-                        const val = type === 'gem' ? 5 : 2; // High value per particle
-
-                        Game.spawnFlyingResource(centerX + offsetX, centerY + offsetY, val, type);
-                    }, delay);
-
-                    delay += 50; // 50ms interval = 1 second stream
-                }
-            } else {
-                Game.addGems(50); // Fallback
-            }
-
-            // Animation - Boss Defeat
-            const villainImg = document.querySelector("#screen-final-boss .villain-img");
-            if (villainImg) {
-                villainImg.style.transition = "transform 1s, filter 1s opacity 2s";
-                villainImg.style.transform = "scale(0) rotate(360deg)";
-                villainImg.style.filter = "brightness(5) blur(10px)";
-                villainImg.style.opacity = "0";
-            }
-            if (typeof Game.spawnFloatingText === "function") {
-                Game.spawnFloatingText(document.querySelector("#screen-final-boss h3"), "RIFT SEALED! LEGENDARY!", "bonus");
-            }
-
-            // Delay and Switch to New Sequence (Final Villain Screen -> Score -> etc)
-            setTimeout(() => {
-                Game.goToNewScore();
-            }, 2500);
-
-        } else {
-            Game.addGems(-30); // -30 Gem (Penalty)
-            const btn = document.querySelectorAll("#final-boss-options .quiz-btn")[index];
-            if (btn) {
-                btn.style.background = "#500";
-                btn.innerText += " (The Villain laughs...)";
-                btn.disabled = true;
-            }
+        // Transition Effect (Shake)
+        const bossScreen = document.getElementById("screen-final-boss");
+        if (bossScreen) {
+            bossScreen.style.animation = "shake 0.5s ease-in-out";
         }
+
+        // Short delay then Win
+        setTimeout(() => {
+            Game.goToNewScore();
+        }, 1000);
+    },
+
+    /*
+    checkFinalBossAnswer(index) {
+        // ... (Legacy code preserved for reference if needed later) ...
     }
+    */
 };
 
 window.Game = Game;
