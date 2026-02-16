@@ -330,8 +330,8 @@
         villainCounter: function () {
             if (gameState !== 'playing') return;
 
-            const sourceEl = document.getElementById('villain-visual-container') || document.querySelector('.entity-area.villain');
-            const targetEl = document.querySelector('.entity-area.warden') || document.getElementById('warden-hp'); // Aim at warden area
+            const sourceEl = document.getElementById('villain-visual-container') || document.querySelector('#screen-alice-battle .entity-area.villain');
+            const targetEl = document.querySelector('#screen-alice-battle .entity-area.warden') || document.getElementById('warden-hp'); // Aim at warden area
 
             if (!sourceEl || !targetEl) return;
 
