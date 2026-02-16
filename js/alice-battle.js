@@ -48,9 +48,6 @@ export const AliceBattle = {
                 console.error("CRITICAL: Canvas #alice-canvas NOT FOUND!");
                 return;
             }
-            // DEBUG: Visual check for canvas presence
-            this.canvas.style.backgroundColor = "rgba(255, 0, 0, 0.1)";
-
             this.ctx = this.canvas.getContext('2d');
             this.resize();
             console.log(`[AliceBattle] Canvas Initialized: ${this.width}x${this.height}`);
@@ -101,7 +98,6 @@ export const AliceBattle = {
     },
 
     triggerAttack(type) {
-        console.log(`[AliceBattle] triggerAttack: ${type}, State: ${this.gameState}`);
 
         if (this.gameState !== 'playing' || this.cardValues[type] <= 0) return;
 
@@ -128,8 +124,7 @@ export const AliceBattle = {
 
         for (let i = 0; i < count; i++) {
             setTimeout(() => {
-                if (this.gameState !== 'playing') return;
-                console.log(`[AliceBattle] Spawning Lightning #${i + 1}`);
+                if (this.gameState !== 'playing' || this.villainHP <= 0) return; // Add check
                 this.lightnings.push(new Lightning(wBox.left + wBox.width / 2, wBox.top, vBox.left + vBox.width / 2, vBox.bottom, false, 0, color));
                 this.flashOpacity = 0.2;
                 this.shakeTime = 8;
