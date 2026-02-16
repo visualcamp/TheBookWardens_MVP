@@ -31,7 +31,6 @@ export const AliceBattle = {
     },
 
     init() {
-        // alert("Debug: AliceBattle.init() STARTED!");
         try {
             console.log("Initializing Alice Battle...");
             const container = document.getElementById('screen-alice-battle');
@@ -47,11 +46,14 @@ export const AliceBattle = {
                 console.error("CRITICAL: Canvas #alice-canvas NOT FOUND!");
                 return;
             }
+            // DEBUG: Visual check for canvas presence
+            this.canvas.style.backgroundColor = "rgba(255, 0, 0, 0.1)";
+
             this.ctx = this.canvas.getContext('2d');
+            this.resize();
+            console.log(`[AliceBattle] Canvas Initialized: ${this.width}x${this.height}`);
 
             this.ui.gameUi = document.getElementById('alice-game-ui');
-            if (!this.ui.gameUi) console.error("CRITICAL: #alice-game-ui NOT FOUND!");
-
             this.ui.villainHp = document.getElementById('villain-hp');
             this.ui.wardenHp = document.getElementById('warden-hp');
             this.ui.log = document.getElementById('al-log');
@@ -60,21 +62,15 @@ export const AliceBattle = {
             this.ui.resultHeader = document.getElementById('result-header');
             this.ui.restartBtn = document.getElementById('alice-restart-btn');
 
-            this.resize();
             window.addEventListener('resize', () => this.resize());
 
-            // Reset State
-            // alert("Debug: Resetting Game State...");
             this.resetGame();
 
-            // Start Loop
             if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
             this.animate();
-            // alert("Debug: AliceBattle Init COMPLETE! Loop Started.");
 
         } catch (e) {
             console.error("CRITICAL INIT ERROR:", e);
-            alert("Error initializing Alice Battle: " + e.message);
         }
     },
 
@@ -88,6 +84,7 @@ export const AliceBattle = {
         this.villainHP = 100;
         this.wardenHP = 100;
         this.gameState = 'playing';
+        this.lightnings = []; // Reset lightnings
 
         this.cardValues = { ink: 190, rune: 30, gem: 50 };
         this.vCardValues = { queen: 100, king: 60, joker: 40 };
@@ -98,40 +95,25 @@ export const AliceBattle = {
         if (this.ui.finalScreen) this.ui.finalScreen.classList.remove('active');
         if (this.ui.log) this.ui.log.innerText = "Battle started...";
 
-        document.querySelectorAll('.alice-rift').forEach(r => r.remove());
         this.updateCardDisplay();
     },
 
-    updateCardDisplay() {
-        for (const key in this.cardValues) {
-            const valEl = document.getElementById(`val-${key}`);
-            const cardEl = document.getElementById(`card-${key}`);
-            if (valEl) valEl.innerText = Math.max(0, this.cardValues[key]);
-            if (cardEl) {
-                if (this.cardValues[key] <= 0) cardEl.classList.add('disabled');
-                else cardEl.classList.remove('disabled');
-            }
-        }
-        for (const key in this.vCardValues) {
-            const valEl = document.getElementById(`v-val-${key}`);
-            const cardEl = document.getElementById(`v-card-${key}`);
-            if (valEl) valEl.innerText = Math.max(0, this.vCardValues[key]);
-            if (cardEl) {
-                if (this.vCardValues[key] <= 0) cardEl.classList.add('disabled');
-                else cardEl.classList.remove('disabled');
-            }
-        }
-    },
-
     triggerAttack(type) {
+        console.log(`[AliceBattle] triggerAttack: ${type}, State: ${this.gameState}`);
+
         if (this.gameState !== 'playing' || this.cardValues[type] <= 0) return;
 
         const wAvatar = document.getElementById('warden-avatar');
         const vAvatar = document.getElementById('villain-avatar');
-        if (!wAvatar || !vAvatar) return;
+        if (!wAvatar || !vAvatar) {
+            console.error("[AliceBattle] Avatars not found for coordinates!");
+            return;
+        }
 
         const wBox = wAvatar.getBoundingClientRect();
         const vBox = vAvatar.getBoundingClientRect();
+
+        console.log(`[AliceBattle] Coords - Warden: (${wBox.left}, ${wBox.top}), Villain: (${vBox.left}, ${vBox.top})`);
 
         let color = '#00ffff', damage = 10, count = 1;
 
@@ -145,6 +127,7 @@ export const AliceBattle = {
         for (let i = 0; i < count; i++) {
             setTimeout(() => {
                 if (this.gameState !== 'playing') return;
+                console.log(`[AliceBattle] Spawning Lightning #${i + 1}`);
                 this.lightnings.push(new Lightning(wBox.left + wBox.width / 2, wBox.top, vBox.left + vBox.width / 2, vBox.bottom, false, 0, color));
                 this.flashOpacity = 0.2;
                 this.shakeTime = 8;
