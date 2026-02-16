@@ -1122,15 +1122,15 @@
 
   <!-- Scripts -->
   <!-- 1. Eye Tracking Core -->
-  <script type="module" src="./js/app.js?v=CLICK_FIX_FINAL"></script>
+  <script type="module" src="./js/app.js?v=FINAL_CLEAN"></script>
   <script type="module">
-    import { AliceBattle } from './js/alice-battle.js?v=CLICK_FIX_FINAL';
+    import { AliceBattle } from './js/alice-battle.js?v=FINAL_CLEAN';
     window.AliceBattleRef = AliceBattle;
-    console.log("AliceBattle Module Loaded (CLICK_FIX_FINAL)");
+    console.log("AliceBattle Module Loaded (DEBUG_FORCE_INIT)");
   </script>
   <!-- 2. Game Logic -->
-  <script src="./js/calibration.js?v=CLICK_FIX_FINAL"></script>
-  <script type="module" src="./js/game.js?v=CLICK_FIX_FINAL"></script>
+  <script src="./js/calibration.js?v=DEBUG_FORCE_INIT"></script>
+  <script type="module" src="./js/game.js?v=DEBUG_FORCE_INIT"></script>
 
   <!-- 3. Explicit Event Binding for Debug Button (With STANDALONE BATTLE LOGIC) -->
   <script>

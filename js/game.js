@@ -1923,8 +1923,8 @@ Game.typewriter = {
                         window.Game.AliceBattle = window.AliceBattleRef;
                     }
 
-                    // Force Canvas Display & Resize
-                    const canvas = document.getElementById('alice-canvas');
+                    // Canvas styling handled by CSS now (AliceBattle.css)
+                    const canvas = null; // document.getElementById('alice-canvas');
                     if (canvas) {
                         canvas.style.display = 'block';
                         canvas.style.position = 'absolute';
