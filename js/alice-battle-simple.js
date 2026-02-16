@@ -1,8 +1,10 @@
 
 // alice-battle-simple.js (No Modules, Pure Global Script)
+// LOGIC REWORK: Text Conquest (Purify vs Corrupt)
+// V2: Added Priority Logic for Counter-Attacks
 
 (function () {
-    console.log("Loading AliceBattle Simple Script...");
+    console.log("Loading AliceBattle Simple Script (Text Conquest Mode V2)...");
 
     // Private Variables
     let canvas, ctx, width, height;
@@ -12,8 +14,8 @@
     let gameState = 'playing';
     let animFrameId = null;
 
-    let villainHP = 100;
-    let wardenHP = 100;
+    let villainHP = 100; // Represents % of Gray Chars left (Starts at 100)
+    let wardenHP = 100;  // Represents specific Warden Health (Starts at 100)
 
     const cardValues = { ink: 190, rune: 30, gem: 50 };
     const decreaseAmount = { ink: 10, rune: 5, gem: 8 };
@@ -22,27 +24,32 @@
 
     const aliceStory = "Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing to do: once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations in it, 'and what is the use of a book,' thought Alice 'without pictures or conversations?'";
 
+    // Text Conquest Logic
+    let textData = []; // Array of { index, char, dom, wordIndex, state: 'gray'|'white' }
+    let wordsData = []; // Array of [charIndices...]
+
+    // Priority Queues
+    let recentlyCorrupted = []; // Indices turned gray by villain recently
+    let recentlyPurified = [];  // Indices turned white by warden recently
+
     // UI Cache
     let ui = {
         gameUi: null, villainHp: null, wardenHp: null, log: null,
-        finalScreen: null, storyDisplay: null, resultHeader: null, restartBtn: null
+        finalScreen: null, storyDisplay: null, resultHeader: null, restartBtn: null,
+        aliceTextContainer: null
     };
 
     // Lightning Class
     class Lightning {
-        constructor(startX, startY, targetX, targetY, isBranch = false, depth = 0, color = '#00ffff') {
+        constructor(startX, startY, targetX, targetY, color = '#00ffff') {
             this.segments = [];
             this.startX = startX;
             this.startY = startY;
             this.targetX = targetX;
             this.targetY = targetY;
             this.opacity = 1.0;
-            this.depth = depth;
             this.color = color;
-
-            // Make it Thinner! (Original: 3-depth or 8-10. New: 1.5-depth or 4)
-            const originalBaseWidth = isBranch ? (1.5 - depth * 0.5) : (color === '#ff0055' ? 4 : 3);
-            this.baseWidth = Math.max(0.5, originalBaseWidth * 0.5); // Much thinner
+            this.baseWidth = 1.5; // Thin lightning
             this.generateSegments();
         }
 
@@ -52,18 +59,14 @@
             const dx = this.targetX - this.startX;
             const dy = this.targetY - this.startY;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            const segmentCount = Math.max(6, Math.floor(distance / 25));
+            const segmentCount = Math.max(5, Math.floor(distance / 20));
 
             for (let i = 0; i <= segmentCount; i++) {
                 const progress = i / segmentCount;
-                let nextX = this.startX + dx * progress + (Math.random() - 0.5) * (distance * 0.15);
-                let nextY = this.startY + dy * progress + (Math.random() - 0.5) * 30;
+                let nextX = this.startX + dx * progress + (Math.random() - 0.5) * (distance * 0.1);
+                let nextY = this.startY + dy * progress + (Math.random() - 0.5) * 20;
                 if (i === segmentCount) { nextX = this.targetX; nextY = this.targetY; }
                 this.segments.push({ x: curX, y: curY, nextX, nextY });
-
-                if (this.depth < 2 && Math.random() > 0.85 && i > 0 && i < segmentCount) {
-                    lightnings.push(new Lightning(nextX, nextY, nextX + (Math.random() - 0.5) * 300, nextY + (Math.random() - 0.5) * 300, true, this.depth + 1, this.color));
-                }
                 curX = nextX; curY = nextY;
             }
         }
@@ -71,32 +74,126 @@
         draw() {
             if (!ctx) return;
             ctx.save();
-            ctx.globalCompositeOperation = 'screen'; // Use Screen for better glow
+            ctx.globalCompositeOperation = 'screen';
             ctx.strokeStyle = this.color;
             ctx.globalAlpha = this.opacity;
-            ctx.lineWidth = this.baseWidth * 2; // Thinner glow stroke
-            ctx.shadowBlur = 10; // Reduced blur size
+            ctx.lineWidth = this.baseWidth * 2;
+            ctx.shadowBlur = 8;
             ctx.shadowColor = this.color;
             this.renderPath();
-            ctx.strokeStyle = '#ffffff';
-            ctx.globalAlpha = this.opacity;
-            ctx.lineWidth = this.baseWidth * 0.8; // Correct Core width
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = this.baseWidth;
             this.renderPath();
             ctx.restore();
             this.opacity -= 0.08;
         }
 
         renderPath() {
-            if (!ctx) return;
             ctx.beginPath();
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            this.segments.forEach(s => { ctx.moveTo(s.x, s.y); ctx.lineTo(s.nextX, s.nextY); });
+            this.segments.forEach((s, idx) => {
+                if (idx === 0) ctx.moveTo(s.x, s.y);
+                else ctx.lineTo(s.nextX, s.nextY);
+            });
             ctx.stroke();
         }
     }
 
-    // Functions
+    // --- TEXT LOGIC ---
+    function initText() {
+        if (!ui.aliceTextContainer) return;
+        ui.aliceTextContainer.innerHTML = '';
+        textData = [];
+        wordsData = [];
+        recentlyCorrupted = [];
+        recentlyPurified = [];
+
+        const words = aliceStory.split(' ');
+        let charGlobalIndex = 0;
+
+        words.forEach((word, wIdx) => {
+            const wordSpan = document.createElement('span');
+            wordSpan.style.whiteSpace = "nowrap"; // Keep words together
+            wordSpan.style.marginRight = "5px";
+            wordSpan.className = "alice-word";
+
+            let currentWordIndices = [];
+
+            for (let i = 0; i < word.length; i++) {
+                const char = word[i];
+                const charSpan = document.createElement('span');
+                charSpan.innerText = char;
+                charSpan.id = `char-${charGlobalIndex}`;
+                charSpan.style.transition = "color 0.5s, text-shadow 0.5s";
+                charSpan.style.color = "#666"; // Default Gray
+                charSpan.dataset.state = 'gray';
+
+                wordSpan.appendChild(charSpan);
+
+                textData.push({
+                    index: charGlobalIndex,
+                    char: char,
+                    dom: charSpan,
+                    wordIndex: wIdx,
+                    state: 'gray'
+                });
+                currentWordIndices.push(charGlobalIndex);
+                charGlobalIndex++;
+            }
+
+            ui.aliceTextContainer.appendChild(wordSpan);
+            wordsData.push(currentWordIndices);
+        });
+
+        updateGameStatus();
+    }
+
+    function updateGameStatus() {
+        const totalChars = textData.length;
+        const whiteChars = textData.filter(d => d.state === 'white').length;
+
+        // Villain HP = 100 - (Purified %)
+        const purity = (whiteChars / totalChars) * 100;
+        villainHP = Math.max(0, 100 - purity);
+
+        if (ui.villainHp) ui.villainHp.style.width = villainHP + '%';
+        if (ui.wardenHp) ui.wardenHp.style.width = wardenHP + '%';
+
+        if (villainHP <= 1) endGame('victory'); // 99% Purified implies Win
+        if (wardenHP <= 0) endGame('defeat');
+    }
+
+    function changeTextState(indices, newState, color) {
+        indices.forEach(idx => {
+            if (textData[idx]) {
+                textData[idx].state = newState;
+                textData[idx].dom.style.color = newState === 'white' ? '#fff' : '#444';
+                textData[idx].dom.style.textShadow = newState === 'white' ? `0 0 5px ${color}` : 'none';
+
+                // Add flash animation class?
+                // Minimal inline style animation
+                textData[idx].dom.animate([
+                    { transform: 'scale(1.3)', color: color },
+                    { transform: 'scale(1)' }
+                ], { duration: 300 });
+            }
+        });
+        updateGameStatus();
+    }
+
+    // --- UTILS ---
+    function pickRandom(arr, count) {
+        let result = [];
+        let temp = [...arr];
+        for (let i = 0; i < count; i++) {
+            if (temp.length === 0) break;
+            const rnd = Math.floor(Math.random() * temp.length);
+            result.push(temp[rnd]);
+            temp.splice(rnd, 1);
+        }
+        return result;
+    }
+
+    // --- GAME FUNCTIONS ---
     function resize() {
         if (!canvas) return;
         width = canvas.width = window.innerWidth;
@@ -118,19 +215,6 @@
         }
     }
 
-    function dealDamage(target, amount) {
-        if (gameState !== 'playing') return;
-        if (target === 'villain') {
-            villainHP = Math.max(0, villainHP - amount);
-            if (ui.villainHp) ui.villainHp.style.width = villainHP + '%';
-            if (villainHP <= 0) endGame('victory');
-        } else {
-            wardenHP = Math.max(0, wardenHP - amount);
-            if (ui.wardenHp) ui.wardenHp.style.width = wardenHP + '%';
-            if (wardenHP <= 0) endGame('defeat');
-        }
-    }
-
     function endGame(result) {
         gameState = result;
         if (ui.gameUi) ui.gameUi.style.opacity = '0';
@@ -138,46 +222,18 @@
             if (ui.finalScreen) ui.finalScreen.classList.add('active');
             if (result === 'victory') {
                 if (ui.resultHeader) { ui.resultHeader.innerText = "VICTORY"; ui.resultHeader.style.color = "#4da6ff"; }
-                if (ui.storyDisplay) ui.storyDisplay.innerHTML = `<div class="story-clean">${aliceStory}</div>`;
+                if (ui.storyDisplay) ui.storyDisplay.innerHTML = `<div class="story-clean" style="color:#fff; font-size:1.2rem;">${aliceStory}</div>`;
             } else {
                 if (ui.resultHeader) { ui.resultHeader.innerText = "DEFEAT"; ui.resultHeader.style.color = "#ff4d4d"; }
-                if (ui.storyDisplay) ui.storyDisplay.innerHTML = `<div class="story-corrupted">${corruptText(aliceStory)}</div>`;
-                createRifts();
             }
         }, 1000);
-    }
-
-    function createRifts() {
-        if (!ui.finalScreen) return;
-        for (let i = 0; i < 35; i++) {
-            const rift = document.createElement('div');
-            rift.className = 'alice-rift';
-            const isVertical = Math.random() > 0.5;
-            rift.style.width = isVertical ? '2px' : (Math.random() * 400 + 100) + 'px';
-            rift.style.height = isVertical ? (Math.random() * 400 + 100) + 'px' : '2px';
-            rift.style.left = Math.random() * 100 + 'vw';
-            rift.style.top = Math.random() * 100 + 'vh';
-            rift.style.transform = `rotate(${Math.random() * 360}deg)`;
-            ui.finalScreen.appendChild(rift);
-        }
-    }
-
-    function corruptText(text) {
-        const chars = "☠️☣️#!@$%^&*()_+-=[]{}|;':,./<>?0123456789";
-        return text.split('').map(c => (c === ' ' || Math.random() < 0.6) ? c : chars[Math.floor(Math.random() * chars.length)]).join('');
     }
 
     function animateLoop() {
         if (!ctx) return;
         ctx.clearRect(0, 0, width, height);
-
-        // DEBUG: VISUAL HEARTBEAT REMOVED
-        // ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
-        // ctx.fillRect(width / 2 - 25, height / 2 - 25, 50, 50);
-
         ctx.save();
-        // Simple Blend Mode
-        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalCompositeOperation = 'lighter'; // Use lighter for nicer glow overlap
 
         if (flashOpacity > 0) {
             ctx.fillStyle = `rgba(255, 255, 255, ${flashOpacity})`;
@@ -190,31 +246,18 @@
         }
 
         for (let i = lightnings.length - 1; i >= 0; i--) {
-            // DIRECT DRAWING (Skip method call overhead risk)
-            const l = lightnings[i];
-
-            ctx.beginPath();
-            ctx.strokeStyle = l.color;
-            ctx.lineWidth = 3;
-            ctx.globalAlpha = l.opacity;
-            l.segments.forEach((s, idx) => {
-                if (idx === 0) ctx.moveTo(s.x, s.y);
-                else ctx.lineTo(s.nextX, s.nextY);
-            });
-            ctx.stroke();
-
-            l.opacity -= 0.05; // Slower fade
-            if (l.opacity <= 0) lightnings.splice(i, 1);
+            lightnings[i].draw();
+            if (lightnings[i].opacity <= 0) lightnings.splice(i, 1);
         }
         ctx.restore();
         animFrameId = requestAnimationFrame(animateLoop);
     }
 
-    // Expose Global Object
+    // --- MAIN EXPORT ---
     window.AliceBattleRef = {
         init: function () {
             try {
-                console.log("AliceBattleRef.init() called.");
+                console.log("AliceBattleRef Init");
                 const container = document.getElementById('screen-alice-battle');
                 if (container) {
                     container.style.display = 'flex';
@@ -222,19 +265,16 @@
                 }
 
                 canvas = document.getElementById('alice-canvas');
-                if (!canvas) { console.error("Canvas missing"); return; }
-
-                // FORCE ESSENTIAL STYLES (Safety Net)
+                if (!canvas) return;
                 canvas.style.display = 'block';
-                canvas.style.position = 'absolute';
-                canvas.style.top = '0';
-                canvas.style.left = '0';
-                canvas.style.width = '100vw'; // Explicit Width
-                canvas.style.height = '100vh'; // Explicit Height
-                canvas.style.zIndex = '100'; // Highest priority
-                canvas.style.pointerEvents = 'none'; // Pass clicks
+                canvas.style.width = '100vw';
+                canvas.style.height = '100vh';
+                canvas.style.zIndex = '100';
+                canvas.style.pointerEvents = 'none';
 
                 ctx = canvas.getContext('2d');
+                width = canvas.width = window.innerWidth;
+                height = canvas.height = window.innerHeight;
 
                 ui.gameUi = document.getElementById('alice-game-ui');
                 ui.villainHp = document.getElementById('villain-hp');
@@ -243,169 +283,236 @@
                 ui.finalScreen = document.getElementById('alice-final-screen');
                 ui.storyDisplay = document.getElementById('story-display');
                 ui.resultHeader = document.getElementById('result-header');
+                ui.aliceTextContainer = document.getElementById('alice-text');
 
                 window.addEventListener('resize', resize);
-                resize();
 
-                // Reset
                 villainHP = 100; wardenHP = 100; gameState = 'playing'; lightnings = [];
-                if (ui.villainHp) ui.villainHp.style.width = '100%';
-                if (ui.wardenHp) ui.wardenHp.style.width = '100%';
-                if (ui.gameUi) ui.gameUi.style.opacity = '1';
-                if (ui.finalScreen) ui.finalScreen.classList.remove('active');
-                if (ui.log) ui.log.innerText = "Battle started...";
 
                 cardValues.ink = 190; cardValues.rune = 30; cardValues.gem = 50;
                 vCardValues.queen = 100; vCardValues.king = 60; vCardValues.joker = 40;
                 updateCardDisplay();
 
+                initText();
+
                 if (animFrameId) cancelAnimationFrame(animFrameId);
                 animateLoop();
+
             } catch (e) { console.error(e); }
         },
 
         triggerAttack: function (type) {
             if (gameState !== 'playing' || cardValues[type] <= 0) return;
 
-            // New Source: The clicked card itself
             const sourceEl = document.getElementById('card-' + type);
-            // New Target: Villain Image or Container
-            const targetEl = document.getElementById('villain-visual-container') || document.querySelector('.entity-area.villain');
+            if (!sourceEl) return;
+            const wBox = sourceEl.getBoundingClientRect();
+            const startX = wBox.left + wBox.width / 2;
+            const startY = wBox.top;
 
-            if (!sourceEl || !targetEl) return;
+            // Visual Card Glow
+            const origShadow = sourceEl.style.boxShadow;
+            sourceEl.style.boxShadow = `0 0 20px 10px ${type === 'ink' ? '#b300ff' : type === 'rune' ? '#00f2ff' : '#fff'}`;
+            setTimeout(() => sourceEl.style.boxShadow = origShadow, 300);
 
-            // Visual Feedback: Glow Border
-            let originalBorder = sourceEl.style.borderColor;
-            let originalShadow = sourceEl.style.boxShadow;
+            // LOGIC: Select Targets based on Priority (Recently Corrupted > Random Gray)
+            let targets = [];
+            let color = '#fff';
+            let message = "";
 
-            let color = '#00ffff', damage = 10;
-
-            // Updated Single Attack Logic & Thinner Colors
             if (type === 'ink') {
-                color = '#b300ff'; damage = 5; ui.log.innerText = `Ink Splash!`;
-                sourceEl.style.boxShadow = `0 0 20px 5px ${color}`;
-                sourceEl.style.borderColor = color;
+                // 10 Chars.
+                const priorityIndices = recentlyCorrupted.filter(idx => textData[idx].state === 'gray');
+                const otherGrayIndices = textData.filter(d => d.state === 'gray' && !recentlyCorrupted.includes(d.index)).map(d => d.index);
+
+                // Take from priority first
+                const takenPriority = pickRandom(priorityIndices, 10);
+                targets.push(...takenPriority);
+
+                // Fill rest from random gray
+                if (targets.length < 10) {
+                    const needed = 10 - targets.length;
+                    targets.push(...pickRandom(otherGrayIndices, needed));
+                }
+
+                color = '#fff';
+                message = "Ink Splash!";
             }
-            if (type === 'rune') {
-                color = '#00f2ff'; damage = 6; ui.log.innerText = `Rune Cast!`;
-                sourceEl.style.boxShadow = `0 0 20px 5px ${color}`;
-                sourceEl.style.borderColor = color;
+            else if (type === 'rune') {
+                // 3 Words. Priority: Word contains Corrupted char.
+                const grayWords = wordsData.filter(w => w.some(idx => textData[idx].state === 'gray'));
+
+                // Sort words? Or just pick random. Let's pick random gray words.
+                // Could prioritize words containing 'recentlyCorrupted' chars but random is fine for Words.
+                const selectedWords = pickRandom(grayWords, 3);
+                selectedWords.forEach(w => targets.push(...w));
+
+                color = '#00f2ff';
+                message = "Rune Cast!";
             }
-            if (type === 'gem') {
-                color = '#ffffff'; damage = 12; ui.log.innerText = `Gemlight!`;
-                sourceEl.style.boxShadow = `0 0 20px 5px ${color}`;
-                sourceEl.style.borderColor = color;
+            else if (type === 'gem') {
+                // 3 Consecutive Words.
+                const grayWords = wordsData.filter(w => w.some(idx => textData[idx].state === 'gray'));
+                if (grayWords.length > 0) {
+                    const startWordIdx = textData[grayWords[Math.floor(Math.random() * grayWords.length)][0]].wordIndex;
+                    for (let i = 0; i < 3; i++) {
+                        if (startWordIdx + i < wordsData.length) {
+                            targets.push(...wordsData[startWordIdx + i]);
+                        }
+                    }
+                }
+                color = '#ffcc00';
+                message = "Gem Light!";
             }
 
-            // Reset glow after short delay
-            setTimeout(() => {
-                sourceEl.style.boxShadow = originalShadow || 'none';
-                sourceEl.style.borderColor = originalBorder || '#555';
-            }, 300);
+            ui.log.innerText = message;
+
+            if (targets.length > 0) {
+                // Add to 'recentlyPurified' for Villain logic
+                recentlyPurified = [...new Set([...recentlyPurified, ...targets])];
+                // Limit history size
+                if (recentlyPurified.length > 50) recentlyPurified = recentlyPurified.slice(-50);
+
+                // Fire Lightnings
+                const distinctWordIndices = [...new Set(targets.map(idx => textData[idx].wordIndex))];
+
+                // Fire to each word center (limit visual spam)
+                distinctWordIndices.forEach((wIdx, i) => {
+                    setTimeout(() => {
+                        const wordChars = wordsData[wIdx];
+                        const firstChar = textData[wordChars[0]].dom;
+                        const lastChar = textData[wordChars[wordChars.length - 1]].dom;
+                        const fBox = firstChar.getBoundingClientRect();
+                        const lBox = lastChar.getBoundingClientRect();
+                        const targetX = (fBox.left + lBox.right) / 2;
+                        const targetY = (fBox.top + lBox.bottom) / 2;
+
+                        lightnings.push(new Lightning(startX, startY, targetX, targetY, type === 'ink' ? '#b300ff' : type === 'rune' ? '#00f2ff' : '#fff'));
+                        shakeTime = 3;
+                    }, i * 30);
+                });
+
+                setTimeout(() => {
+                    changeTextState(targets, 'white', color);
+                }, 200 + distinctWordIndices.length * 30);
+            }
 
             cardValues[type] = Math.max(0, cardValues[type] - decreaseAmount[type]);
             updateCardDisplay();
 
-            let wBox = sourceEl.getBoundingClientRect();
-            let vBox = targetEl.getBoundingClientRect();
-
-            // PRECISE COORDINATES: Card Top Center -> Villain Bottom Center
-            const startX = wBox.left + wBox.width / 2;
-            const startY = wBox.top;
-
-            const targetX = vBox.left + vBox.width / 2;
-            const targetY = vBox.bottom - vBox.height * 0.2;
-
-            lightnings.push(new Lightning(startX, startY, targetX, targetY, false, 0, color));
-
-            // Single Hit Damage
-            setTimeout(() => {
-                if (gameState !== 'playing' || villainHP <= 0) return;
-                flashOpacity = 0.2; shakeTime = 8; dealDamage('villain', damage);
-            }, 100);
-
-            setTimeout(() => { if (gameState === 'playing' && villainHP > 0) this.villainCounter(); }, 800);
+            // Villain Retaliates
+            setTimeout(() => { if (gameState === 'playing') this.villainCounter(); }, 1000 + Math.random() * 500);
         },
 
         villainCounter: function () {
             if (gameState !== 'playing') return;
 
-            const sourceEl = document.getElementById('villain-visual-container') || document.querySelector('.entity-area.villain');
-            const targetEl = document.querySelector('.entity-area.warden') || document.getElementById('warden-hp'); // Aim at warden area
-
-            if (!sourceEl || !targetEl) return;
-
-            const vBox = sourceEl.getBoundingClientRect();
-            const wBox = targetEl.getBoundingClientRect();
-
             const availableCards = Object.keys(vCardValues).filter(key => vCardValues[key] > 0);
-
-            if (availableCards.length === 0) {
-                ui.log.innerText = "Red Queen is fading...";
-                lightnings.push(new Lightning(vBox.left + vBox.width / 2, vBox.bottom - 50, wBox.left + wBox.width / 2, wBox.top, false, 0, '#664444'));
-                dealDamage('warden', 1); // Nerfed villain desperate attack too? Keeping low.
-                return;
-            }
+            if (availableCards.length === 0) return;
 
             const chosenKey = availableCards[Math.floor(Math.random() * availableCards.length)];
-            let damage = 5; // Reduced Base
-            if (chosenKey === 'queen') damage = 10;
-            if (chosenKey === 'king') damage = 8;
-            if (chosenKey === 'joker') damage = 5;
+            const vSourceEl = document.getElementById(`v-card-${chosenKey}`);
+            if (!vSourceEl) return;
 
-            // Visual Feedback for Villain Card
-            const vCardEl = document.getElementById(`v-card-${chosenKey}`);
-            if (vCardEl) {
-                let color = '#ff0044';
-                vCardEl.style.boxShadow = `0 0 20px 5px ${color}`;
-                vCardEl.style.borderColor = color;
+            const vBox = vSourceEl.getBoundingClientRect();
+            const startX = vBox.left + vBox.width / 2;
+            const startY = vBox.bottom;
+
+            vSourceEl.style.boxShadow = `0 0 20px 10px #ff0044`;
+            vSourceEl.style.borderColor = "#ff0044";
+            setTimeout(() => { vSourceEl.style.boxShadow = 'none'; vSourceEl.style.borderColor = '#ff4444'; }, 300);
+
+            let targets = [];
+            let message = "";
+            let lightningColor = "#ff0044";
+
+            if (chosenKey === 'queen') {
+                // 10 Chars. Priority: Recently Purified (White)
+                const priorityIndices = recentlyPurified.filter(idx => textData[idx].state === 'white');
+                const otherWhiteIndices = textData.filter(d => d.state === 'white' && !recentlyPurified.includes(d.index)).map(d => d.index);
+
+                const takenPriority = pickRandom(priorityIndices, 10);
+                targets.push(...takenPriority);
+
+                if (targets.length < 10) {
+                    const needed = 10 - targets.length;
+                    targets.push(...pickRandom(otherWhiteIndices, needed));
+                }
+
+                message = "The Queen Corrupts!";
+            }
+            else if (chosenKey === 'king') {
+                // 3 Random White Words
+                const whiteWords = wordsData.filter(w => w.some(idx => textData[idx].state === 'white'));
+                const selectedWords = pickRandom(whiteWords, 3);
+                selectedWords.forEach(w => targets.push(...w));
+                message = "King's Decree!";
+            }
+            else {
+                // 3 Consecutive
+                const whiteWords = wordsData.filter(w => w.some(idx => textData[idx].state === 'white'));
+                if (whiteWords.length > 0) {
+                    const startWordIdx = textData[whiteWords[Math.floor(Math.random() * whiteWords.length)][0]].wordIndex;
+                    for (let i = 0; i < 3; i++) {
+                        if (startWordIdx + i < wordsData.length) {
+                            targets.push(...wordsData[startWordIdx + i]);
+                        }
+                    }
+                }
+                message = "Joker's Trick!";
+            }
+
+            ui.log.innerText = message;
+
+            if (targets.length > 0) {
+                recentlyCorrupted = [...new Set([...recentlyCorrupted, ...targets])];
+                if (recentlyCorrupted.length > 50) recentlyCorrupted = recentlyCorrupted.slice(-50);
+
+                const distinctWordIndices = [...new Set(targets.map(idx => textData[idx].wordIndex))];
+
+                distinctWordIndices.forEach((wIdx, i) => {
+                    setTimeout(() => {
+                        const wordChars = wordsData[wIdx];
+                        const firstChar = textData[wordChars[0]].dom;
+                        const lastChar = textData[wordChars[wordChars.length - 1]].dom;
+                        const fBox = firstChar.getBoundingClientRect();
+                        const lBox = lastChar.getBoundingClientRect();
+                        const targetX = (fBox.left + lBox.right) / 2;
+                        const targetY = (fBox.top + lBox.bottom) / 2;
+
+                        lightnings.push(new Lightning(startX, startY, targetX, targetY, lightningColor));
+                        shakeTime = 3;
+                    }, i * 30);
+                });
+
                 setTimeout(() => {
-                    vCardEl.style.boxShadow = 'none';
-                    vCardEl.style.borderColor = '#ff4444';
-                }, 400);
+                    changeTextState(targets, 'gray', null);
+                    wardenHP = Math.max(0, wardenHP - 5);
+                    if (ui.wardenHp) ui.wardenHp.style.width = wardenHP + '%';
+                    if (wardenHP <= 0) endGame('defeat');
+                }, 200 + distinctWordIndices.length * 30);
+            } else {
+                if (ui.wardenHp && wardenHP > 0) {
+                    lightnings.push(new Lightning(startX, startY, width / 2, height - 100, lightningColor));
+                    setTimeout(() => {
+                        wardenHP -= 10;
+                        if (ui.wardenHp) ui.wardenHp.style.width = wardenHP + '%';
+                        if (wardenHP <= 0) endGame('defeat');
+                    }, 200);
+                }
             }
 
             vCardValues[chosenKey] = Math.max(0, vCardValues[chosenKey] - vDecreaseAmount[chosenKey]);
             updateCardDisplay();
-
-            setTimeout(() => {
-                // PRECISE COORDINATES: Villain Image Bottom -> Warden Top
-                const startX = vBox.left + vBox.width / 2;
-                const startY = vBox.bottom - vBox.height * 0.1;
-
-                const targetX = wBox.left + wBox.width / 2;
-                const targetY = wBox.top;
-
-                lightnings.push(new Lightning(startX, startY, targetX, targetY, false, 0, '#ff0044'));
-                flashOpacity = 0.25; shakeTime = 12; dealDamage('warden', damage);
-            }, 50);
         }
     };
 
-    // Alias for compatibility if needed
-    window.AliceBattle = window.AliceBattleRef;
-
-    // AUTO-LINKER: Ensure Game.AliceBattle is connected
     const linkInterval = setInterval(() => {
         if (window.Game && window.AliceBattleRef) {
             if (window.Game.AliceBattle !== window.AliceBattleRef) {
                 window.Game.AliceBattle = window.AliceBattleRef;
-                console.log("Auto-Linked Game.AliceBattle");
             }
         }
-
-        // BIND DEBUG BUTTON (Keep trying until found)
-        const debugBtn = document.getElementById('btn-debug-alice');
-        if (debugBtn && !debugBtn.onclick) {
-            debugBtn.onclick = function () {
-                console.log("Direct Debug Button Clicked");
-                window.AliceBattleRef.init();
-            };
-            debugBtn.style.border = '2px solid #00ff00'; // Visual confirmation
-            debugBtn.innerText = "Direct - Alice Battle (READY)";
-        }
     }, 1000);
-
-    console.log("AliceBattleRef IS READY (Global Mode).");
 
 })();
