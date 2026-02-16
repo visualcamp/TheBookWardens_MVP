@@ -31,8 +31,10 @@ export const AliceBattle = {
     },
 
     init() {
+        // alert("DEBUG: AliceBattle.init() STARTED"); // Enable this if needed
         try {
             console.log("Initializing Alice Battle...");
+            // alert("DEBUG: Finding container...");
             const container = document.getElementById('screen-alice-battle');
             if (container) {
                 container.style.display = 'flex';
