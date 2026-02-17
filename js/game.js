@@ -886,7 +886,7 @@ Game.typewriter = {
                 const btn = document.createElement("button"); // FIXED: Re-added missing variable declaration
                 btn.className = "quiz-btn";
                 btn.textContent = optText;
-                btn.onclick = () => this.checkBossAnswer(i); // Direct call to avoid Game.checkBoss issues
+                btn.onclick = () => Game.checkBossAnswer(i); // Direct call to global Game object
                 optionsEl.appendChild(btn);
             });
         }
