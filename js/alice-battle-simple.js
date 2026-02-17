@@ -110,12 +110,18 @@
     function initTextBattlefield() {
         if (!ui.textField) return;
 
-        // FORCE VISIBILITY (Override CSS opacity: 0.12)
+        // FORCE VISIBILITY & LAYOUT (Multi-line fix)
         ui.textField.style.setProperty('opacity', '1', 'important');
         ui.textField.style.setProperty('mask-image', 'none', 'important');
         ui.textField.style.setProperty('-webkit-mask-image', 'none', 'important');
+
         ui.textField.style.overflow = 'visible';
         ui.textField.style.color = '#fff';
+        ui.textField.style.display = 'block'; // Allow wrapping
+        ui.textField.style.whiteSpace = 'normal'; // Allow wrapping
+        ui.textField.style.height = 'auto';
+        ui.textField.style.minHeight = '150px';
+        ui.textField.style.lineHeight = '1.6';
 
         ui.textField.innerHTML = '';
         totalChars = 0;
