@@ -5,6 +5,8 @@ import { ScoreManager } from './managers/ScoreManager.js';
 import { SceneManager } from './managers/SceneManager.js';
 import { bus } from './core/EventBus.js';
 import { TextRenderer } from './TextRendererV2.js';
+import { WardenManager } from './managers/WardenManager.js';
+import { IntroManager } from './managers/IntroManager.js';
 const Game = {
     // Initialized in init()
     scoreManager: null,
@@ -34,237 +36,23 @@ const Game = {
         if (this.scoreManager) this.scoreManager.updateUI();
     },
 
-    // --- Rift Intro Sequence (Cinematic 20s) ---
-    async startRiftIntro() {
-        console.log("Starting Rift Intro Sequence...");
-
-        // Use Scene Manager
-        this.switchScreen("screen-rift-intro");
-        this.sceneManager.resetRiftIntro(); // Helper reset
-
-        // Helper for delays
-        const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-        // Get elements via Manager helper? Or direct. 
-        // For now, let's keep references here but use Manager for actions.
-        const introScreen = document.getElementById("screen-rift-intro");
-        const villainContainer = document.getElementById("rift-villain-container");
-        const textContainer = document.getElementById("rift-text-container");
-        const meteorLayer = document.getElementById("meteor-layer");
-
-        // --- SCENE 1: PEACE (0s - 2.2s) ---
-        await wait(200);
-        textContainer.style.opacity = 1;
-        textContainer.style.transform = "translateY(0)";
-
-        this.sceneManager.showStoryText("Every story holds a world within.");
-        await wait(2000);
-
-        // --- SCENE 2: WARNING (2.2s - 4.2s) ---
-        introScreen.classList.remove("scene-peace");
-        introScreen.classList.add("scene-warning");
-
-        this.sceneManager.showStoryText("But chaos seeks to consume it.");
-
-        villainContainer.style.opacity = 0.6;
-        await wait(2000);
-
-        // --- SCENE 3: INVASION (4.2s - 5.7s) ---
-        introScreen.classList.remove("scene-warning");
-        introScreen.classList.add("scene-invasion");
-
-        this.sceneManager.showStoryText("The Rift opens!", "villain");
-        villainContainer.style.opacity = 1;
-
-        // Start light meteors
-        const lightMeteorLoop = setInterval(() => {
-            if (Math.random() > 0.7) this.sceneManager.spawnMeteor(meteorLayer);
-        }, 300);
-
-        await wait(1500);
-        clearInterval(lightMeteorLoop);
-
-        // --- SCENE 4: DESTRUCTION (5.7s - 9.5s) ---
-        introScreen.classList.remove("scene-invasion");
-        introScreen.classList.add("scene-destruction");
-
-        this.sceneManager.showStoryText("The words are fading...<br>WARDEN, RESTORE THE STORY!");
-        textContainer.classList.add("rift-damaged");
-
-        const heavyMeteorLoop = setInterval(() => {
-            this.sceneManager.spawnMeteor(meteorLayer);
-            this.sceneManager.spawnMeteor(meteorLayer);
-        }, 100);
-
-        await wait(3000);
-
-        await wait(800);
-        clearInterval(heavyMeteorLoop);
-
-        // --- SCENE 5: TRANSITION ---
-        this.sceneManager.showStoryText("Initializing Word Forge...");
-        await wait(1000);
-
-        console.log("Rift Intro Done. Moving to Word Forge.");
-        // ... (rest logic same)
-
-        // Show deferred connected message if already ready
-        if (this.state.sdkLoading && this.state.sdkLoading.isReady) {
-            this.showToast("Magic Eye Connected!");
-        }
-
-        this.state.vocabIndex = 0;
-        this.loadVocab(0);
-        this.switchScreen("screen-word");
-    },
-
-    showStoryText(message, type = "overlay") {
-        if (type === "villain") {
-            const bubble = document.getElementById("rift-villain-speech");
-            if (!bubble) return;
-            bubble.innerText = message;
-            bubble.classList.add("show");
-            setTimeout(() => bubble.classList.remove("show"), 3000);
-        } else {
-            const overlay = document.getElementById("rift-story-overlay");
-            if (!overlay) return;
-            overlay.innerHTML = message; // Allow HTML for <br>
-            overlay.classList.add("show");
-            setTimeout(() => overlay.classList.remove("show"), 3500);
-        }
-    },
-
-
-
-
-    spawnMeteor(layer) {
-        if (!layer) return;
-        const m = document.createElement("div");
-        m.className = "meteor";
-
-        // Spawn Area: Top-Left to Top-Center for Diagonal Fall (Top-Left -> Bottom-Right)
-        // X: -20% to 80% (Left side mostly)
-        // Y: 0px to 400px (Start lower to hit text directly)
-        const startX = (Math.random() * window.innerWidth * 1.0) - (window.innerWidth * 0.2);
-        const startY = Math.random() * 400;
-
-        m.style.left = startX + "px";
-        m.style.top = startY + "px";
-
-        // Random size: 200px - 500px
-        const size = 200 + Math.random() * 300;
-        m.style.width = size + "px";
-
-        // Random speed: 0.8s - 1.5s
-        const speed = 0.8 + Math.random() * 0.7;
-        m.style.animationDuration = speed + "s";
-
-        // Random delay to make it feel natural
-        m.style.animationDelay = (Math.random() * 0.2) + "s";
-
-        layer.appendChild(m);
-
-        // Cleanup based on max duration
-        setTimeout(() => m.remove(), 2000);
-    },
-
-    corruptText(text) {
-        // Replace 50% of characters with glitch symbols
-        const glyphs = "#@!$%&?*-_+|~^";
-        return text.split('').map(char => {
-            if (char === ' ') return ' '; // keep spaces mostly
-            return Math.random() > 0.4 ? glyphs[Math.floor(Math.random() * glyphs.length)] : char;
-        }).join('');
-    },
+    // --- Rift Intro Sequence (Delegated to IntroManager) ---
 
 
 
     init() {
         console.log("Game Init");
 
-        // [NEW] Instantiate Managers
+        // Instatiate Manager Classes
         this.scoreManager = new ScoreManager();
         this.sceneManager = new SceneManager();
-        this.wardenManager = new WardenManager(this);
+        // WardenManager handles HTML onclick logic but also needs Game reference if called via JS
+        // (WardenManager is instantiated on-demand in index.html for binding, or via Game if needed)
+        // this.wardenManager = new WardenManager(this); // Optional here if we rely on global
 
-        // [EVENT BUS] Subscribe to Game Events
-        bus.on('pang', () => {
-            this.scoreManager.addInk(10);
-        });
-
-        bus.on('gem_earned', (amount) => {
-            this.scoreManager.addGems(amount);
-        });
-
-        bus.on('rune_earned', (amount) => {
-            this.scoreManager.addRunes(amount);
-        });
-
-        // [RGT] Handle Rune Word Trigger
-        bus.on('rune_touched', (runeId) => {
-            console.log(`[Game] Rune Triggered: ${runeId}`);
-            // Reward: +5 Runes
-            this.addRunes(5);
-            // FX: Spawn particles at last gaze position? Or at word position?
-            // TextRenderer handles visual pop. We just handle score.
-            // Maybe a sound effect?
-            // if (this.audioManager) this.audioManager.play('rune_collect');
-        });
-
-        // [COORDINATION] Link Gaze Data Manager
-        if (window.gazeDataManager) {
-            this.gazeManager = window.gazeDataManager;
-            console.log("[Game] Linked to window.gazeDataManager");
-        } else {
-            console.warn("[Game] window.gazeDataManager not found during init. Will retry in start().");
-        }
-
-        // [NEW] Hook for App.js to update Game Loading UI
-        window.updateLoadingProgress = (pct, msg) => {
-            if (this.updateSDKProgress) this.updateSDKProgress(pct, msg);
-        };
-
-        this.bindEvents();
-
-        this.updateUI();
-
-        // 3. Auto-start / Skip Logic
-        const params = new URLSearchParams(window.location.search);
-
-        // [FIX] Force Expose Methods globally (Anti-Module Scope Issue)
-        // This ensures inline HTML onclicks can find them even if 'this' context is tricky.
-        if (window.Game) {
-            window.Game.bindKeyAndUnlock_V2 = this.bindKeyAndUnlock_V2.bind(this);
-            window.Game.switchScreen = this.switchScreen.bind(this);
-            console.log("[Game] Confirmed bindKeyAndUnlock_V2 is exposed to window.Game");
-        } else {
-            console.error("[Game] Critical: window.Game is missing during init!");
-            window.Game = this;
-        }
-        // NEW: Check for 'skip_intro=1' (Coming back from In-App Browser Redirect)
-        // If present, we skip the splash screen entirely and go to Home.
-        if (params.get("skip_intro") === "1" && !this.isInAppBrowser()) {
-            console.log("Skipping Intro (Returned from redirect)");
-            // Manually switch active screen from Splash (default) to Home
-            // But first, ensure DOM is ready or just force switch
-            document.addEventListener("DOMContentLoaded", () => {
-                this.switchScreen("screen-home");
-            });
-            // Also execute immediately in case DOM is already ready
-            this.switchScreen("screen-home");
-        } else {
-            // Normal Load: Splash is active by default in HTML. Do nothing.
-        }
-
-        // Legacy 'skip=1' logic - keeping for backward compatibility if needed, 
-        // but the new flow prefers 'skip_intro'.
-        if (params.get("skip") === "1" && !this.isInAppBrowser()) {
-            console.log("Auto-starting game due to skip param");
-            const startBtn = document.getElementById("btn-start-game");
-            if (startBtn) {
-                setTimeout(() => startBtn.click(), 500);
-            }
-        }
+        // [Moved Intro Logic]
+        this.introManager = new IntroManager(this);
+        this.introManager.init();
 
         // 4. Session ID for Firebase
         this.sessionId = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -284,197 +72,19 @@ const Game = {
     },
 
     bindEvents() {
-        const startBtn = document.getElementById("btn-start-game");
-        if (startBtn) {
-            startBtn.onclick = async () => {
-                // 1. Check In-App Browser
-                if (this.isInAppBrowser()) {
-                    this.openSystemBrowser();
-                    return;
+        // [Intro Events delegated to IntroManager]
+
+        // Debug Keys
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "`") { // Tilde key for instant debug
+                const chk = document.getElementById("chk-debug-mode");
+                if (chk) {
+                    chk.checked = !chk.checked;
+                    // Trigger change event manually
+                    chk.dispatchEvent(new Event('change'));
                 }
-
-                if (this.isInAppBrowser()) {
-                    this.openSystemBrowser();
-                    return;
-                }
-
-                // 2. Normal Flow
-                // Loader Animation
-
-
-                // Start Rift Intro Scene immediately (Delay handled inside)
-                this.startRiftIntro();
-
-                this.trackingInitPromise = (async () => {
-                    try {
-                        // 1. Start Message (REMOVED per user request to avoid popup/layout shift)
-                        // this.updateSDKProgress(10, "Summoning Magic Eye...");
-                        if (typeof window.startEyeTracking === "function") {
-                            // Hook into window.onSDKProgress if available (we will add this to app.js later)
-                            // For now, manual updates
-
-                            const ok = await window.startEyeTracking();
-
-                            if (!ok) {
-                                throw new Error("Permission denied or initialization failed.");
-                            }
-
-                            this.updateSDKProgress(100, "Connected!");
-                            // this.showToast("Magic Eye Connected!"); // Shortened message - DEFERRED
-                            return true;
-                        } else {
-                            console.warn("window.startEyeTracking not found.");
-                            this.updateSDKProgress(0, "Magic Error :(");
-                            return false;
-                        }
-                    } catch (e) {
-                        console.error(e);
-                        alert("Eye tracking initialization failed: " + e.message);
-                        this.switchScreen("screen-home");
-
-                        if (startBtn) {
-                            startBtn.style.display = "inline-block";
-                            startBtn.disabled = false;
-                            startBtn.textContent = "Enter the Rift";
-                        }
-                        return false;
-                    }
-                })();
-            };
-        }
-        // Initialize WPM Previews
-        this.initWPMPreviews();
-    },
-
-    // [New] Animation Logic: Mimics Game's TextRendererV2 (Word-Based + Fade + Chunk Pause)
-    initWPMPreviews() {
-        const boxes = document.querySelectorAll('.wpm-anim-box');
-        if (boxes.length === 0) return;
-
-        // Reduced to 3 lines for compact view
-        const sentences = [
-            "The sun was warm in the sky.",
-            "A small boy walked to the park.",
-            "He saw a dog on the grass."
-        ];
-
-        // Loop text for continuous preview
-        const fullText = sentences.join(" ");
-
-        boxes.forEach(box => {
-            const wpm = parseInt(box.getAttribute('data-wpm'), 10) || 100;
-            // Clear previous
-            if (box._previewCleanup) box._previewCleanup();
-
-            // Run the simulation
-            this.runWPMPreview(box, wpm, fullText);
-        });
-    },
-
-    // Reusable WPM Simulation Engine
-    runWPMPreview(container, wpm, text) {
-        container.innerHTML = "";
-        container.style.position = "relative";
-        container.style.whiteSpace = "normal"; // Allow word wrap
-        container.style.overflow = "hidden";
-        container.style.display = "block";
-        container.style.height = "auto";
-        container.style.minHeight = "1.8em"; // Compact height
-        container.style.fontSize = "0.85rem"; // Smaller font for speed feel
-        container.style.lineHeight = "1.4"; // Space saver
-        container.style.color = "#aaa"; // Dimmer text
-
-        // Split into words
-        const words = text.split(" ");
-        let wordSpans = [];
-
-        // Pre-create generic spans (Word-Based)
-        words.forEach(w => {
-            const span = document.createElement("span");
-            span.textContent = w;
-            span.style.opacity = "0";
-            span.style.marginRight = "0.3em";
-            span.style.display = "inline-block";
-            // Game-like Fade In + Slide Up
-            span.style.transition = "opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)";
-            span.style.transform = "translateY(10px)";
-            span.style.color = "#eee"; // Highlighted text color
-            container.appendChild(span);
-            wordSpans.push(span);
-        });
-
-        // Loop State
-        let currentIndex = 0;
-        let isRunning = true;
-        let timer = null;
-        let chunkCount = 0;
-
-        // --- SPECIFICATION: UNIFIED PREVIEW ENGINE ---
-        // Use the EXACT same logic as the main game
-        const params = this.calculateWPMAttributes(wpm);
-        const WORD_INTERVAL = params.interval;
-        const TARGET_CHUNK_SIZE = params.chunkSize;
-        const CHUNK_DELAY = params.delay;
-
-        const tick = () => {
-            if (!isRunning) return;
-
-            // Check Reset
-            if (currentIndex >= wordSpans.length) {
-                setTimeout(() => {
-                    wordSpans.forEach(s => {
-                        s.style.opacity = "0";
-                        s.style.transform = "translateY(10px)";
-                    });
-                    currentIndex = 0;
-                    chunkCount = 0;
-                    tick();
-                }, 2000);
-                return;
             }
-
-            const span = wordSpans[currentIndex];
-            const wordText = words[currentIndex];
-
-            // Reveal Word
-            span.style.opacity = "1";
-            span.style.transform = "translateY(0)";
-
-            currentIndex++;
-            chunkCount++;
-
-            // Fade Out Scheduling (Tail Effect)
-            setTimeout(() => {
-                if (isRunning && span) {
-                    span.style.opacity = "0.3";
-                }
-            }, 2000);
-
-            // Determine Next Delay
-            let nextDelay = WORD_INTERVAL;
-
-            // Check Chunk/Pause Condition
-            const isEnd = wordText.includes('.') || wordText.includes('?') || wordText.includes('!');
-            const isComma = wordText.includes(',');
-
-            // Logic: Pause if Punctuation OR Chunk Size Reached
-            if (isEnd || isComma || chunkCount >= TARGET_CHUNK_SIZE) {
-                nextDelay = CHUNK_DELAY;
-                chunkCount = 0;
-            }
-
-            timer = setTimeout(tick, nextDelay);
-        };
-
-        // Start
-        tick();
-
-        // Cleanup
-        container._previewCleanup = () => {
-            isRunning = false;
-            if (timer) clearTimeout(timer);
-            container.innerHTML = "";
-        };
+        });
     },
 
     // --- NEW: SDK Loading Feedback ---
@@ -542,38 +152,7 @@ const Game = {
         }, 1000);
     },
 
-    isInAppBrowser() {
-        const ua = navigator.userAgent || navigator.vendor || window.opera;
-        return (
-            /KAKAOTALK/i.test(ua) ||
-            /FBAV/i.test(ua) ||
-            /Line/i.test(ua) ||
-            /Instagram/i.test(ua) ||
-            /Snapchat/i.test(ua) ||
-            /Twitter/i.test(ua) ||
-            /DaumApps/i.test(ua)
-        );
-    },
-
-    openSystemBrowser() {
-        const url = window.location.href;
-        if (/Android/i.test(navigator.userAgent)) {
-            let newUrl = url;
-            // Add 'skip_intro=1' to signal that we should skip the splash on re-entry
-            // Use 'skip_intro' instead of just 'skip' to differentiate intent if needed
-            if (newUrl.indexOf("?") === -1) newUrl += "?skip_intro=1";
-            else if (newUrl.indexOf("skip_intro=1") === -1) newUrl += "&skip_intro=1";
-
-            const noProtocol = newUrl.replace(/^https?:\/\//, "");
-            const intentUrl = `intent://${noProtocol}#Intent;scheme=https;package=com.android.chrome;end`;
-            window.location.href = intentUrl;
-        } else {
-            alert("Please copy the URL and open it in Safari or Chrome to play.");
-            navigator.clipboard.writeText(url).then(() => {
-                alert("URL copied to clipboard!");
-            }).catch(() => { });
-        }
-    },
+    // --- Browser Detection Moved to IntroManager ---
 
     switchScreen(screenId) {
         // [FIX] Force close overlay screens that might not be in SceneManager
