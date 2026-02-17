@@ -950,7 +950,7 @@ Game.typewriter = {
                 if (villainScreen) {
                     villainScreen.classList.remove("active");
                     villainScreen.style.display = "none";
-                    setTimeout(() => { villainScreen.style.display = ""; }, 2000);
+                    // [FIX] Removed redundant display restoration that causes overlap with Final Boss
                 }
 
                 // Check if this was the Last Paragraph
