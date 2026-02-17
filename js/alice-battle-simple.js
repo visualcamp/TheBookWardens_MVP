@@ -109,6 +109,14 @@
 
     function initTextBattlefield() {
         if (!ui.textField) return;
+
+        // FORCE VISIBILITY (Override CSS opacity: 0.12)
+        ui.textField.style.setProperty('opacity', '1', 'important');
+        ui.textField.style.setProperty('mask-image', 'none', 'important');
+        ui.textField.style.setProperty('-webkit-mask-image', 'none', 'important');
+        ui.textField.style.overflow = 'visible';
+        ui.textField.style.color = '#fff';
+
         ui.textField.innerHTML = '';
         totalChars = 0;
         grayChars = 0;
