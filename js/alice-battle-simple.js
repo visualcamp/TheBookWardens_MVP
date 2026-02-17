@@ -347,6 +347,7 @@
 
     function showVictoryModal(container) {
         const modal = createBaseModal();
+        modal.style.pointerEvents = 'auto'; // Force interaction
 
         const content = document.createElement('div');
         content.style.textAlign = 'center';
@@ -359,12 +360,17 @@
         const btn = document.createElement('button');
         btn.innerText = "SCORE REPORT";
         styleModalButton(btn, '#4da6ff');
-        btn.onclick = () => {
-            if (window.Game && window.Game.goToNewScore) {
+        btn.style.pointerEvents = 'auto';
+
+        btn.onclick = (e) => {
+            if (e) e.stopPropagation();
+            console.log("[Victory] Click!");
+
+            if (window.Game && typeof window.Game.goToNewScore === 'function') {
                 window.Game.goToNewScore();
             } else {
-                alert("Score Screen not linked! (Check console)");
-                console.error("Game.goToNewScore missing");
+                console.error("Game.goToNewScore missing. Game:", window.Game);
+                alert("Navigation Error. Please reload.");
             }
         };
 
@@ -376,6 +382,7 @@
 
     function showDefeatModal(container) {
         const modal = createBaseModal();
+        modal.style.pointerEvents = 'auto'; // Force interaction
 
         const content = document.createElement('div');
         content.style.textAlign = 'center';
@@ -388,13 +395,21 @@
         const btn = document.createElement('button');
         btn.innerText = "RETRY TRAINING";
         styleModalButton(btn, '#ff4d4d');
-        btn.onclick = () => {
-            if (window.Game && window.Game.switchScreen) {
-                // Reset state if needed?
-                // For now, just go back to Word Forge to practice
+        btn.style.pointerEvents = 'auto';
+
+        btn.onclick = (e) => {
+            if (e) e.stopPropagation();
+            console.log("[Defeat] Click!");
+
+            if (window.Game && typeof window.Game.switchScreen === 'function') {
+                // Reset Word Forge
+                if (window.Game.state) window.Game.state.vocabIndex = 0;
+                if (typeof window.Game.loadVocab === 'function') window.Game.loadVocab(0);
+
                 window.Game.switchScreen('screen-word');
             } else {
-                alert("Navigation failed! (Check console)");
+                console.error("Game.switchScreen missing.");
+                alert("Navigation Error. Please reload.");
             }
         };
 
