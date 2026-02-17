@@ -587,7 +587,7 @@
 
                     // FIXED POSITIONING (Force Visibility)
                     parentBar.style.position = 'absolute';
-                    parentBar.style.top = '36%'; // Between Villain and Text
+                    parentBar.style.top = '42%'; // Below Cards (approx)
                     parentBar.style.left = '50%';
                     parentBar.style.transform = 'translateX(-50%)';
                     parentBar.style.width = '90%'; // Wider
@@ -629,21 +629,26 @@
                 // Adjust Layout compactness
                 const villainArea = container.querySelector('.entity-area.villain');
                 if (villainArea) {
-                    villainArea.style.height = '35vh'; // Give space
+                    villainArea.style.height = '40vh'; // Give space for cards
                     villainArea.style.minHeight = '200px';
                 }
 
-                // Move Text Field Up (Remove Gap)
+                // Move Text Field Down (Below Bar)
                 if (ui.textField) {
                     const tfParent = ui.textField.parentElement;
-                    tfParent.style.marginTop = '0';
-                    tfParent.style.paddingTop = '60px'; // Space for Bar
+                    // Push down to lower half
+                    tfParent.style.marginTop = '48vh';
+                    tfParent.style.paddingTop = '10px';
                     tfParent.style.zIndex = '800';
+                    tfParent.style.position = 'absolute'; // Force position logic
+                    tfParent.style.top = '0';
+                    tfParent.style.width = '100%';
 
                     // WIDER TEXT FIELD
-                    ui.textField.style.width = '120%';
-                    ui.textField.style.marginLeft = '-10%'; // Center alignment
-                    ui.textField.style.minHeight = '300px'; // More lines (~7 lines)
+                    ui.textField.style.width = '94vw';
+                    ui.textField.style.marginLeft = '3vw'; // Center approx
+                    ui.textField.style.minHeight = '180px'; // Reduced Height
+                    ui.textField.style.overflowY = 'auto'; // Scroll if needed
                 }
 
                 if (ui.wardenHp) ui.wardenHp.parentElement.style.display = 'none';
