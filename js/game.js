@@ -5,8 +5,6 @@ import { ScoreManager } from './managers/ScoreManager.js';
 import { SceneManager } from './managers/SceneManager.js';
 import { bus } from './core/EventBus.js';
 import { TextRenderer } from './TextRendererV2.js';
-import { TextRenderer } from './TextRendererV2.js';
-
 const Game = {
     // Initialized in init()
     scoreManager: null,
