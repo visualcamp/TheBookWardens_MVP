@@ -866,119 +866,88 @@
 
     <!-- NEW SCENE 2: MISSION ACCOMPLISHED (Score Report) -->
     <section id="screen-new-score" class="screen"
-      style="text-align: center; background: radial-gradient(circle at center, #1a103c 0%, #000 90%); overflow-y: auto; padding-top: 100px; box-sizing: border-box; padding-bottom: 50px;">
+      style="text-align: center; background: radial-gradient(circle at center, #1a103c 0%, #000 90%); height: 100vh; overflow: hidden; padding: 80px 10px 10px 10px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between;">
 
-      <h1
-        style="color: #ffd700; margin-bottom: 30px; font-family: 'Cinzel', serif; font-size: 3rem; text-shadow: 0 0 20px gold; font-weight: bold; letter-spacing: 2px;">
-        MISSION REPORT</h1>
+      <!-- HEADER -->
+      <h2
+        style="color: #ffd700; margin: 0 0 10px 0; font-family: 'Cinzel', serif; font-size: 1.8rem; text-shadow: 0 0 20px gold; font-weight: bold; letter-spacing: 2px; flex: 0 0 auto;">
+        MISSION REPORT</h2>
 
-      <!-- 1. PRIMARY STATS (WPM, RANK) -->
-      <div class="score-grid"
-        style="grid-template-columns: repeat(2, 1fr) !important; gap: 15px !important; max-width: 400px; margin: 0 auto 30px auto;">
-
+      <!-- ROW 1: STATS -->
+      <div style="flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 5px;">
         <!-- WPM -->
         <div
-          style="background: rgba(0,229,255,0.1); padding: 15px; border-radius: 12px; border: 1px solid rgba(0, 229, 255, 0.5);">
-          <div style="color: #888; font-size: 0.8rem; margin-bottom: 5px;">READING SPEED</div>
-          <div id="report-wpm" style="font-size: 2rem; font-weight: bold; color: #00e5ff;">0</div>
-          <div style="font-size: 0.8rem; color: #00e5ff;">WPM</div>
-        </div>
-
-        <!-- RANK -->
-        <div style="background: rgba(255,215,0,0.1); padding: 15px; border-radius: 12px; border: 1px solid gold;">
-          <div style="color: #888; font-size: 0.8rem; margin-bottom: 5px;">WARDEN RANK</div>
-          <div id="report-rank-text" style="font-size: 1.5rem; font-weight: bold; color: gold; margin-top: 5px;">Novice
+          style="background: rgba(0,229,255,0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(0, 229, 255, 0.4);">
+          <div style="color: #888; font-size: 0.7rem;">SPEED</div>
+          <div style="display:flex; align-items:baseline; justify-content:center;">
+            <span id="report-wpm" style="font-size: 1.5rem; font-weight: bold; color: #00e5ff;">0</span>
+            <span style="font-size: 0.7rem; color: #00e5ff; margin-left:3px;">WPM</span>
           </div>
+        </div>
+        <!-- RANK -->
+        <div
+          style="background: rgba(255,215,0,0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,215,0,0.4);">
+          <div style="color: #888; font-size: 0.7rem;">RANK</div>
+          <div id="report-rank-text" style="font-size: 1.4rem; font-weight: bold; color: gold;">Novice</div>
         </div>
       </div>
 
-      <!-- 2. DETAIL SCORING (Ink, Rune, Gem + Villain) -->
-      <div
-        style="max-width: 500px; margin: 0 auto 30px auto; background: rgba(0,0,0,0.5); border-radius: 15px; padding: 20px; text-align: left;">
-
+      <!-- ROW 2: RESOURCES -->
+      <div style="flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-bottom: 5px;">
         <!-- INK -->
         <div
-          style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
-          <div style="display: flex; align-items: center;">
-            <span
-              style="font-size: 1.5rem; margin-right: 15px; color: #00e5ff; text-shadow: 0 0 10px #00e5ff;">🖋️</span>
-            <div>
-              <div style="color: #fff; font-weight: bold;">Ink (Lines Read)</div>
-              <div id="report-ink-count" style="color: #888; font-size: 0.8rem;">0 lines</div>
-            </div>
-          </div>
-          <div id="report-ink-score" style="color: #00e5ff; font-weight: bold; font-size: 1.2rem;">+0</div>
+          style="background: rgba(255,255,255,0.05); padding: 8px; border-radius: 8px; display:flex; flex-direction:column; align-items:center;">
+          <img src="ink.png" style="width:30px; height:auto; margin-bottom:2px;">
+          <div id="report-ink-count" style="font-size:0.8rem; color:#ccc;">0</div>
+          <div id="report-ink-score" style="font-size:0.9rem; font-weight:bold; color:#00e5ff;">+0</div>
         </div>
-
         <!-- RUNE -->
         <div
-          style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
-          <div style="display: flex; align-items: center;">
-            <span style="font-size: 1.5rem; margin-right: 15px; color: #00ff00; text-shadow: 0 0 10px #00ff00;">ᚱ</span>
-            <div>
-              <div style="color: #fff; font-weight: bold;">Rune (Vocab)</div>
-              <div id="report-rune-count" style="color: #888; font-size: 0.8rem;">0 words</div>
-            </div>
-          </div>
-          <div id="report-rune-score" style="color: #00ff00; font-weight: bold; font-size: 1.2rem;">+0</div>
+          style="background: rgba(255,255,255,0.05); padding: 8px; border-radius: 8px; display:flex; flex-direction:column; align-items:center;">
+          <img src="rune.png" style="width:30px; height:auto; margin-bottom:2px;">
+          <div id="report-rune-count" style="font-size:0.8rem; color:#ccc;">0</div>
+          <div id="report-rune-score" style="font-size:0.9rem; font-weight:bold; color:#00ff00;">+0</div>
         </div>
-
         <!-- GEM -->
         <div
-          style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;;">
-          <div style="display: flex; align-items: center;">
-            <span
-              style="font-size: 1.5rem; margin-right: 15px; color: #ff00ff; text-shadow: 0 0 10px #ff00ff;">💎</span>
-            <div>
-              <div style="color: #fff; font-weight: bold;">Gem (Quiz)</div>
-              <div id="report-gem-count" style="color: #888; font-size: 0.8rem;">0 solved</div>
-            </div>
-          </div>
-          <div id="report-gem-score" style="color: #ff00ff; font-weight: bold; font-size: 1.2rem;">+0</div>
+          style="background: rgba(255,255,255,0.05); padding: 8px; border-radius: 8px; display:flex; flex-direction:column; align-items:center;">
+          <img src="gem.png" style="width:30px; height:auto; margin-bottom:2px;">
+          <div id="report-gem-count" style="font-size:0.8rem; color:#ccc;">0</div>
+          <div id="report-gem-score" style="font-size:0.9rem; font-weight:bold; color:#d500f9;">+0</div>
         </div>
-
-        <!-- VILLAIN BONUS -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-          <div style="display: flex; align-items: center;">
-            <span style="font-size: 1.5rem; margin-right: 15px; color: #ff4d4d; text-shadow: 0 0 10px red;">💀</span>
-            <div>
-              <div style="color: #fff; font-weight: bold;">Final Boss Defeated</div>
-              <div style="color: #888; font-size: 0.8rem;">World Saved Bonus</div>
-            </div>
-          </div>
-          <div id="report-boss-score" style="color: gold; font-weight: bold; font-size: 1.2rem;">+10,000</div>
-        </div>
-
       </div>
 
-      <!-- 3. REWARD & ACTION (Golden Key Funnel) -->
+      <!-- ROW 3: BOSS BONUS (Slim) -->
+      <div
+        style="flex: 0 0 auto; background: rgba(255,0,0,0.1); border: 1px solid rgba(255,0,0,0.3); padding: 8px; border-radius: 8px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 0.9rem; color: #ffcccc;">💀 Final Boss Defeated</span>
+        <span id="report-boss-score" style="font-size: 1rem; color: #ff4d4d; font-weight: bold;">+10,000</span>
+      </div>
+
+      <!-- ROW 4: REWARD (Golden Key) -->
       <div id="reward-section"
-        style="background: linear-gradient(180deg, rgba(255,215,0,0.1) 0%, rgba(0,0,0,0.9) 100%); padding: 25px; border-radius: 15px; border: 1px solid rgba(255,215,0,0.3); max-width: 450px; margin: 0 auto 30px auto;">
+        style="flex: 1 1 auto; background: linear-gradient(180deg, rgba(255,215,0,0.05) 0%, rgba(0,0,0,0.8) 100%); border: 1px solid rgba(255,215,0,0.2); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; justify-content: center; min-height: 0;">
 
-        <div style="font-size: 3rem; margin-bottom: 10px;">🗝️</div>
-        <h3 style="font-family: 'Cinzel', serif; color: #ffd700; margin-bottom: 5px;">THE GOLDEN KEY</h3>
-        <p style="color: #ccc; font-size: 0.9rem; margin-bottom: 10px;">
-          Unlocks <strong>'Alice in Wonderland' Chapter 1</strong>
+        <div style="font-size: 2.5rem; margin-bottom: 5px;">🗝️</div>
+        <div
+          style="font-family: 'Cinzel', serif; color: #ffd700; font-size: 1.1rem; font-weight: bold; margin-bottom: 2px;">
+          GOLDEN KEY</div>
+        <p style="color: #ff4d4d; font-size: 0.7rem; font-weight: bold; margin-bottom: 10px;">
+          ⚠️ Warning: Unbound Key will vanish!
         </p>
 
-        <!-- WARNING MESSAGE -->
-        <p
-          style="color: #ff4d4d; font-weight: bold; font-size: 0.8rem; margin-bottom: 20px; text-shadow: 0 0 5px rgba(255,0,0,0.5);">
-          ⚠️ Warning: Unbound Key will vanish without Soul Bind.
-        </p>
-
-        <!-- Funnel Form -->
-        <div id="bind-form">
-          <input type="email" id="warden-email" placeholder="Enter Warden Email to Bind Key"
-            style="width: 100%; padding: 12px; margin-bottom: 10px; background: rgba(255,255,255,0.1); border: 1px solid #555; color: #fff; border-radius: 5px; text-align: center;">
+        <!-- Form -->
+        <div id="bind-form" style="width: 100%; max-width: 320px; margin: 0 auto;">
+          <input type="email" id="warden-email" placeholder="Enter Email to Bind Key"
+            style="width: 100%; padding: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.1); border: 1px solid #555; color: #fff; border-radius: 5px; text-align: center; font-size: 0.9rem;">
 
           <button class="btn-primary" onclick="Game.bindKeyAndUnlock()"
-            style="width: 100%; background: #ffd700; color: #000; font-weight: bold; border: none; padding: 12px; border-radius: 5px; cursor: pointer; box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);">
-            🛡️ JOIN WARDENS & UNLOCK
+            style="width: 100%; background: #ffd700; color: #000; font-weight: bold; border: none; padding: 10px; border-radius: 5px; cursor: pointer; font-size: 0.9rem; box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);">
+            🛡️ BIND & UNLOCK
           </button>
         </div>
-
       </div>
+
     </section>
 
     <!-- NEW SCENE 3: SIGN UP (Lead Gen) -->
