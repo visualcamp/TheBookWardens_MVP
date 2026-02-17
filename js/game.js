@@ -566,6 +566,16 @@ const Game = {
     },
 
     switchScreen(screenId) {
+        // [FIX] Force close overlay screens that might not be in SceneManager
+        const overlays = ['screen-new-share', 'screen-new-score', 'screen-final-boss', 'alice-final-screen'];
+        overlays.forEach(id => {
+            const el = document.getElementById(id);
+            if (el && id !== screenId) {
+                el.style.display = 'none';
+                el.classList.remove('active');
+            }
+        });
+
         if (!this.sceneManager) return;
         this.sceneManager.show(screenId);
 
