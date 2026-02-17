@@ -231,6 +231,16 @@ const Game = {
         // 3. Auto-start / Skip Logic
         const params = new URLSearchParams(window.location.search);
 
+        // [FIX] Force Expose Methods globally (Anti-Module Scope Issue)
+        // This ensures inline HTML onclicks can find them even if 'this' context is tricky.
+        if (window.Game) {
+            window.Game.bindKeyAndUnlock_V2 = this.bindKeyAndUnlock_V2.bind(this);
+            window.Game.switchScreen = this.switchScreen.bind(this);
+            console.log("[Game] Confirmed bindKeyAndUnlock_V2 is exposed to window.Game");
+        } else {
+            console.error("[Game] Critical: window.Game is missing during init!");
+            window.Game = this;
+        }
         // NEW: Check for 'skip_intro=1' (Coming back from In-App Browser Redirect)
         // If present, we skip the splash screen entirely and go to Home.
         if (params.get("skip_intro") === "1" && !this.isInAppBrowser()) {
