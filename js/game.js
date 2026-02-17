@@ -2193,7 +2193,7 @@ Game.typewriter = {
 
     },
 
-    bindKeyAndUnlock() {
+    bindKeyAndUnlock_V2() {
         alert("[DEBUG] Bind Function Called"); // Entry Check
         const emailInput = document.getElementById('warden-email');
         let email = emailInput ? emailInput.value : '';

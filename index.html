@@ -942,7 +942,7 @@
             style="width: 100%; padding: 12px; margin-bottom: 10px; background: rgba(255,255,255,0.05); border: 1px solid #555; color: #fff; border-radius: 5px; text-align: center; font-size: 1rem;">
 
           <button
-            onclick="alert('Inline Click!'); console.log('Inline Click!'); if(window.Game) window.Game.bindKeyAndUnlock(); else alert('Game Object Missing!');"
+            onclick="alert('Inline Click!'); console.log('Inline Click!'); if(window.Game) window.Game.bindKeyAndUnlock_V2(); else alert('Game Object Missing!');"
             style="width:100%; height: 50px; background:#ffd700; border:none; border-radius:5px; font-weight:bold; cursor:pointer; font-size: 1.1rem; box-shadow: 0 0 15px rgba(255,215,0,0.5); transition: transform 0.1s;">
             CLAIM REWARD
           </button>
@@ -1230,7 +1230,7 @@
   </script>
   <!-- 2. Game Logic -->
   <script src="./js/calibration.js?v=DEBUG_FORCE_INIT"></script>
-  <script type="module" src="./js/game.js?v=Game_Methods_Added_V28"></script>
+  <script type="module" src="./js/game.js?v=BIND_V2_FIX"></script>
 
   <!-- 3. Explicit Event Binding for Debug Button (With STANDALONE BATTLE LOGIC) -->
   <!-- 3. Conflicting Emergency Script REMOVED for Stability -->
