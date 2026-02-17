@@ -2102,9 +2102,24 @@ Game.typewriter = {
             }
             const btn = document.querySelector('#bind-form button');
             if (btn) {
-                btn.style.pointerEvents = "auto";
-                btn.style.zIndex = "100001";
-                btn.style.position = "relative";
+                // Remove inline handler
+                btn.removeAttribute("onclick");
+
+                // Force new clean listener (Clone to strip old listeners if any)
+                const newBtn = btn.cloneNode(true);
+                btn.parentNode.replaceChild(newBtn, btn);
+
+                newBtn.style.pointerEvents = "auto";
+                newBtn.style.zIndex = "100001";
+                newBtn.style.position = "relative";
+
+                newBtn.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    alert("[DEBUG] Button Click Event Triggered");
+                    this.bindKeyAndUnlock();
+                });
+                console.log("[Game] Reward Button events rebound.");
             }
         }
 
