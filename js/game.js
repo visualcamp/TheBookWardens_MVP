@@ -47,30 +47,23 @@ const Game = {
     init() {
         console.log("Game Init");
 
-        // Instatiate Manager Classes
+        // 1. Core Managers (Must be first)
         this.scoreManager = new ScoreManager();
         this.sceneManager = new SceneManager();
-        // WardenManager handles HTML onclick logic but also needs Game reference if called via JS
-        // (WardenManager is instantiated on-demand in index.html for binding, or via Game if needed)
-        // this.wardenManager = new WardenManager(this); // Optional here if we rely on global
+        this.uiManager = new UIManager(this);
+        this.gameLogic = new GameLogic(this); // Critical Dependency
 
-        // [Moved Intro Logic]
+        // 2. Feature Managers (Dependent on Core)
         this.introManager = new IntroManager(this);
-        this.introManager.init();
-
-        // [Moved Vocab Logic]
         this.vocabManager = new VocabManager(this);
         this.vocabManager.init(vocabList);
 
-        // [Moved UI Logic]
-        this.uiManager = new UIManager(this);
-
-        // [Moved Game Logic]
-        this.gameLogic = new GameLogic(this);
-
-        // [Moved DOM Bindings]
+        // 3. DOM & Events (Last)
         this.domManager = new DOMManager(this);
         this.domManager.init();
+
+        // 4. Start Features
+        this.introManager.init(); // Now safe to call
 
         // 4. Session ID for Firebase
         this.sessionId = Math.random().toString(36).substring(2, 6).toUpperCase();
