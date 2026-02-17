@@ -22,7 +22,7 @@
     const villainCooldownBase = 2000; // ms
     let lastVillainAttackTime = 0;
 
-    const aliceStory = "Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing to do: once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations in it, 'and what is the use of a book,' thought Alice 'without pictures or conversations?'";
+    const aliceStory = "For it flashed across her mind that she had never before seen a rabbit with either a waistcoat-pocket, or a watch to take out of it, and burning with curiosity, she ran across the field after it.";
 
     // UI Cache
     let ui = {
@@ -475,10 +475,13 @@
                 // SETUP UNIFIED BAR (TUG OF WAR)
                 if (ui.villainHp) {
                     ui.villainHp.style.width = '50%'; // Start at 50%
-                    ui.villainHp.style.backgroundColor = '#4da6ff'; // Blue (Warden)
+                    ui.villainHp.style.backgroundColor = '#2962FF'; // Vivid Blue (Warden)
+
                     // Parent is Red (Villain)
-                    ui.villainHp.parentElement.style.backgroundColor = '#ff4d4d';
-                    ui.villainHp.parentElement.style.border = '2px solid #fff';
+                    const parentBar = ui.villainHp.parentElement;
+                    parentBar.style.backgroundColor = '#D50000'; // Vivid Red
+                    parentBar.style.border = '2px solid #fff';
+                    parentBar.style.height = '24px'; // Thicker Bar
                 }
 
                 // Hide Old Warden HP Bar
