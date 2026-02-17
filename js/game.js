@@ -879,6 +879,10 @@ Game.typewriter = {
     },
 
     loadBossQuiz(index) {
+        // [FIX] Ensure screen is interactive (reset previous lock)
+        const villainScreen = document.getElementById("screen-boss");
+        if (villainScreen) villainScreen.style.pointerEvents = "auto";
+
         if (!this.quizzes || !this.quizzes[index]) return;
 
         const quiz = this.quizzes[index];
