@@ -166,15 +166,9 @@ const Game = {
 
         // Safety Fallback if HUD element missing
         if (!targetEl) {
-            console.warn(`[Game] spawnFlyingResource target '${targetId}' not found. Using fallback position.`);
-            // Create dummy target at top-right or top-center
+            // Create dummy target at top-right
             targetEl = {
-                getBoundingClientRect: () => ({
-                    left: window.innerWidth - 100,
-                    top: 20,
-                    width: 0,
-                    height: 0
-                }),
+                getBoundingClientRect: () => ({ left: window.innerWidth - 60, top: 40, width: 0, height: 0 }),
                 parentElement: null
             };
         }
@@ -183,45 +177,62 @@ const Game = {
         const targetX = targetRect.left + targetRect.width / 2;
         const targetY = targetRect.top + targetRect.height / 2;
 
-        // CP Control Point (Arc Upwards)
-        const cpX = startX + (Math.random() * 100 - 50);
-        const cpY = Math.min(startY, targetY) - 150;
-
         // Create Element
         const p = document.createElement('div');
         p.className = 'flying-resource';
-        p.innerText = type === 'ink' ? `+${amount} Ink` : `+${amount} Gems`;
+        p.innerText = type === 'ink' ? `+${amount}` : `+${amount}`;
         p.style.position = 'fixed';
         p.style.left = startX + 'px';
         p.style.top = startY + 'px';
-        p.style.color = type === 'ink' ? '#00ffff' : '#ffd700'; // Cyan or Gold
+        p.style.color = type === 'ink' ? '#00ffff' : '#ffd700';
         p.style.fontWeight = 'bold';
-        p.style.fontSize = '24px';
+        p.style.fontSize = '1.5rem';
         p.style.pointerEvents = 'none';
         p.style.zIndex = '1000001';
-        p.style.transform = 'translate(-50%, -50%) scale(1)';
         p.style.textShadow = `0 0 10px ${p.style.color}`;
         p.style.transition = 'opacity 0.2s';
 
-        // Add Icon
+        // Icon
         const icon = document.createElement('span');
         icon.innerText = type === 'ink' ? ' ✒️' : ' 💎';
         p.appendChild(icon);
 
         document.body.appendChild(p);
 
-        // Animation Loop (Quadratic Bezier)
+        // Fail-safe removal (Force remove after 1.2s)
+        setTimeout(() => {
+            if (p && p.parentNode) p.remove();
+        }, 1200);
+
+        // Animation Loop
         let startTime = null;
         const duration = 1000;
+        const cpX = startX + (Math.random() * 100 - 50);
+        const cpY = Math.min(startY, targetY) - 150;
 
         const animate = (timestamp) => {
             if (!startTime) startTime = timestamp;
             const progress = (timestamp - startTime) / duration;
-            p.style.transform = `translate(-50%, -50%) scale(${1 + Math.sin(progress * Math.PI) * 0.5})`;
 
-            requestAnimationFrame(animate);
+            if (progress < 1) {
+                const t = progress;
+                const ease = 1 - Math.pow(1 - t, 3);
+
+                const curX = Math.pow(1 - ease, 2) * startX + 2 * (1 - ease) * ease * cpX + Math.pow(ease, 2) * targetX;
+                const curY = Math.pow(1 - ease, 2) * startY + 2 * (1 - ease) * ease * cpY + Math.pow(ease, 2) * targetY;
+
+                p.style.left = curX + 'px';
+                p.style.top = curY + 'px';
+                p.style.opacity = 1 - Math.pow(ease, 4);
+
+                window.requestAnimationFrame(animate);
+            } else {
+                if (p.parentNode) p.remove();
+                if (type === 'gem') Game.addGems(amount);
+                if (type === 'ink') Game.addInk(amount);
+            }
         };
-        requestAnimationFrame(animate);
+        window.requestAnimationFrame(animate);
     },
 
     // --- 1.2 WPM Selection (Delegated) ---
@@ -912,12 +923,16 @@ Game.typewriter = {
         // Correct Answer Check
         // Correct Answer Check
         if (optionIndex === quiz.a) {
+            // [FIX] Disable ALL buttons immediately to prevent double-click / race conditions
+            const allBtns = document.querySelectorAll("#boss-options button");
+            allBtns.forEach(b => b.disabled = true);
+
             // SUCCESS
             // logic moved to flying resource callback
             // Game.addGems(10); 
 
             // Trigger Visuals
-            const btn = document.querySelectorAll("#boss-options button")[optionIndex];
+            const btn = allBtns[optionIndex];
             if (btn && typeof Game.spawnFlyingResource === 'function') {
                 const rect = btn.getBoundingClientRect();
                 Game.spawnFlyingResource(rect.left + rect.width / 2, rect.top + rect.height / 2, 10, 'gem');
