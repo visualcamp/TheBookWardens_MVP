@@ -941,22 +941,28 @@ Game.typewriter = {
                 console.log("Boss Defeated! +10 Gems");
             }
 
-            // Hide Boss UI immediately (Force)
+            // Hide Boss UI after animation (1.0s delay)
             const villainScreen = document.getElementById("screen-boss");
             if (villainScreen) {
-                villainScreen.classList.remove("active");
-                villainScreen.style.display = "none"; // Hard hide to prevent loop
-                // Restore display property after transition so it can reappear later
-                setTimeout(() => { villainScreen.style.display = ""; }, 2000);
+                // Just prevent interaction immediately
+                villainScreen.style.pointerEvents = "none";
             }
+            // Logic for next screen is handled below with delay
 
             // Check if this was the Last Paragraph
             if (this.currentParaIndex >= this.paragraphs.length - 1) {
                 // [CHANGED] Instead of Victory, go to FINAL BOSS
                 console.log("[Game] All paragraphs done. Summoning ARCH-VILLAIN...");
                 setTimeout(() => {
+                    // FORCE HIDE MID BOSS SCREEN
+                    const vs = document.getElementById("screen-boss");
+                    if (vs) {
+                        vs.style.display = "none";
+                        vs.classList.remove("active");
+                        vs.style.pointerEvents = "auto";
+                    }
                     this.triggerFinalBossBattle();
-                }, 1500);
+                }, 1000);
             } else {
                 // GO TO NEXT PARAGRAPH
                 // Force hide villain modal if exists
