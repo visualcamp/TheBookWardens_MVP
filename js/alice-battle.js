@@ -235,6 +235,7 @@ export const AliceBattle = {
     init() {
         try {
             console.log("Initializing Alice Battle (Closure Mode)...");
+            // alert("AliceBattle Init called!"); // Ensure we reach here
             const container = document.getElementById('screen-alice-battle');
             if (container) {
                 container.style.display = 'flex';

@@ -961,7 +961,13 @@ Game.typewriter = {
                         vs.classList.remove("active");
                         vs.style.pointerEvents = "auto";
                     }
-                    this.triggerFinalBossBattle();
+                    if (window.AliceBattleRef) {
+                        // alert("AliceRef Found! Triggering...");
+                        this.triggerFinalBossBattle();
+                    } else {
+                        alert("ERROR: window.AliceBattleRef is MISSING!\nCheck console for script errors.");
+                        console.error("AliceBattleRef missing. Cannot start final boss.");
+                    }
                 }, 1000);
             } else {
                 // GO TO NEXT PARAGRAPH
