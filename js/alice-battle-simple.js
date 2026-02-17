@@ -679,7 +679,18 @@
                     ui.finalScreen.style.opacity = '0';
                 }
 
-                cardValues.ink = 190; cardValues.rune = 30; cardValues.gem = 50;
+                // Score Initialization: Use Real Game Data if Available, else Default Test Values
+                if (window.Game && window.Game.scoreManager && (window.Game.scoreManager.ink > 0 || window.Game.scoreManager.runes > 0 || window.Game.scoreManager.gems > 0)) {
+                    cardValues.ink = window.Game.scoreManager.ink;
+                    cardValues.rune = window.Game.scoreManager.runes;
+                    cardValues.gem = window.Game.scoreManager.gems;
+                    console.log("[AliceBattle] Loaded Real Scores:", cardValues);
+                } else {
+                    cardValues.ink = 190;
+                    cardValues.rune = 30;
+                    cardValues.gem = 50;
+                    console.log("[AliceBattle] Loaded Default Test Scores:", cardValues);
+                }
 
                 // Compact Villain Cards (PUSH UP SLIGHTLY from previous)
                 const vCards = container.querySelector('.villain-cards') || container.querySelector('.entity-area.villain .card-container');
