@@ -206,8 +206,9 @@
     }
 
     function getTargetCharsForWarden(type) {
-        // Collect all GRAY chars
-        const allGray = Array.from(document.querySelectorAll('.b-char[data-state="gray"]'));
+        if (!ui.textField) return [];
+        // Collect all GRAY chars in THIS text field
+        const allGray = Array.from(ui.textField.querySelectorAll('.b-char[data-state="gray"]'));
         if (allGray.length === 0) return [];
 
         let targets = [];
@@ -250,8 +251,9 @@
     }
 
     function getTargetCharsForVillain(type) {
-        // Collect all WHITE chars
-        const allWhite = Array.from(document.querySelectorAll('.b-char[data-state="white"]'));
+        if (!ui.textField) return [];
+        // Collect all WHITE chars in THIS text field
+        const allWhite = Array.from(ui.textField.querySelectorAll('.b-char[data-state="white"]'));
         if (allWhite.length === 0) return []; // Nothing to corrupt
 
         let targets = [];
@@ -430,7 +432,10 @@
                 ui.finalScreen = document.getElementById('alice-final-screen');
                 ui.storyDisplay = document.getElementById('story-display');
                 ui.resultHeader = document.getElementById('result-header');
-                ui.textField = document.getElementById('alice-text'); // Middle text area
+                ui.resultHeader = document.getElementById('result-header');
+
+                // CRITICAL FIX: Scope to container to avoid ID collision with other screens
+                ui.textField = container.querySelector('#alice-text'); // Middle text area in THIS screen
 
                 window.addEventListener('resize', resize);
                 resize();
