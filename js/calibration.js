@@ -38,13 +38,13 @@ export class CalibrationManager {
         // Clear old
         if (this.state.maxWaitTimer) clearTimeout(this.state.maxWaitTimer);
 
-        // 10 seconds max wait for 1 point
+        // 5 seconds max wait for 1 point (Emergency Reduction)
         this.state.maxWaitTimer = setTimeout(() => {
             if (this.state.running) {
-                this.ctx.logW("cal", "Calibration timed out (10s limit). Showing fail popup.");
+                this.ctx.logW("cal", "Calibration timed out (5s limit). Showing fail popup.");
                 this.showFailPopup();
             }
-        }, 10000);
+        }, 5000);
     }
 
     showFailPopup() {
