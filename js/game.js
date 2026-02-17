@@ -941,13 +941,13 @@ Game.typewriter = {
                 console.log("Boss Defeated! +10 Gems");
             }
 
-            // Hide Boss UI immediately (Force)
+            // Hide Boss UI handled by screen transition later (1.5s delay)
             const villainScreen = document.getElementById("screen-boss");
             if (villainScreen) {
-                villainScreen.classList.remove("active");
-                villainScreen.style.display = "none"; // Hard hide to prevent loop
-                // Restore display property after transition so it can reappear later
-                setTimeout(() => { villainScreen.style.display = ""; }, 2000);
+                // Just disable interaction, let animation play
+                villainScreen.style.pointerEvents = "none";
+                // Don't hide display here. 
+                // switchScreen calls will hide it automatically when next screen activates.
             }
 
             // Check if this was the Last Paragraph
