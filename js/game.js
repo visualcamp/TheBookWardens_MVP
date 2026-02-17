@@ -9,8 +9,6 @@ import { WardenManager } from './managers/WardenManager.js?v=2';
 import { IntroManager } from './managers/IntroManager.js?v=2';
 import { VocabManager } from './managers/VocabManager.js?v=2';
 import { UIManager } from './core/UIManager.js?v=2';
-// game.js - Using ES Modules for structured logic
-console.log("[game.js] Script START execution");
 import { GameLogic } from './core/GameLogic.js?v=2';
 import { DOMManager } from './core/DOMManager.js?v=2';
 const Game = {
@@ -943,36 +941,22 @@ Game.typewriter = {
                 console.log("Boss Defeated! +10 Gems");
             }
 
-            // Hide Boss UI handled by screen transition later (1.5s delay)
+            // Hide Boss UI immediately (Force)
             const villainScreen = document.getElementById("screen-boss");
             if (villainScreen) {
-                // Just disable interaction, let animation play
-                villainScreen.style.pointerEvents = "none";
-                // Don't hide display here. 
-                // switchScreen calls will hide it automatically when next screen activates.
+                villainScreen.classList.remove("active");
+                villainScreen.style.display = "none"; // Hard hide to prevent loop
+                // Restore display property after transition so it can reappear later
+                setTimeout(() => { villainScreen.style.display = ""; }, 2000);
             }
 
             // Check if this was the Last Paragraph
             if (this.currentParaIndex >= this.paragraphs.length - 1) {
                 // [CHANGED] Instead of Victory, go to FINAL BOSS
-                // [CHANGED] Direct call to GameLogic to bypass potential 'this' issues
                 console.log("[Game] All paragraphs done. Summoning ARCH-VILLAIN...");
                 setTimeout(() => {
-                    // FORCE HIDE BOSS SCREEN
-                    const vs = document.getElementById("screen-boss");
-                    if (vs) {
-                        vs.style.display = "none";
-                        vs.style.pointerEvents = "auto"; // Reset for next time
-                        vs.classList.remove("active");
-                    }
-
-                    if (this.gameLogic) {
-                        this.gameLogic.triggerFinalBossBattle();
-                    } else {
-                        console.error("[Game] GameLogic missing! Forcing screen switch.");
-                        Game.switchScreen("screen-alice-battle");
-                    }
-                }, 1000);
+                    this.triggerFinalBossBattle();
+                }, 1500);
             } else {
                 // GO TO NEXT PARAGRAPH
                 // Force hide villain modal if exists
@@ -1063,22 +1047,6 @@ Game.typewriter = {
 };
 
 window.Game = Game;
-
-// [DEBUG] Shortcut
-window.debugJump = (idx = 2) => {
-    console.log(`[Debug v14.1.20] Jumping to MidBoss Battle ${idx}`);
-    // Use window.Game to ensure global reference
-    if (window.Game && typeof window.Game.triggerMidBossBattle === 'function') {
-        window.Game.currentParaIndex = idx;
-        window.Game.triggerMidBossBattle();
-    } else {
-        console.error("[Debug] Game.triggerMidBossBattle not found on window.Game", window.Game);
-        // Fallback: try local scope Game
-        if (typeof Game !== 'undefined' && Game.triggerMidBossBattle) {
-            Game.triggerMidBossBattle();
-        }
-    }
-};
 
 // [SAFETY FIX] Module timing protection
 const initGame = () => {
