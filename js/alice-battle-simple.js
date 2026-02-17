@@ -106,6 +106,7 @@
         height = canvas.height = window.innerHeight;
     }
 
+
     function initTextBattlefield() {
         if (!ui.textField) return;
         ui.textField.innerHTML = '';
@@ -126,8 +127,12 @@
                 charSpan.className = 'b-char gray'; // Init as Gray
                 charSpan.innerText = word[i];
                 charSpan.id = `char-${wordIdx}-${i}`; // Unique ID for targeting
-                charSpan.style.transition = 'color 0.5s, text-shadow 0.3s';
-                charSpan.style.color = '#666'; // Visual Gray
+                charSpan.style.transition = 'color 0.3s, text-shadow 0.3s, transform 0.2s';
+
+                // Force Gray Style
+                charSpan.style.setProperty('color', '#555', 'important');
+                charSpan.style.textShadow = 'none';
+
                 charSpan.dataset.state = 'gray'; // Logical State
 
                 wordSpan.appendChild(charSpan);
@@ -143,7 +148,8 @@
     function updateVillainHP() {
         const hpPercent = (grayChars / totalChars) * 100;
         if (ui.villainHp) ui.villainHp.style.width = hpPercent + '%';
-        if (grayChars <= 0) endGame('victory');
+        // Only trigger victory if > 0 chars were loaded initially to prevent instant win
+        if (totalChars > 0 && grayChars <= 0) endGame('victory');
     }
 
     function updateCardDisplay() {
@@ -162,17 +168,31 @@
         if (newState === 'white') {
             charEl.classList.remove('gray');
             charEl.classList.add('white');
-            charEl.style.color = '#fff';
-            charEl.style.textShadow = '0 0 10px #fff, 0 0 20px cyan';
+
+            // Strong White Transition
+            charEl.style.setProperty('color', '#ffffff', 'important');
+            charEl.style.textShadow = '0 0 10px #fff, 0 0 20px cyan, 0 0 30px cyan';
+            charEl.style.transform = 'scale(1.1)';
+
             grayChars--;
-            setTimeout(() => { charEl.style.textShadow = 'none'; }, 500);
+            setTimeout(() => {
+                charEl.style.textShadow = 'none';
+                charEl.style.transform = 'scale(1)';
+            }, 600);
         } else {
             charEl.classList.remove('white');
             charEl.classList.add('gray');
-            charEl.style.color = '#666';
-            charEl.style.textShadow = '0 0 10px #f00';
+
+            // Strong Gray Transition
+            charEl.style.setProperty('color', '#555', 'important');
+            charEl.style.textShadow = '0 0 10px #ff0000';
+            charEl.style.transform = 'scale(0.9)';
+
             grayChars++;
-            setTimeout(() => { charEl.style.textShadow = 'none'; }, 500);
+            setTimeout(() => {
+                charEl.style.textShadow = 'none';
+                charEl.style.transform = 'scale(1)';
+            }, 600);
         }
         return true;
     }
