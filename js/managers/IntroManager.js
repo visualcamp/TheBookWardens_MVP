@@ -28,7 +28,25 @@ export class IntroManager {
                     console.warn("Fullscreen deferred: " + e.message);
                 }
 
-                // 3. Start Rift Intro
+                // 3. Initialize Eye Tracking SDK
+                try {
+                    console.log("[IntroManager] Requesting Eye Tracking Boot...");
+                    if (typeof window.startEyeTracking === 'function') {
+                        const success = await window.startEyeTracking();
+                        if (!success) {
+                            console.error("[IntroManager] Eye Tracking Init Failed!");
+                            // Show error modal? Or just proceed with warning?
+                            // For now, proceed (Calibration will fail gracefully)
+                            alert("Eye tracking failed to initialize. Game may not work correctly.");
+                        }
+                    } else {
+                        console.error("[IntroManager] startEyeTracking function not found!");
+                    }
+                } catch (e) {
+                    console.error("[IntroManager] SDK Boot Error:", e);
+                }
+
+                // 4. Start Rift Intro
                 this.startRiftIntro();
             };
         }

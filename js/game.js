@@ -309,26 +309,16 @@ const Game = {
 
     // --- 4. Splash Screen Logic (Proxy to IntroManager) ---
     dismissSplash() {
-        if (this.introManager && typeof this.introManager.dismissSplash === 'function') {
-            this.introManager.dismissSplash();
-        } else {
-            console.error("IntroManager.dismissSplash missing! Using Fallback.");
-
-            // Fallback Logic: Hide Splash manually
-            const splash = document.getElementById("screen-splash");
-            if (splash) {
-                splash.classList.remove("active");
-                splash.style.display = "none";
-            }
-
-            // Try alternate method or go home
-            if (this.introManager && typeof this.introManager.startRiftIntro === 'function') {
-                this.introManager.startRiftIntro();
-            } else {
-                // Absolute fallback
-                this.switchScreen("screen-home");
+        // 1. Check In-App Browser (Critical for Eye Tracking)
+        if (this.introManager && typeof this.introManager.isInAppBrowser === 'function') {
+            if (this.introManager.isInAppBrowser()) {
+                this.introManager.openSystemBrowser();
+                return;
             }
         }
+
+        // 2. Go to Lobby (Home) to initialize SDK properly via user interaction
+        this.switchScreen("screen-home");
     },
 
     // --- NEW: Enriched Game Flow (Debug / Implementation) ---
