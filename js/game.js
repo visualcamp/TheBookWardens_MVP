@@ -309,13 +309,25 @@ const Game = {
 
     // --- 4. Splash Screen Logic (Proxy to IntroManager) ---
     dismissSplash() {
-        if (this.introManager) {
+        if (this.introManager && typeof this.introManager.dismissSplash === 'function') {
             this.introManager.dismissSplash();
         } else {
-            console.error("IntroManager not ready!");
-            // Fallback manual removal if Manager fails
+            console.error("IntroManager.dismissSplash missing! Using Fallback.");
+
+            // Fallback Logic: Hide Splash manually
             const splash = document.getElementById("screen-splash");
-            if (splash) splash.classList.remove("active");
+            if (splash) {
+                splash.classList.remove("active");
+                splash.style.display = "none";
+            }
+
+            // Try alternate method or go home
+            if (this.introManager && typeof this.introManager.startRiftIntro === 'function') {
+                this.introManager.startRiftIntro();
+            } else {
+                // Absolute fallback
+                this.switchScreen("screen-home");
+            }
         }
     },
 
