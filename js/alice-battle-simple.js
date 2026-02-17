@@ -122,6 +122,7 @@
         ui.textField.style.height = 'auto';
         ui.textField.style.minHeight = '150px';
         ui.textField.style.lineHeight = '1.6';
+        ui.textField.style.fontSize = '0.9em'; // 90% size as requested
 
         ui.textField.innerHTML = '';
         totalChars = 0;
@@ -434,7 +435,8 @@
                 ui.gameUi = document.getElementById('alice-game-ui');
                 ui.villainHp = document.getElementById('villain-hp');
                 ui.wardenHp = document.getElementById('warden-hp');
-                ui.log = document.getElementById('al-log');
+                ui.log = container.querySelector('#al-log'); // Scoped log
+                if (ui.log) ui.log.innerText = ""; // Clear initial text per user request
                 ui.finalScreen = document.getElementById('alice-final-screen');
                 ui.storyDisplay = document.getElementById('story-display');
                 ui.resultHeader = document.getElementById('result-header');
@@ -456,7 +458,7 @@
                     ui.finalScreen.style.display = 'none';
                     ui.finalScreen.style.opacity = '0';
                 }
-                if (ui.log) ui.log.innerText = "Use your cards to purify the text!";
+                // ui.log.innerText = "Use your cards to purify the text!"; // Removing per user request
 
                 cardValues.ink = 190; cardValues.rune = 30; cardValues.gem = 50;
 
