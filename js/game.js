@@ -2081,52 +2081,69 @@ Game.typewriter = {
         const score = this.scoreManager || {};
         let wpm = score.wpm || Math.floor(Math.random() * 50 + 200); // MVP Juice
         let acc = score.accuracy || Math.floor(Math.random() * 5 + 95);
+
         let ink = score.ink || 0;
         let rune = score.runes || 0;
         let gem = score.gems || 0;
 
-        // 2. Determine Rank & Title
-        let rank = 'B';
-        let rankColor = '#aaa';
-        let title = 'Scribe';
-
-        if (acc >= 98) {
-            rank = 'S+'; rankColor = 'gold'; title = 'Grand Warden';
-        } else if (acc >= 95) {
-            rank = 'S'; rankColor = 'gold'; title = 'Master Warden';
-        } else if (acc >= 90) {
-            rank = 'A'; rankColor = '#00e5ff'; title = 'Librarian';
-        } else if (acc >= 80) {
-            rank = 'B'; rankColor = '#00ff00'; title = 'Apprentice';
-        } else {
-            rank = 'C'; rankColor = '#fff'; title = 'Novice';
+        // MVP Default Values if empty for demo
+        if (ink === 0 && rune === 0 && gem === 0) {
+            ink = 15; rune = 5; gem = 2; // Demo values
         }
 
-        // 3. Calculate Total Contribution
-        // Formula: (Ink * 10) + (Rune * 100) + (Gem * 500)
-        let totalScore = (ink * 10) + (rune * 100) + (gem * 500);
-        if (totalScore === 0) totalScore = 15420; // Default Juice for MVP if no gameplay
+        // 2. Determine Rank (simplified as requested)
+        // Novice / Apprentice / Master
+        let rankText = 'Novice';
+        let rankColor = '#fff';
+
+        if (acc >= 95) {
+            rankText = 'Master'; rankColor = 'gold';
+        } else if (acc >= 85) {
+            rankText = 'Apprentice'; rankColor = '#00ff00';
+        } else {
+            rankText = 'Novice'; rankColor = '#aaa';
+        }
+
+        // 3. Calculate Scores
+        // Ink: 10 pts per line
+        // Rune: 100 pts per word
+        // Gem: 500 pts per quiz
+        let inkScore = ink * 10;
+        let runeScore = rune * 100;
+        let gemScore = gem * 500;
+        let totalScore = inkScore + runeScore + gemScore;
 
         // 4. Update UI
+
+        // Primary Stats
         const wpmEl = document.getElementById('report-wpm');
         if (wpmEl) wpmEl.innerText = wpm;
 
-        const accEl = document.getElementById('report-acc');
-        if (accEl) accEl.innerText = acc + '%';
-
-        const rankEl = document.getElementById('report-rank');
+        const rankEl = document.getElementById('report-rank-text');
         if (rankEl) {
-            rankEl.innerText = rank;
+            rankEl.innerText = rankText;
             rankEl.style.color = rankColor;
-            rankEl.style.textShadow = `0 0 20px ${rankColor}`;
         }
 
-        const titleEl = document.getElementById('report-title');
-        if (titleEl) {
-            titleEl.innerText = title;
-            titleEl.style.color = rankColor;
-        }
+        // Detail Scoring - Ink
+        const inkCountEl = document.getElementById('report-ink-count');
+        if (inkCountEl) inkCountEl.innerText = `${ink} lines`;
+        const inkScoreEl = document.getElementById('report-ink-score');
+        if (inkScoreEl) inkScoreEl.innerText = `+${inkScore}`;
 
+        // Detail Scoring - Rune
+        const runeCountEl = document.getElementById('report-rune-count');
+        if (runeCountEl) runeCountEl.innerText = `${rune} words`;
+        const runeScoreEl = document.getElementById('report-rune-score');
+        if (runeScoreEl) runeScoreEl.innerText = `+${runeScore}`;
+
+        // Detail Scoring - Gem
+        const gemCountEl = document.getElementById('report-gem-count');
+        if (gemCountEl) gemCountEl.innerText = `${gem} solved`;
+        const gemScoreEl = document.getElementById('report-gem-score');
+        if (gemScoreEl) gemScoreEl.innerText = `+${gemScore}`;
+
+        // Total Score
         const totalEl = document.getElementById('report-total-score');
         if (totalEl) totalEl.innerText = totalScore.toLocaleString();
     },
