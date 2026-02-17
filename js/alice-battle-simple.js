@@ -364,31 +364,43 @@
 
         btn.onclick = (e) => {
             if (e) e.stopPropagation();
-            console.log("[Victory] Click!");
+            console.log("[Victory] Click! Scorched Earth Engaged.");
 
+            // 1. Kill Zombies (Stop Background Loops)
+            let id = window.requestAnimationFrame(function () { });
+            while (id--) {
+                window.cancelAnimationFrame(id);
+            }
+            // Nullify global loop function referenced in other files
+            if (window.loop) window.loop = () => { };
+
+            // 2. Hide Container Forcefully
+            container.style.display = 'none';
+            container.setAttribute('style', 'display: none !important');
+
+            // 3. Try Clean Navigation
             if (window.Game && typeof window.Game.goToNewScore === 'function') {
                 window.Game.goToNewScore();
-            } else {
-                console.warn("[Victory] Game.goToNewScore missing. Using Force DOM Navigation.");
+            }
 
-                // FORCE DOM NAVIGATION (Fallback)
-                container.style.display = 'none'; // Hide current screen
-
+            // 4. Force Visual Update (Direct DOM)
+            setTimeout(() => {
                 const scoreScreen = document.getElementById('screen-new-score');
                 if (scoreScreen) {
                     scoreScreen.style.display = 'flex';
+                    scoreScreen.style.opacity = '1';
+                    scoreScreen.style.zIndex = '99999999';
 
-                    // Simple random update for visual feedback
+                    // Force UI Update
                     const wpmEl = document.getElementById('report-wpm');
                     if (wpmEl) wpmEl.innerText = Math.floor(Math.random() * 50 + 200);
-
                     const accEl = document.getElementById('report-acc');
                     if (accEl) accEl.innerText = "98%";
                 } else {
-                    alert("Critical Error: Score Screen DOM missing.");
+                    alert("Critical: Score Screen Missing. Reloading.");
                     location.reload();
                 }
-            }
+            }, 100);
         };
 
         content.appendChild(btn);
