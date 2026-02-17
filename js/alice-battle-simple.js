@@ -122,7 +122,7 @@
         ui.textField.style.height = 'auto';
         ui.textField.style.minHeight = '150px';
         ui.textField.style.lineHeight = '1.6';
-        ui.textField.style.fontSize = '0.9em'; // 90% size as requested
+        ui.textField.style.fontSize = '0.9em'; // 90% size
 
         ui.textField.innerHTML = '';
         totalChars = 0;
@@ -139,20 +139,27 @@
 
             for (let i = 0; i < word.length; i++) {
                 const charSpan = document.createElement('span');
-                charSpan.className = 'b-char gray'; // Init as Gray
                 charSpan.innerText = word[i];
-                charSpan.id = `char-${wordIdx}-${i}`; // Unique ID for targeting
+                charSpan.id = `char-${wordIdx}-${i}`;
                 charSpan.style.transition = 'color 0.3s, text-shadow 0.3s, transform 0.2s';
 
-                // Force Gray Style
-                charSpan.style.setProperty('color', '#555', 'important');
-                charSpan.style.textShadow = 'none';
-
-                charSpan.dataset.state = 'gray'; // Logical State
+                // 50/50 Chance Logic
+                // If random > 0.5 => Gray (Corrupted), Else => White (Purified)
+                if (Math.random() > 0.5) {
+                    charSpan.className = 'b-char gray';
+                    charSpan.style.setProperty('color', '#555', 'important');
+                    charSpan.style.textShadow = 'none';
+                    charSpan.dataset.state = 'gray';
+                    grayChars++;
+                } else {
+                    charSpan.className = 'b-char white';
+                    charSpan.style.setProperty('color', '#ffffff', 'important');
+                    charSpan.style.textShadow = '0 0 10px #fff'; // Subtle glow for init
+                    charSpan.dataset.state = 'white';
+                }
 
                 wordSpan.appendChild(charSpan);
                 totalChars++;
-                grayChars++;
             }
             ui.textField.appendChild(wordSpan);
         });
@@ -161,10 +168,22 @@
     }
 
     function updateVillainHP() {
-        const hpPercent = (grayChars / totalChars) * 100;
-        if (ui.villainHp) ui.villainHp.style.width = hpPercent + '%';
-        // Only trigger victory if > 0 chars were loaded initially to prevent instant win
-        if (totalChars > 0 && grayChars <= 0) endGame('victory');
+        // TUG OF WAR LOGIC
+        // Blue Bar = Warden's Territory (White Chars)
+        // Red Back = Villain's Territory (Gray Chars)
+
+        const whiteChars = totalChars - grayChars;
+        const wardenPercent = (whiteChars / totalChars) * 100;
+
+        if (ui.villainHp) {
+            ui.villainHp.style.width = wardenPercent + '%';
+        }
+
+        // Win/Loss Condition
+        if (totalChars > 0) {
+            if (grayChars <= 0) endGame('victory'); // All White
+            if (whiteChars <= 0) endGame('defeat'); // All Gray
+        }
     }
 
     function updateCardDisplay() {
@@ -436,29 +455,42 @@
                 ui.villainHp = document.getElementById('villain-hp');
                 ui.wardenHp = document.getElementById('warden-hp');
                 ui.log = container.querySelector('#al-log'); // Scoped log
-                if (ui.log) ui.log.innerText = ""; // Clear initial text per user request
+                if (ui.log) ui.log.innerText = ""; // Clear log
+
                 ui.finalScreen = document.getElementById('alice-final-screen');
                 ui.storyDisplay = document.getElementById('story-display');
                 ui.resultHeader = document.getElementById('result-header');
-                ui.resultHeader = document.getElementById('result-header');
 
-                // CRITICAL FIX: Scope to container to avoid ID collision with other screens
-                ui.textField = container.querySelector('#alice-text'); // Middle text area in THIS screen
+                // CRITICAL FIX: Scope to container
+                ui.textField = container.querySelector('#alice-text');
 
                 window.addEventListener('resize', resize);
                 resize();
 
-                // Reset
-                wardenHP = 100; gameState = 'playing'; lightnings = [];
+                // Reset Game State
+                gameState = 'playing';
+                lightnings = [];
                 lastVillainAttackTime = Date.now();
 
-                if (ui.wardenHp) ui.wardenHp.style.width = '100%';
+                // SETUP UNIFIED BAR (TUG OF WAR)
+                if (ui.villainHp) {
+                    ui.villainHp.style.width = '50%'; // Start at 50%
+                    ui.villainHp.style.backgroundColor = '#4da6ff'; // Blue (Warden)
+                    // Parent is Red (Villain)
+                    ui.villainHp.parentElement.style.backgroundColor = '#ff4d4d';
+                    ui.villainHp.parentElement.style.border = '2px solid #fff';
+                }
+
+                // Hide Old Warden HP Bar
+                if (ui.wardenHp) {
+                    ui.wardenHp.parentElement.style.display = 'none';
+                }
+
                 if (ui.gameUi) ui.gameUi.style.opacity = '1';
                 if (ui.finalScreen) {
                     ui.finalScreen.style.display = 'none';
                     ui.finalScreen.style.opacity = '0';
                 }
-                // ui.log.innerText = "Use your cards to purify the text!"; // Removing per user request
 
                 cardValues.ink = 190; cardValues.rune = 30; cardValues.gem = 50;
 
@@ -481,8 +513,7 @@
             const targetChars = getTargetCharsForWarden(type);
 
             if (targetChars.length === 0) {
-                ui.log.innerText = "No darkness to purify nearby!";
-                // Small feedback anyway
+                // No log, just visual shake
                 sourceEl.style.transform = "scale(0.95)";
                 setTimeout(() => sourceEl.style.transform = "scale(1)", 100);
                 return;
@@ -494,9 +525,11 @@
 
             // 3. Visual Feedback
             let color = '#00ffff';
-            if (type === 'ink') { color = '#b300ff'; ui.log.innerText = `Ink Splash! Purified ${targetChars.length} letters.`; }
-            if (type === 'rune') { color = '#00f2ff'; ui.log.innerText = `Rune Cast! Purified words.`; }
-            if (type === 'gem') { color = '#ffffff'; ui.log.innerText = `Gemlight! Restored context.`; }
+            if (type === 'ink') { color = '#b300ff'; }
+            if (type === 'rune') { color = '#00f2ff'; }
+            if (type === 'gem') { color = '#ffffff'; }
+
+            // NO LOGGING
 
             sourceEl.style.boxShadow = `0 0 20px 5px ${color}`;
             sourceEl.style.borderColor = color;
@@ -537,7 +570,7 @@
                         updateVillainHP();
                     }, 150); // Flight time
 
-                }, idx * 30); // Staggered launch (Papapak!)
+                }, idx * 30); // Staggered launch
             });
 
             // Villain Re-Action
@@ -549,9 +582,9 @@
 
             // Decide Attack Type
             const rand = Math.random();
-            let type = 'joker'; let cardId = 'v-card-joker'; let damage = 5; let color = '#ff00aa';
-            if (rand > 0.6) { type = 'king'; cardId = 'v-card-king'; damage = 10; color = '#ff0055'; }
-            if (rand > 0.9) { type = 'queen'; cardId = 'v-card-queen'; damage = 20; color = '#ff0000'; }
+            let type = 'joker'; let cardId = 'v-card-joker'; let color = '#ff00aa';
+            if (rand > 0.6) { type = 'king'; cardId = 'v-card-king'; color = '#ff0055'; }
+            if (rand > 0.9) { type = 'queen'; cardId = 'v-card-queen'; color = '#ff0000'; }
 
             const sourceEl = document.getElementById(cardId) || document.getElementById('villain-visual-container');
             const targetChars = getTargetCharsForVillain(type);
@@ -563,7 +596,7 @@
                 setTimeout(() => cEl.style.boxShadow = 'none', 500);
             }
 
-            ui.log.innerText = `Red Queen uses ${type.toUpperCase()}!`;
+            // NO LOGGING
 
             const sBox = sourceEl.getBoundingClientRect();
             let startX = sBox.left + sBox.width / 2;
@@ -575,22 +608,9 @@
                 startY = 100; // Top Center fallback
             }
 
-            // If no letters to corrupt, attack warden directly
+            // If no letters to corrupt, we just wait (or could shake the screen)
             if (targetChars.length === 0) {
-                const wEl = document.getElementById('warden-hp');
-                const wBox = wEl.getBoundingClientRect();
-                let wX = wBox.left + wBox.width / 2;
-                let wY = wBox.top;
-
-                if (wBox.width === 0) { wX = window.innerWidth / 2; wY = window.innerHeight - 50; }
-
-                lightnings.push(new Lightning(startX, startY, wX, wY, false, 0, color));
-                setTimeout(() => {
-                    wardenHP = Math.max(0, wardenHP - damage);
-                    if (ui.wardenHp) ui.wardenHp.style.width = wardenHP + '%';
-                    flashOpacity = 0.3; shakeTime = 10;
-                    if (wardenHP <= 0) endGame('defeat');
-                }, 200);
+                // No target logic needed, victory is handled by updateVillainHP
                 return;
             }
 
@@ -612,12 +632,6 @@
                     setTimeout(() => {
                         changeCharState(charEl, 'gray');
                         updateVillainHP();
-
-                        // Collateral Damage to Warden
-                        wardenHP = Math.max(0, wardenHP - 1);
-                        if (ui.wardenHp) ui.wardenHp.style.width = wardenHP + '%';
-                        if (wardenHP <= 0) endGame('defeat');
-
                     }, 150);
 
                 }, idx * 30);
