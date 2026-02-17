@@ -2077,9 +2077,14 @@ Game.typewriter = {
         console.log("[Game] Transitioning to Score Report...");
         this.switchScreen('screen-new-score');
 
-        // Scroll to Top Reset
+        // Scroll to Top Reset & Layout Fix
         const screen = document.getElementById('screen-new-score');
-        if (screen) screen.scrollTop = 0;
+        if (screen) {
+            screen.scrollTop = 0;
+            screen.style.display = 'flex';
+            screen.style.flexDirection = 'column';
+            screen.style.justifyContent = 'space-between';
+        }
 
         // 1. Fetch Data
         const score = this.scoreManager || {};
