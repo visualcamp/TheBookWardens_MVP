@@ -2087,74 +2087,71 @@ Game.typewriter = {
         }
 
         // 1. Fetch Data
+        // 1. Fetch Data
         const score = this.scoreManager || {};
-        let wpm = score.wpm || Math.floor(Math.random() * 50 + 200); // MVP Juice
-        let acc = score.accuracy || Math.floor(Math.random() * 5 + 95);
 
+        // Use Actual Data (fallback to 0)
+        let wpm = score.wpm || 0;
         let ink = score.ink || 0;
         let rune = score.runes || 0;
         let gem = score.gems || 0;
 
-        // MVP Default Values if empty for demo
-        if (ink === 0 && rune === 0 && gem === 0) {
-            ink = 15; rune = 5; gem = 2; // Demo values
+        // Demo Fallback ONLY if absolutely empty (e.g. direct url access)
+        if (wpm === 0 && ink === 0 && rune === 0 && gem === 0) {
+            wpm = Math.floor(Math.random() * 50 + 150);
+            ink = 120; rune = 15; gem = 30; // Random demo values
         }
 
-        // 2. Determine Rank (simplified as requested)
-        // Novice / Apprentice / Master
+        // 2. Determine Rank
         let rankText = 'Novice';
-        let rankColor = '#fff';
+        let rankColor = '#aaa';
+        // Simple logic based on WPM for now
+        if (wpm >= 250) { rankText = 'Master'; rankColor = 'gold'; }
+        else if (wpm >= 150) { rankText = 'Apprentice'; rankColor = '#00ff00'; }
 
-        if (acc >= 95) {
-            rankText = 'Master'; rankColor = 'gold';
-        } else if (acc >= 85) {
-            rankText = 'Apprentice'; rankColor = '#00ff00';
-        } else {
-            rankText = 'Novice'; rankColor = '#aaa';
-        }
+        // 3. Helper: Animate Value
+        const animateValue = (id, start, end, duration, prefix = "", suffix = "") => {
+            const obj = document.getElementById(id);
+            if (!obj) return;
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                const current = Math.floor(progress * (end - start) + start);
+                obj.innerText = prefix + current.toLocaleString() + suffix;
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                }
+            };
+            window.requestAnimationFrame(step);
+        };
 
-        // 3. Calculate Scores
-        // Ink: 10 pts per line
-        // Rune: 100 pts per word
-        // Gem: 500 pts per quiz
-        let inkScore = ink * 10;
-        let runeScore = rune * 100;
-        let gemScore = gem * 500;
-        let totalScore = inkScore + runeScore + gemScore;
-
-        // 4. Update UI
-
-        // Primary Stats
-        const wpmEl = document.getElementById('report-wpm');
-        if (wpmEl) wpmEl.innerText = wpm;
+        // 4. Trigger Animations
+        animateValue("report-wpm", 0, wpm, 1500);
 
         const rankEl = document.getElementById('report-rank-text');
         if (rankEl) {
             rankEl.innerText = rankText;
             rankEl.style.color = rankColor;
+            // Simple pulse animation for rank
+            rankEl.style.transition = "transform 0.3s";
+            rankEl.style.transform = "scale(0.5)";
+            setTimeout(() => { rankEl.style.transform = "scale(1.2)"; }, 1200);
+            setTimeout(() => { rankEl.style.transform = "scale(1.0)"; }, 1400);
         }
 
-        // Detail Scoring - Ink
-        const inkCountEl = document.getElementById('report-ink-count');
-        if (inkCountEl) inkCountEl.innerText = `${ink} lines`;
-        const inkScoreEl = document.getElementById('report-ink-score');
-        if (inkScoreEl) inkScoreEl.innerText = `+${inkScore}`;
+        // Resources (Count Up)
+        animateValue("report-ink-count", 0, ink, 1000, "", "");
+        animateValue("report-ink-score", 0, ink * 10, 1500, "+", "");
 
-        // Detail Scoring - Rune
-        const runeCountEl = document.getElementById('report-rune-count');
-        if (runeCountEl) runeCountEl.innerText = `${rune} words`;
-        const runeScoreEl = document.getElementById('report-rune-score');
-        if (runeScoreEl) runeScoreEl.innerText = `+${runeScore}`;
+        animateValue("report-rune-count", 0, rune, 1000, "", "");
+        animateValue("report-rune-score", 0, rune * 100, 1500, "+", "");
 
-        // Detail Scoring - Gem
-        const gemCountEl = document.getElementById('report-gem-count');
-        if (gemCountEl) gemCountEl.innerText = `${gem} solved`;
-        const gemScoreEl = document.getElementById('report-gem-score');
-        if (gemScoreEl) gemScoreEl.innerText = `+${gemScore}`;
+        animateValue("report-gem-count", 0, gem, 1000, "", "");
+        animateValue("report-gem-score", 0, gem * 500, 1500, "+", "");
 
-        // Detail Scoring - Boss Bonus (Fixed for Victory)
-        const bossScoreEl = document.getElementById('report-boss-score');
-        if (bossScoreEl) bossScoreEl.innerText = "+10,000";
+        // Boss Bonus
+        animateValue("report-boss-score", 0, 10000, 2000, "+", "");
     },
 
     bindKeyAndUnlock() {
