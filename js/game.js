@@ -567,7 +567,8 @@ const Game = {
 
     switchScreen(screenId) {
         // [FIX] Force close overlay screens that might not be in SceneManager
-        const overlays = ['screen-new-share', 'screen-new-score', 'screen-final-boss', 'alice-final-screen'];
+        // Added 'alice-battle-simple-container' and generic 'alice-screen'
+        const overlays = ['screen-new-share', 'screen-new-score', 'screen-final-boss', 'alice-final-screen', 'alice-battle-simple-container', 'alice-screen'];
         overlays.forEach(id => {
             const el = document.getElementById(id);
             if (el && id !== screenId) {
@@ -576,8 +577,16 @@ const Game = {
             }
         });
 
-        if (!this.sceneManager) return;
-        this.sceneManager.show(screenId);
+        if (this.sceneManager) {
+            this.sceneManager.show(screenId);
+        }
+
+        // [FIX] Ensure the new screen is clickable
+        const newScreen = document.getElementById(screenId);
+        if (newScreen) {
+            newScreen.style.pointerEvents = 'auto';
+            newScreen.style.zIndex = '9000'; // Make sure it's above canvas
+        }
 
         if (screenId === "screen-read") {
             // Reset Context Latching for new session to avoid carrying over old data
