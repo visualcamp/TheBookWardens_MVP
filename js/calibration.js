@@ -392,9 +392,8 @@ export class CalibrationManager {
                 const statusEl = document.getElementById("calibration-status");
                 if (statusEl) {
                     statusEl.textContent = "Look at the Magic Orb!";
-                    statusEl.style.display = 'block';
-                    statusEl.style.color = "#0f0";
-                    statusEl.style.textShadow = "0 0 10px #0f0";
+                    statusEl.style.color = "#00ff00";
+                    statusEl.style.textShadow = "0 0 10px #00ff00";
 
                     // Force Absolute Position
                     statusEl.style.position = 'absolute';
@@ -405,6 +404,8 @@ export class CalibrationManager {
                     statusEl.style.whiteSpace = "nowrap";
                     statusEl.style.textAlign = "center";
                     statusEl.style.pointerEvents = "none";
+
+                    statusEl.style.display = 'block'; // [MOVED]
                 }
 
                 const btn = document.getElementById("btn-calibration-start");
@@ -412,8 +413,7 @@ export class CalibrationManager {
                     // Update Button Text & Position
                     btn.textContent = "OK";
 
-                    // Style: Center horizontally, placed well below the dot
-                    btn.style.display = "inline-block";
+                    // Style: Center horizontally, placed below text
                     btn.style.position = 'absolute';
                     btn.style.left = '50%';
                     btn.style.transform = 'translateX(-50%)';
@@ -421,6 +421,8 @@ export class CalibrationManager {
                     // Place it below the text
                     btn.style.top = (y + 220) + 'px';
                     btn.style.pointerEvents = "auto";
+
+                    btn.style.display = "inline-block"; // [MOVED]
                 }
             });
             logI("sdk", "addCalibrationNextPointCallback bound (CalibrationManager)");
