@@ -11,6 +11,8 @@ import { VocabManager } from './managers/VocabManager.js?v=FINAL_FIX_NOW';
 import { UIManager } from './core/UIManager.js?v=FINAL_FIX_NOW';
 import { GameLogic } from './core/GameLogic.js?v=FINAL_FIX_NOW';
 import { DOMManager } from './core/DOMManager.js?v=FINAL_FIX_NOW';
+import { ReadingManager } from './managers/ReadingManager.js?v=FINAL_FIX_NOW';
+import { BattleManager } from './managers/BattleManager.js?v=FINAL_FIX_NOW';
 const Game = {
     // Initialized in init()
     scoreManager: null,
@@ -42,29 +44,62 @@ const Game = {
 
     // --- Rift Intro Sequence (Delegated to IntroManager) ---
 
+    // Callback from ReadingManager
+    onParagraphFinished(index) {
+        console.log(`[Game] Paragraph ${index} finished. Triggering Event...`);
+
+        // Trigger Mid-Boss Battle (via BattleManager)
+        setTimeout(() => {
+            if (this.battleManager) {
+                this.battleManager.triggerGazeReplay().then(() => {
+                    this.battleManager.triggerMidBossBattle();
+                });
+            } else {
+                // Fallback if BattleManager missing
+                console.warn("BattleManager missing. Skipping battle.");
+                this.readingManager.startParagraph(index + 1);
+            }
+        }, 1000);
+    },
+
 
 
     init() {
         console.log("Game Init");
 
         // 1. Core Managers (Must be first)
-        this.scoreManager = new ScoreManager();
-        this.sceneManager = new SceneManager();
-        this.uiManager = new UIManager(this);
-        this.gameLogic = new GameLogic(this); // Critical Dependency
-
-        // 2. Feature Managers (Dependent on Core)
+        this.scoreManager        // Initialize Managers
         this.introManager = new IntroManager(this);
         this.vocabManager = new VocabManager(this);
+        // this.sceneManager = new SceneManager(this); // SceneLogic delegated to DOMManager?
+        this.scoreManager = new ScoreManager(this);
+        this.wardenManager = new WardenManager(this);
+
+        // [REFACTOR] New Reading Manager
+        this.readingManager = new ReadingManager(this);
+
+        // [REFACTOR] New Battle Manager
+        this.battleManager = new BattleManager(this);
+        this.battleManager.init();
+
+        // --- Intro Manager Init ---
+        this.introManager.init();
+
+        // --- Load Vocab ---
         this.vocabManager.init(vocabList);
 
-        // 3. DOM & Events (Last)
-        this.domManager = new DOMManager(this);
-        this.domManager.init();
+        // --- NEW: Dynamic Paragraphs Loading handled by ReadingManager later ---
+        // For now, load default story
+        // this.typewriter.paragraphs = storyChapter1.paragraphs; // Old logic
 
-        // 4. Start Features
-        this.introManager.init(); // Now safe to call
+        // Initialize Reading Content
+        this.readingManager.init(storyChapter1.paragraphs);
 
+        // --- Score Manager Init ---
+        this.scoreManager.init();
+
+        // UI Bindings
+        this.bindEvents();
         // 4. Session ID for Firebase
         this.sessionId = Math.random().toString(36).substring(2, 6).toUpperCase();
         console.log("Session ID:", this.sessionId);
@@ -133,6 +168,16 @@ const Game = {
         console.log("Calibration done. Entering Reading Rift...");
         setTimeout(() => {
             this.switchScreen("screen-read");
+
+            // Start Reading Session
+            if (this.readingManager) {
+                // Reset State
+                this.state.ink = 0;
+                Game.updateUI();
+
+                // Start Paragraph 0
+                this.readingManager.startParagraph(0);
+            }
         }, 1000);
     },
 
@@ -314,21 +359,9 @@ const Game = {
             return;
         }
 
-        // Typewriter Gaze Feedback
-        if (this.typewriter) {
-            // New Ink Logic
-            if (typeof this.typewriter.updateGazeStats === "function") {
-                this.typewriter.updateGazeStats(x, y);
-            }
-            // Legacy Logic (if exists)
-            if (typeof this.typewriter.checkGazeDistance === "function") {
-                this.typewriter.checkGazeDistance(x, y);
-            }
-
-            // [RGT] Check Responsive Words
-            if (this.typewriter.renderer && typeof this.typewriter.renderer.checkRuneTriggers === 'function') {
-                this.typewriter.renderer.checkRuneTriggers(x, y);
-            }
+        // Delegate to ReadingManager
+        if (this.readingManager) {
+            this.readingManager.onGaze(x, y);
         }
     },
 
@@ -478,717 +511,13 @@ const Game = {
     }
 };
 
-// --- Typewriter Mode Logic (Refactored for TextRenderer) ---
-Game.typewriter = {
-    renderer: null,
 
-    // Data (Content)
-    // Data (Content)
-    paragraphs: storyChapter1.paragraphs, // Use Dynamic Paragraphs
-    quizzes: midBossQuizzes,
 
-    // --- FINAL BOSS DATA ---
-    finalQuiz: finalBossQuiz,
 
-    // State
-    currentParaIndex: 0,
-    chunkIndex: 0,
-    isPaused: false,
-    timer: null,
 
-    // Stats
-    startTime: null,
-    wordCount: 0,
 
-    // Reading Tracking (Line-based)
-    lineStats: new Map(), // lineIndex -> Set(wordIndices hit)
 
-    init() {
-        // Init renderer if not already
-        if (!this.renderer) {
-            // Ensure container exists
-            const container = document.getElementById("book-content");
-            if (container) {
-                // Apply layout styles JS-side just in case CSS missed something
-                container.style.position = "relative";
-                container.style.overflow = "visible"; // Allow overflow for debugging visibility
 
-                this.renderer = new TextRenderer("book-content", {
-                    fontSize: window.innerWidth <= 768 ? "1.0rem" : "1.3rem",
-                    lineHeight: "2.8",
-                    wordSpacing: "0.4em",
-                    padding: "20px"
-                });
-            } else {
-                console.error("TextRenderer Container Not Found");
-            }
-        }
-    },
-
-    start() {
-        console.log("[Typewriter] Starting Engine V2 (TextRenderer)...");
-        this.init();
-
-        if (!this.renderer) return;
-
-        this.currentParaIndex = 0;
-        this.isPaused = false;
-        this.lineStats.clear();
-
-        Game.state.ink = 0;
-        Game.updateUI();
-
-        // Ensure first paragraph plays
-        this.playNextParagraph();
-
-        // WPM Monitor
-        if (this.wpmMonitor) clearInterval(this.wpmMonitor);
-        // [FIX] Removed WPM polling interval. 
-        // WPM should only update on discrete "Pang" events driven by GazeDataManager.
-        // this.wpmMonitor = setInterval(() => this.updateWPM(), 1000);
-
-        // --- CHANGED: Periodic Cloud Upload REMOVED ---
-        // As per user request, we now upload ONLY when Replay starts (per paragraph).
-        if (this.uploadMonitor) {
-            clearInterval(this.uploadMonitor);
-            this.uploadMonitor = null;
-        }
-    },
-
-    playNextParagraph() {
-        // [SAFETY FIX] Reset Scroll Position to (0,0) BEFORE rendering new content.
-        // This prevents lingering scroll from previous paragraphs from affecting lockLayout coordinates.
-        window.scrollTo(0, 0);
-        const screenRead = document.getElementById('screen-read');
-        if (screenRead) screenRead.scrollTop = 0;
-
-        // [CRITICAL FIX] Reset Pang Event Logic / First Content Time for new paragraph
-        console.log(`[Typewriter] Pre-Check: Resetting Triggers for Para ${this.currentParaIndex}...`);
-
-        const gdm = window.gazeDataManager;
-        if (gdm) {
-            // Function Call (Preferred)
-            if (typeof gdm.resetTriggers === 'function') {
-                gdm.resetTriggers();
-            } else {
-                // FALLBACK: Manual Reset (If function missing in cached JS)
-                console.warn("[Typewriter] resetTriggers function missing! Performing Manual Reset.");
-                gdm.maxLineIndexReached = -1;
-                gdm.firstContentTime = null;
-                gdm.lastTriggerTime = 0;
-                gdm.pendingReturnSweep = null;
-                if (gdm.pangLog) gdm.pangLog = [];
-            }
-            console.log("[Typewriter] Triggers Reset Check Complete.");
-        }
-
-        if (this.currentParaIndex >= this.paragraphs.length) {
-            // All paragraphs done. Trigger FINAL BOSS.
-            this.triggerFinalBossBattle();
-            return;
-        }
-
-        const paraData = this.paragraphs[this.currentParaIndex];
-        console.log(`[Typewriter] Playing Para ${this.currentParaIndex}`);
-
-        // 1. Prepare Content (Dynamic DSC Mode)
-        // Wrap single paragraph in chapter structure for renderer
-        const currentWPM = Game.wpm || 150;
-        this.renderer.prepareDynamic({ paragraphs: [paraData] }, currentWPM);
-
-        this.chunkIndex = 0;
-        this.lineStats.clear(); // Reset reading stats for new page
-
-        // [FIX] Register Cursor with SceneManager (Cursor is recreated directly in prepare())
-        if (Game.sceneManager && this.renderer.cursor) {
-            Game.sceneManager.setCursorReference(this.renderer.cursor);
-        }
-
-        // 2. Lock Layout (Next Frame to allow DOM render)
-        requestAnimationFrame(() => {
-            this.renderer.lockLayout();
-            const debugEl = document.getElementById('line-detect-result');
-            if (debugEl) debugEl.textContent = `Lines Cached: ${this.renderer.lines.length}`;
-
-            // Resume Game Loop safely after layout is ready
-            this.isPaused = false;
-
-            // [CRITICAL FIX] Re-enable Tracking!
-            // Tracking is disabled in 'confrontVillain' (Mid-Boss).
-            // We must re-enable it here for the next paragraph.
-            Game.state.isTracking = true;
-            console.log("[Typewriter] Tracking Re-enabled for new paragraph.");
-
-            // 3. Start Reading Flow
-            // UX IMPROVEMENT: Hide cursor initially. 
-            // The screen 'fadeIn' animation shifts the text container. 
-            // If we show the cursor immediately, it looks like it's floating/misaligned.
-            if (this.renderer.cursor) this.renderer.cursor.style.opacity = "0";
-
-            // Wait for measurement and pagination
-            setTimeout(() => {
-                if (this.renderer) {
-                    // Start from Page 0
-                    this.renderer.showPage(0).then(() => {
-                        this.renderer.resetToStart(); // Aligns correctly
-                        if (this.renderer.cursor) this.renderer.cursor.style.opacity = "1";
-                        console.log("[Typewriter] Page 0 Ready.");
-
-                        // Start Text after full delay
-                        setTimeout(() => {
-                            this.startTime = Date.now();
-                            this.tick();
-                        }, 1000); // Reduced from 3000 to 1000 for snappier page loads
-                    });
-                }
-            }, 600);
-        });
-    },
-
-    tick() {
-        if (this.isPaused) return;
-
-        // Prevent double-tick: clear previous if exists (though usually it fires once)
-        if (this.timer) {
-            clearTimeout(this.timer);
-            this.timer = null;
-        }
-
-        // [SAFETY] If chunks are not ready (length 0), wait and retry.
-        if (!this.renderer || !this.renderer.chunks || this.renderer.chunks.length === 0) {
-            console.warn("[Typewriter] Chunks not ready. Retrying in 500ms...");
-            this.timer = setTimeout(() => this.tick(), 500);
-            return;
-        }
-
-        // Reveal next chunk
-        if (this.chunkIndex < this.renderer.chunks.length) {
-
-            // TEXT TRAIN EFFECT (Continuous Flow):
-            // Instead of fading out an old chunk manually here, we SCHEDULE the death of the NEW chunk.
-            // "I am born now, and I shall die in 4 seconds."
-            // This ensures a smooth, independent pipeline regardless of whether the cursor pauses.
-            this.renderer.scheduleFadeOut(this.chunkIndex, 3000); // 3 seconds lifetime
-
-            // Wait for Animation to Finish (Promise-based) with Timeout Safety
-            const chunkLen = this.renderer.chunks[this.chunkIndex].length;
-            const wpm = Game.wpm || 200;
-            const msPerWord = 60000 / wpm; // e.g. 200wpm -> 300ms
-
-            // The renderer's revealChunk animation takes (length * interval) ms.
-            // Game.wpmParams.interval is usually very fast (e.g. 50ms) for 'snappy' reveal.
-            // We need to wait for the visual reveal, THEN wait for the remaining time to match WPM.
-
-            const revealPromise = this.renderer.revealChunk(this.chunkIndex, Game.wpmParams.interval);
-
-            // Total time this chunk *should* occupy
-            // [TUNING] Dynamic Multiplier for "Reading/Pause" buffer.
-            let buffer = 1.2; // Default (200 WPM)
-            if (wpm <= 100) buffer = 1.15; // [100 WPM] Increased chunk size, so reduce buffer slightly.
-            else if (wpm >= 300) buffer = 1.05; // [300 WPM] Needs to be faster. Reduce gap.
-
-            const targetDuration = (msPerWord * chunkLen) * buffer;
-
-            // Safety timeout
-            const timeoutPromise = new Promise(resolve => setTimeout(resolve, targetDuration + 1000));
-
-            const startTime = Date.now();
-
-            Promise.race([revealPromise, timeoutPromise]).then(() => {
-                const elapsed = Date.now() - startTime;
-
-                // Calculate remaining wait time
-                // We want total time (reveal + pause) = targetDuration
-                let remainingWait = targetDuration - elapsed;
-
-                // If reveal was instant or fast, we wait longer.
-                // If reveal took long (e.g. line break pause inside renderer?), we wait less.
-
-                if (remainingWait < 0) remainingWait = 0;
-
-                // [WPM COMPENSATION LOGIC]
-                // 1. Check if the *current* chunk (this.chunkIndex) had a line break.
-                // The renderer adds +450ms internally if a word starts a new line.
-                // We must SUBTRACT this from our game loop delay to avoid double waiting.
-                let hadLineBreak = false;
-                if (this.renderer && this.renderer.chunks && this.renderer.lines) {
-                    const currentChunkIndices = this.renderer.chunks[this.chunkIndex];
-                    if (currentChunkIndices) {
-                        // Check if any word in this chunk is a start of a line (excluding the very first word of text)
-                        hadLineBreak = currentChunkIndices.some(wordIdx => {
-                            return wordIdx > 0 && this.renderer.lines.some(line => line.startIndex === wordIdx);
-                        });
-                    }
-                }
-
-                this.chunkIndex++;
-
-                // Calculate Delay (Pause AFTER valid reading)
-                // We use the remainingWait calculated above to ensure WPM adherence.
-                let baseDelay = remainingWait;
-
-                // Apply Compensation
-                let finalDelay = baseDelay;
-                if (hadLineBreak) {
-                    // Renderer paused 450ms, so we pause 450ms less.
-                    finalDelay = Math.max(0, baseDelay - 450);
-                    // console.log(`[WPM Sync] Line Break Detected in Chunk ${this.chunkIndex-1}. Compensating: ${baseDelay} -> ${finalDelay}ms`);
-                }
-
-                this.timer = setTimeout(() => {
-                    this.timer = null;
-                    this.tick();
-                }, finalDelay);
-            });
-
-        } else {
-            console.log("Chunk Sequence Finished for current Page/Flow.");
-
-            // Check if there are more pages in this paragraph!
-            // [BUGFIX] If all chunks are shown, force finish regardless of 'pages'.
-            // The renderer's page count might include trailing empty pages or logic issues.
-            // Since chunkIndex >= chunks.length means *ALL* text is visible, we should proceed to end the paragraph.
-            /*
-            const renderer = this.renderer;
-            if (renderer && renderer.currentPageIndex < renderer.pages.length - 1) {
-                console.log("[Typewriter] Moving to Next Page...");
- 
-                // Fade out current page words? Or just switch?
-                // Let's just switch cleanly.
-                setTimeout(() => {
-                    const nextPage = renderer.currentPageIndex + 1;
-                    renderer.showPage(nextPage).then(() => {
-                        // Reset chunk index to the first chunk of the new page?
-                        // Actually, this.chunkIndex is global for the whole text. 
-                        // It continues naturally. We just need to ensure the words are visible.
-                        // Wait... The words ON the new page are currently opacity:0.
-                        // tick() will reveal them.
- 
-                        renderer.resetToStart(); // Move cursor to top of new page
-                        this.tick(); // Continue ticking
-                    });
-                }, 2000); // Wait 2s before flipping page
-                return;
-            }
-            */
-
-            console.log("Paragraph Fully Revealed (All Pages). Clearing tail...");
-
-            // CLEANUP TAIL: Fade out any remaining visible chunks
-            // We need to fade out from (chunkIndex - 3) up to (chunkIndex - 1)
-            // But actually, since the loop stopped, we just need to clear everything remaining.
-            // Let's sweep from max(0, this.chunkIndex - 3) to total chunks.
-
-            let cleanupDelay = 0;
-            const startCleanupIdx = Math.max(0, this.chunkIndex - 3);
-
-            // Schedule cleanups for remaining tail
-            for (let i = startCleanupIdx; i < this.renderer.chunks.length; i++) {
-                this.renderer.scheduleFadeOut(i, cleanupDelay + 600);
-                cleanupDelay += 600;
-            }
-
-            // [CHANGED] Always trigger Mid-Boss Battle after ANY paragraph (including the last one).
-            // Logic: P1 -> Replay -> Mid -> P2 -> Replay -> Mid -> ...
-            setTimeout(async () => {
-                // Play Gaze Replay before Villain appears
-                await this.triggerGazeReplay();
-                this.triggerMidBossBattle();
-            }, 1000); // 1s initial delay
-        }
-    },
-
-    // --- NEW: Gaze Replay ---
-    triggerGazeReplay() {
-        return new Promise((resolve) => {
-            console.log("[triggerGazeReplay] Preparing Gaze Replay...");
-
-            // [CHANGED] Upload Data to Firebase NOW (Background Sync)
-            // We do this here because Replay start signifies "Paragraph Done".
-            if (window.gazeDataManager && Game.sessionId) {
-                console.log("[Cloud] Uploading Paragraph Data...");
-                // No await needed, let it run in background
-                window.gazeDataManager.uploadToCloud(Game.sessionId);
-            }
-
-            // Check dependencies
-            if (!window.gazeDataManager || !this.startTime) {
-                console.warn("No GazeDataManager or StartTime found. Skipping Replay.");
-                resolve();
-                return;
-            }
-
-            const gdm = window.gazeDataManager;
-            // [FIX] Convert Absolute Time to Relative Time (GazeDataManager stores relative 't')
-            if (!gdm.firstTimestamp) {
-                console.warn("[Replay] GazeDataManager has no firstTimestamp. Skipping.");
-                resolve();
-                return;
-            }
-
-            const relativeStartTime = this.startTime - gdm.firstTimestamp;
-            const relativeEndTime = Date.now() - gdm.firstTimestamp;
-
-            console.log(`[Replay] Filtering Data: Range [${relativeStartTime.toFixed(0)} ~ ${relativeEndTime.toFixed(0)}] ms`);
-
-            const rawData = gdm.data;
-            const sessionData = rawData.filter(d => d.t >= relativeStartTime && d.t <= relativeEndTime);
-
-            if (sessionData.length === 0) {
-                console.warn(`[Replay] No gaze data found in range. Total Data: ${rawData.length}, Range: ${relativeStartTime.toFixed(0)}-${relativeEndTime.toFixed(0)}`);
-                resolve();
-                return;
-            }
-
-            console.log(`[Replay] Found ${sessionData.length} points.`);
-
-            // Hide Cursor during replay for cleaner view
-            if (this.renderer && this.renderer.cursor) this.renderer.cursor.style.opacity = "0";
-
-            if (this.renderer && typeof this.renderer.playGazeReplay === 'function') {
-                // [FEEDBACK] Reset Rune Words for Replay Cleanliness
-                // We want to remove the 'active-rune' class so the user sees a raw replay.
-                // Or maybe keep them? Feedback says: "Just Yellow Bold is enough" for active.
-                // But during replay, if they are ALREADY yellow/bold, it might be distracting?
-                // The feedback: "3. 지문 다 읽고 리플레이할때, 반응형 단어가 노란색에 밑줄까지 있는데, 보기가 안 좋음."
-                // Since we removed underline from CSS, we just need to ensure they look clean.
-                // Let's RESET them to normal so the replay shows the gaze "re-triggering" them?
-                // No, TextRenderer.playGazeReplay just draws lines/dots. It doesn't re-simulate triggers.
-                // So let's stripped the 'active-rune' class to make the text look "fresh" for the replay canvas overlay.
-
-                this.renderer.words.forEach(w => {
-                    if (w.element) w.element.classList.remove('active-rune'); // Clean slate
-                });
-
-                this.renderer.playGazeReplay(sessionData, () => {
-                    console.log("[triggerGazeReplay] Replay Done.");
-                    // Restore cursor opacity just in case (though screen switch follows)
-                    if (this.renderer.cursor) this.renderer.cursor.style.opacity = "1";
-
-                    // Optional: Restore active state? 
-                    // No need, we are moving to the next screen (Boss Battle).
-                    resolve();
-                });
-            } else {
-                console.warn("Renderer does not support playGazeReplay.");
-                resolve();
-            }
-        });
-    },
-
-    // --- NEW: Mid-Boss Battle (After each paragraph) ---
-    triggerMidBossBattle() {
-        console.log(`[Typewriter] Triggering Villain for Para ${this.currentParaIndex}`);
-        if (this.uploadMonitor) clearInterval(this.uploadMonitor);
-
-        // Use the same screen as final boss, but load specific quiz
-        this.loadBossQuiz(this.currentParaIndex);
-        Game.confrontVillain();
-    },
-
-    loadBossQuiz(index) {
-        // [FIX] Ensure screen is interactive (reset previous lock)
-        const villainScreen = document.getElementById("screen-boss");
-        if (villainScreen) villainScreen.style.pointerEvents = "auto";
-
-        if (!this.quizzes || !this.quizzes[index]) return;
-
-        const quiz = this.quizzes[index];
-        const questionEl = document.getElementById("boss-question");
-        const optionsEl = document.getElementById("boss-options");
-
-        if (questionEl) questionEl.textContent = `"${quiz.q}"`;
-        if (optionsEl) {
-            optionsEl.innerHTML = "";
-            quiz.o.forEach((optText, i) => {
-                const btn = document.createElement("button"); // FIXED: Re-added missing variable declaration
-                btn.className = "quiz-btn";
-                btn.textContent = optText;
-                btn.onclick = () => Game.checkBossAnswer(i); // Direct call to global Game object
-                optionsEl.appendChild(btn);
-            });
-        }
-    },
-
-    // --- Core Interaction: Gaze Input ---
-    updateGazeStats(x, y) {
-        if (!this.renderer || !this.renderer.isLayoutLocked) return;
-
-        // 1. Hit Test (Visual Feedback Only)
-        // Used only to highlight words, NOT to change the Line Index context.
-        const hit = this.renderer.hitTest(x, y);
-
-        // 2. Define Content Context (Ground Truth)
-        // [CORRECTED PRINCIPLE] Line Index counts up automatically as text appears.
-        // It is INDEPENDENT of gaze.
-        const contentLineIndex = (typeof this.renderer.currentVisibleLineIndex === 'number')
-            ? this.renderer.currentVisibleLineIndex
-            : 0;
-
-        let contentTargetY = null;
-
-        // Find the Y coordinate of the *Current Text Line* (Context)
-        if (this.renderer.lines && this.renderer.lines[contentLineIndex]) {
-            contentTargetY = this.renderer.lines[contentLineIndex].visualY;
-        }
-
-        // 3. Return Sweep Logic is handled entirely by GazeDataManager's internal processGaze loop.
-        // We only provide the context.
-
-        // 4. Sync Context to Data Manager
-        if (window.gazeDataManager) {
-            const ctx = {
-                lineIndex: contentLineIndex, // Strictly Typewriter-driven
-                targetY: contentTargetY,
-                paraIndex: this.currentParaIndex,
-                wordIndex: null
-            };
-            window.gazeDataManager.setContext(ctx);
-        }
-
-        // 5. Visual Interactions (Hit Testing for Highlights Only)
-        if (hit && hit.type === 'word') {
-            const word = hit.word;
-            // Only highlight if the word is actually revealed
-            if (word.element && !word.element.classList.contains("read") && word.element.classList.contains("revealed")) {
-                word.element.classList.add("read");
-                word.element.style.color = "#fff";
-                word.element.style.textShadow = "0 0 8px var(--primary-accent)";
-            }
-            if (hit.line) this.trackLineProgress(hit.line, word.index);
-        }
-    },
-
-    trackLineProgress(line, wordIndex) {
-        // Use the line's startIndex as a unique ID
-        const lineId = line.startIndex;
-
-        if (!this.lineStats.has(lineId)) {
-            this.lineStats.set(lineId, new Set());
-        }
-
-        const hitWords = this.lineStats.get(lineId);
-        hitWords.add(wordIndex);
-
-        // Check Coverage
-        const totalWordsInLine = line.wordIndices.length;
-        const hitCount = hitWords.size;
-        const ratio = hitCount / totalWordsInLine;
-
-        // Report Coverage to Data Manager
-        if (window.gazeDataManager) {
-            window.gazeDataManager.setLineMetadata(line.index, {
-                coverage: ratio * 100
-            });
-        }
-
-        // Threshold: 60% of words in line read
-        if (ratio > 0.6 && !line.completed) {
-            line.completed = true; // Flag in renderer's line object (runtime only)
-            // Deprecated: spawnInkReward(line); // Visual effect removed as per request
-        }
-    },
-
-    // spawnInkReward(line) - DELETED (Deprecated feature)
-
-
-    updateWPM() {
-        // Check if currently reading (screen-read is active)
-        const isReading = document.getElementById("screen-read")?.classList.contains("active");
-        if (!isReading || this.isPaused) return;
-
-        let targetWPM = 0;
-        // Priority 1: GazeDataManager (Accurate)
-        if (window.gazeDataManager && window.gazeDataManager.wpm > 0) {
-            targetWPM = window.gazeDataManager.wpm;
-        }
-        // Priority 2: Simple estimation (Fallback) - REMOVED
-        // We strictly use GazeDataManager's calculated WPM.
-        // If 0, display 0. Do not use time-based estimation as it causes fluctuations.
-
-        // Bridge to Manager
-        Game.updateWPM(targetWPM);
-    },
-
-    startBossBattle() {
-        console.log("Entering Boss Battle!");
-        if (this.uploadMonitor) clearInterval(this.uploadMonitor); // Stop auto-upload
-        if (window.gazeDataManager && Game.sessionId) {
-            window.gazeDataManager.uploadToCloud(Game.sessionId); // Final Upload
-        }
-        Game.confrontVillain();
-    },
-
-    // Stub
-    checkGazeDistance(x, y) {
-        this.updateGazeStats(x, y);
-    },
-
-    checkBossAnswer(optionIndex) {
-        const currentIndex = this.currentParaIndex;
-        // Debugging
-        const quiz = this.quizzes[currentIndex];
-
-        // Correct Answer Check
-        // Correct Answer Check
-        if (optionIndex === quiz.a) {
-            // [FIX] Disable ALL buttons immediately to prevent double-click / race conditions
-            const allBtns = document.querySelectorAll("#boss-options button");
-            allBtns.forEach(b => b.disabled = true);
-
-            // SUCCESS
-            // logic moved to flying resource callback
-            // Game.addGems(10); 
-
-            // Trigger Visuals
-            const btn = allBtns[optionIndex];
-            if (btn && typeof Game.spawnFlyingResource === 'function') {
-                const rect = btn.getBoundingClientRect();
-                Game.spawnFlyingResource(rect.left + rect.width / 2, rect.top + rect.height / 2, 10, 'gem');
-            } else {
-                Game.addGems(10); // Fallback
-                console.log("Boss Defeated! +10 Gems");
-            }
-
-            // Hide Boss UI after animation (1.0s delay)
-            const villainScreen = document.getElementById("screen-boss");
-            if (villainScreen) {
-                // Just prevent interaction immediately
-                villainScreen.style.pointerEvents = "none";
-            }
-            // Logic for next screen is handled below with delay
-
-            // Check if this was the Last Paragraph
-            if (this.currentParaIndex >= this.paragraphs.length - 1) {
-                // [CHANGED] Instead of Victory, go to FINAL BOSS
-                console.log("[Game] All paragraphs done. Summoning ARCH-VILLAIN...");
-                setTimeout(() => {
-                    // 1. FORCE HIDE MID BOSS SCREEN
-                    const vs = document.getElementById("screen-boss");
-                    if (vs) {
-                        vs.style.display = "none";
-                        vs.classList.remove("active");
-                        vs.style.pointerEvents = "auto";
-                    }
-
-                    // 2. Log Transition
-                    console.log("Direct Trigger Final Boss (v14.1.32)! Skip GameLogic.");
-
-                    // 3. FORCE SWITCH SCREEN (Manual)
-                    const aliceScreen = document.getElementById("screen-alice-battle");
-                    if (aliceScreen) {
-                        // Hide all screens
-                        document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
-                        // Show Alice Screen
-                        aliceScreen.classList.add('active');
-                        aliceScreen.style.display = "flex";
-                    } else {
-                        console.error("ERROR: screen-alice-battle element missing!");
-                    }
-
-                    // 4. INIT ALICE BATTLE (WITH DATA)
-                    setTimeout(() => {
-                        if (window.AliceBattleRef) {
-                            const currentStats = {
-                                ink: Game.state.ink,
-                                rune: Game.state.rune,
-                                gem: Game.state.gems
-                            };
-                            window.AliceBattleRef.init(currentStats);
-                        } else {
-                            console.error("FATAL: AliceBattleRef NOT FOUND!");
-                        }
-                    }, 100);
-
-                }, 1000);
-            } else {
-                // GO TO NEXT PARAGRAPH
-                // Force hide villain modal if exists
-                const villainModal = document.getElementById("villain-modal");
-                if (villainModal) villainModal.style.display = "none";
-
-                this.currentParaIndex++;
-                console.log(`[Game] Advancing to Stage ${this.currentParaIndex + 1}...`);
-
-                // Reset State for Next Paragraph
-                this.chunkIndex = 0;
-                this.lineStats.clear();
-                // Note: Do NOT resume 'isPaused' here. It will be resumed inside playNextParagraph() after content is ready.
-
-                // Ensure clean transition with shorter delay (1.5s) per request
-                setTimeout(() => {
-                    Game.switchScreen("screen-read");
-                    // Wait a bit for screen transition before starting text
-                    setTimeout(() => {
-                        this.chunkIndex = 0; // Double ensure reset
-                        this.playNextParagraph();
-                    }, 500);
-                }, 1500); // Reduced from 3000 to 1500
-            }
-        } else {
-            // FAILURE
-            Game.addGems(-10); // -10 Gem (Penalty)
-            Game.spawnFloatingText(document.querySelector(".boss-dialog-box"), "-10 Gems", "error");
-
-            const btn = document.querySelectorAll("#boss-quiz-options button")[optionIndex];
-            if (btn) {
-                btn.style.background = "#c62828";
-                btn.innerText += " (Wrong)";
-                btn.disabled = true;
-            }
-        }
-    },
-
-    // [State] Simple Battle System (Delegated to GameLogic)
-
-    triggerFinalBossBattle() {
-        this.gameLogic.triggerFinalBossBattle();
-    },
-
-    updateBattleUI() {
-        this.gameLogic.updateBattleUI();
-    },
-
-    handleBattleAction(type) {
-        this.gameLogic.handleBattleAction(type);
-    },
-
-    winBattle() {
-        this.gameLogic.winBattle();
-    },
-
-    /*
-    checkFinalBossAnswer(index) {
-        // ... (Legacy code preserved for reference if needed later) ...
-    }
-    */
-    goToNewScore() {
-        this.gameLogic.goToNewScore();
-    },
-
-    bindKeyAndUnlock_V2() {
-        if (!this.wardenManager) {
-            console.warn("[Game] WardenManager not ready on click. Force initializing...");
-            // Ensure WardenManager is available in scope (it is imported at top)
-            try {
-                this.wardenManager = new WardenManager(this);
-            } catch (e) {
-                console.error("[Game] Failed to force-init WardenManager:", e);
-                alert("Game Error: WardenManager Missing. Please refresh.");
-                return;
-            }
-        }
-        this.wardenManager.bindWarden();
-    },
-
-    goToNewSignup() {
-        this.gameLogic.goToNewSignup();
-    },
-
-    goToNewShare() {
-        this.gameLogic.goToNewShare();
-    },
-};
 
 window.Game = Game;
 
