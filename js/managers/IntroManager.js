@@ -102,8 +102,18 @@ export class IntroManager {
             return;
         }
 
-        // 2. Start Intro
-        this.startRiftIntro();
+        // 2. Go to Home Screen (Lobby)
+        console.log("[IntroManager] Dismissing Splash -> Home Screen");
+        this.game.switchScreen("screen-home");
+
+        // Safety: ensure button appears
+        setTimeout(() => {
+            const btn = document.getElementById('btn-start-game');
+            if (btn) {
+                btn.style.opacity = "1";
+                btn.style.pointerEvents = "auto";
+            }
+        }, 1500);
     }
 
     async startRiftIntro() {

@@ -96,6 +96,14 @@ const Game = {
                 }
             }
         });
+
+        // [FIX] Splash Screen Logic -> Delegated via JS, not inline HTML
+        const splash = document.getElementById('screen-splash');
+        if (splash) {
+            splash.onclick = () => {
+                this.dismissSplash();
+            };
+        }
     },
 
     // --- NEW: SDK Loading Feedback (Delegated) ---
