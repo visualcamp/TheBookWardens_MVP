@@ -13,21 +13,13 @@ export class IntroManager {
         const startBtn = document.getElementById("btn-start-game");
         if (startBtn) {
             startBtn.onclick = async () => {
-                // Prevent double clicks & Show Loading immediately
-                startBtn.disabled = true;
-                startBtn.classList.add("loading");
-                startBtn.innerText = "Initializing...";
-
                 // 1. Check In-App Browser
                 if (this.isInAppBrowser()) {
                     this.openSystemBrowser();
-                    this.resetStartBtn(startBtn);
                     return;
                 }
 
-                /* 
-                // 2. Fullscreen Request (REMOVED per user preference)
-                // Restoration of original behavior: Do not force fullscreen.
+                // 2. Fullscreen Request
                 try {
                     if (document.documentElement.requestFullscreen) {
                         await document.documentElement.requestFullscreen();
@@ -35,44 +27,11 @@ export class IntroManager {
                 } catch (e) {
                     console.warn("Fullscreen deferred: " + e.message);
                 }
-                */
 
-                // 3. Initialize Eye Tracking SDK
-                try {
-                    console.log("[IntroManager] Requesting Eye Tracking Boot...");
-                    if (typeof window.startEyeTracking === 'function') {
-                        // Must be called DIRECTLY in event handler for mobile permissions
-                        const success = await window.startEyeTracking();
-                        if (!success) {
-                            console.error("[IntroManager] Eye Tracking Init Failed!");
-                            alert("Eye tracking failed to initialize. Please check camera permissions.");
-                            this.resetStartBtn(startBtn);
-                            return; // Stop here
-                        }
-                    } else {
-                        console.error("[IntroManager] startEyeTracking function not found!");
-                        alert("System Error: Tracking module missing.");
-                        this.resetStartBtn(startBtn);
-                        return;
-                    }
-                } catch (e) {
-                    console.error("[IntroManager] SDK Boot Error:", e);
-                    alert("Error starting eye tracking: " + e.message);
-                    this.resetStartBtn(startBtn);
-                    return;
-                }
-
-                // 4. Start Rift Intro
+                // 3. Start Rift Intro
                 this.startRiftIntro();
             };
         }
-    }
-
-    resetStartBtn(btn) {
-        if (!btn) return;
-        btn.disabled = false;
-        btn.innerText = "Start Game";
-        btn.classList.remove("loading");
     }
 
     checkAutoStart() {
@@ -93,31 +52,6 @@ export class IntroManager {
     }
 
     // --- Rift Intro Sequence (Cinematic 20s) ---
-    // --- Rift Intro Sequence (Cinematic 20s) ---
-    // Alias for Game Proxy call
-    dismissSplash() {
-        // 1. Check In-App Browser (Critical for Eye Tracking)
-        if (this.isInAppBrowser()) {
-            this.openSystemBrowser();
-            return;
-        }
-
-        // 2. Go to Home Screen (Lobby)
-        console.log("[IntroManager] Dismissing Splash -> Home Screen");
-        this.game.switchScreen("screen-home");
-
-        // Safety: ensure button appears via CSS fallback (removed JS intervention)
-        /*
-        setTimeout(() => {
-            const btn = document.getElementById('btn-start-game');
-            if(btn) {
-                // btn.style.opacity = "1"; // CSS Animation handles this
-                // btn.style.pointerEvents = "auto";
-            }
-        }, 1500);
-        */
-    }
-
     async startRiftIntro() {
         console.log("[IntroManager] Starting Rift Intro Sequence...");
 

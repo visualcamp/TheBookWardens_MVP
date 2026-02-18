@@ -302,7 +302,6 @@ const overlay = {
   gazeRaw: null, // {x,y,trackingState,confidence}
 };
 
-// [FIXED] calManager initialization with Face Check callback
 const calManager = new CalibrationManager({
   logI, logW, logE, setStatus, setState,
   requestRender: () => renderOverlay(),
@@ -310,15 +309,6 @@ const calManager = new CalibrationManager({
     if (typeof window.Game !== "undefined") {
       window.Game.onCalibrationFinish();
     }
-  },
-  onFaceCheckSuccess: () => {
-    logI("cal", "Face Check Success -> Triggering Real Calibration");
-    startActualCalibration();
-  },
-  // [NEW] Restart callback for Retry
-  onRestart: () => {
-    logI("cal", "Retrying Calibration -> Restarting Sequence");
-    startActualCalibration();
   }
 });
 
@@ -398,6 +388,7 @@ function renderOverlay() {
   frameCount++;
   clearCanvas();
 
+  // --- Calibration: Magic Orb Style (Arcane Focus) ---
   // --- Calibration: Magic Orb Style (Arcane Focus) ---
   calManager.render(els.canvas.getContext("2d"), els.canvas.width, els.canvas.height, toCanvasLocalPoint);
 
@@ -485,20 +476,8 @@ window.addEventListener("resize", () => {
 
 // ---------- Camera ----------
 async function ensureCamera() {
-  if (mediaStream && mediaStream.active) {
-    logI("camera", "Stream already active, reusing.");
-    return true;
-  }
-
-  if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-    alert("Camera requires HTTPS! Redirecting...");
-    location.replace(`https:${location.href.substring(location.protocol.length)}`);
-    return false;
-  }
-
   setState("perm", "requesting");
   try {
-    // 1st Attempt: Ideal constraints
     mediaStream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: "user",
@@ -508,26 +487,7 @@ async function ensureCamera() {
       },
       audio: false,
     });
-  } catch (e1) {
-    console.warn("[Camera] 1st attempt failed (constraints). Retrying with basic constraints...");
-    try {
-      // 2nd Attempt: Basic constraints (Laptop Friendly)
-      mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: false
-      });
-    } catch (e2) {
-      // Final Failure
-      setState("perm", "denied");
-      showRetry(true, "camera permission denied");
-      logE("camera", "getUserMedia all attempts failed", e2);
-      alert("Camera access failed! Please check permissions or close other apps using the camera.");
-      return false;
-    }
-  }
 
-  // Success Handling
-  try {
     setState("perm", "granted");
 
     if (els.video) {
@@ -546,7 +506,9 @@ async function ensureCamera() {
 
     return true;
   } catch (e) {
-    logE("camera", "Video setup failed", e);
+    setState("perm", "denied");
+    showRetry(true, "camera permission denied");
+    logE("camera", "getUserMedia failed", e);
     return false;
   }
 }
@@ -619,11 +581,6 @@ function attachSeesoCallbacks() {
       const xRaw = gazeInfo?.x;
       const yRaw = gazeInfo?.y;
 
-      // [NEW] Face Check Logic
-      if (calManager && calManager.handleFaceCheckGaze) {
-        calManager.handleFaceCheckGaze(gazeInfo?.trackingState);
-      }
-
       overlay.gazeRaw = {
         x: xRaw,
         y: yRaw,
@@ -672,64 +629,61 @@ function attachSeesoCallbacks() {
   calManager.bindTo(seeso);
 }
 
-// --- Preload Logic ---
-let initPromise = null;
-
-async function preloadSDK() {
-  if (initPromise) return initPromise;
-
-  console.log("[Seeso] Starting Background Preload...");
-  initPromise = (async () => {
-    try {
-      setState("sdk", "loading");
-      SDK = await loadWebpackModule("./seeso/dist/seeso.js?v=FINAL_FIX_NOW");
-      const SeesoClass = SDK?.default || SDK?.Seeso || SDK;
-      if (!SeesoClass) throw new Error("Seeso export not found");
-
-      seeso = new SeesoClass();
-      window.__seeso = { SDK, seeso };
-
-      setState("sdk", "constructed");
-
-      // Bind callbacks early
-      attachSeesoCallbacks();
-
-      // Initialize Engine
-      const userStatusOption = SDK?.UserStatusOption
-        ? new SDK.UserStatusOption(true, true, true)
-        : { useAttention: true, useBlink: true, useDrowsiness: true };
-
-      logI("sdk", "initializing engine...");
-      const errCode = await seeso.initialize(LICENSE_KEY, userStatusOption);
-
-      if (errCode !== 0) {
-        setState("sdk", "init_failed");
-        throw new Error("Initialize returned: " + errCode);
-      }
-
-      setState("sdk", "initialized");
-      console.log("[Seeso] Preload Complete! Ready for Tracking.");
-      return true;
-    } catch (e) {
-      logE("sdk", "Preload Failed", e);
-      setState("sdk", "init_exception");
-      throw e;
-    }
-  })();
-
-  return initPromise;
-}
-
-// Auto-start preload after short delay
-setTimeout(preloadSDK, 500);
-
-// Modified initSeeso (now just waits for preload)
 async function initSeeso() {
-  if (!initPromise) preloadSDK();
+  setState("sdk", "loading");
+  // [REMOVED] Intermediate Toast: "Preparing Spells..."
+
   try {
-    await initPromise;
+    SDK = await loadWebpackModule("./seeso/dist/seeso.js");
+    const SeesoClass = SDK?.default || SDK?.Seeso || SDK;
+    if (!SeesoClass) throw new Error("Seeso export not found from ./seeso/dist/seeso.js");
+
+    seeso = new SeesoClass();
+    window.__seeso = { SDK, seeso };
+
+    setState("sdk", "constructed");
+    logI("sdk", "module loaded", { exportedKeys: Object.keys(SDK || {}) });
+    // [REMOVED] Intermediate Toast: "Spells Loaded!"
+
+  } catch (e) {
+    setState("sdk", "load_failed");
+    showRetry(true, "sdk load failed");
+    logE("sdk", "Failed to load ./seeso/dist/seeso.js", e);
+    if (window.updateLoadingProgress) window.updateLoadingProgress(0, "Spell Failed :(");
+    return false;
+  }
+
+  // Bind callbacks before init
+  attachSeesoCallbacks();
+
+  try {
+    // [REMOVED] Intermediate Toast: "Searching for Hero..."
+    const userStatusOption = SDK?.UserStatusOption
+      ? new SDK.UserStatusOption(true, true, true)
+      : { useAttention: true, useBlink: true, useDrowsiness: true };
+
+    logI("sdk", "initializing", { userStatusOption });
+
+    // [REMOVED] Intermediate Toast: "Opening the Eye..."
+    const errCode = await seeso.initialize(LICENSE_KEY, userStatusOption);
+    logI("sdk", "initialize returned", { errCode });
+
+    if (errCode !== 0) {
+      setState("sdk", "init_failed");
+      showRetry(true, "sdk init failed");
+      logE("sdk", "initialize failed", { errCode });
+      if (window.updateLoadingProgress) window.updateLoadingProgress(0, "Hero Not Found :(");
+      return false;
+    }
+
+    setState("sdk", "initialized");
+    // [REMOVED] Intermediate Toast: "Focusing..."
     return true;
   } catch (e) {
+    setState("sdk", "init_exception");
+    showRetry(true, "sdk init exception");
+    logE("sdk", "Exception during initialize()", e);
+    if (window.updateLoadingProgress) window.updateLoadingProgress(0, "Eye Closed :(");
     return false;
   }
 }
@@ -749,22 +703,7 @@ function startTracking() {
   }
 }
 
-/**
- * Entry Point for Game: Enters Face Check Mode.
- */
 function startCalibration() {
-  if (!seeso) return false;
-
-  // Start tracking first if not already
-  logI("cal", "Entering Face Check Mode...");
-  calManager.startFaceCheck();
-  return true;
-}
-
-/**
- * Internal: Actually calls Seeso Calibration after Face Check passes.
- */
-function startActualCalibration() {
   if (!seeso) return false;
 
   // Make canvas layer visible for calibration dots
@@ -777,15 +716,15 @@ function startActualCalibration() {
   try {
     // Force High Accuracy (2) to ensure sufficient data collection (prevents 0% finish)
     // On Mobile, use Medium (1) or Low (0) to avoid getting stuck.
-    // Force criteria to 0 (Low) for ALL devices to prevent Laptop freeze (Emergency)
-    const criteria = 0;
+    const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+    const criteria = isMobile ? 1 : 2;
 
     // 5-point calibration (mode 5 is standard usually, check docs. Here current code sends 1?)
     // Actually mode 1 might be 1-point? The user mentioned 5-point.
     // Changing to 5 for better accuracy if supported, but sticking to existing logic first.
+    // Assuming 5 is standard, let's use 5. Or keep 1 if that's what was working.
     // The previous code had `seeso.startCalibration(1, criteria)`. Let's stick to 5 for game.
-    // [Request] 1-point calibration (mode 1)
-
+    // 1-point calibration (mode 1)
     calManager.reset();
     const mode = 1;
 
@@ -803,29 +742,16 @@ function startActualCalibration() {
         requestAnimationFrame(tick);
       };
       tick();
-
-      // [EMERGENCY SKIP REMOVED FOR PRODUCTION]
-      /*
-      setTimeout(() => {
-        if (overlay.calRunning) {
-          const skipBtn = document.createElement('button');
-          skipBtn.innerText = "⚠️ Emergency Skip";
-           // ... (removed)
-          document.body.appendChild(skipBtn);
-          setTimeout(() => skipBtn.remove(), 10000);
-        }
-      }, 3000);
-      */
     }
 
-    logI("cal", "startActualCalibration returned", { ok, criteria });
+    logI("cal", "startCalibration returned", { ok, criteria });
     setState("cal", ok ? "running" : "failed");
     setStatus("Calibrating... Look at the dots!");
 
     return !!ok;
   } catch (e) {
     setState("cal", "failed");
-    logE("cal", "startActualCalibration threw", e);
+    logE("cal", "startCalibration threw", e);
     return false;
   }
 }
