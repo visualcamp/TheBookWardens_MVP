@@ -14,7 +14,9 @@ export class CalibrationManager {
             pointCount: 0,
             isFinishing: false,
             watchdogTimer: null,
+            inFailPopup: false, // [NEW] Flag to stop rendering when popup is open
         };
+        this.seeso = null; // [NEW] Store SDK reference
     }
 
     reset() {
@@ -23,9 +25,109 @@ export class CalibrationManager {
         this.state.progress = 0;
         this.state.isFinishing = false;
         this.state.running = false;
+        this.state.inFailPopup = false;
         if (this.state.watchdogTimer) clearTimeout(this.state.watchdogTimer);
         if (this.state.safetyTimer) clearTimeout(this.state.safetyTimer);
         if (this.state.maxWaitTimer) clearTimeout(this.state.maxWaitTimer);
+        if (this.state.progressWatchdog) clearInterval(this.state.progressWatchdog);
+    }
+
+    // ... (startFaceCheck, handleFaceCheckGaze, updateFaceCheckUI, startCollection kept as is) ...
+
+    showFailPopup() {
+        // Stop rendering the dot/orb so it doesn't overlap text
+        this.state.inFailPopup = true;
+
+        const popup = document.getElementById("cal-fail-popup");
+        if (popup) {
+            popup.style.display = "flex";
+
+            // Hide the status text behind popup
+            const statusEl = document.getElementById("calibration-status");
+            if (statusEl) statusEl.style.display = 'none';
+
+            // Re-bind buttons dynamically to ensure they work even after DOM updates
+            const btnRetry = document.getElementById("btn-cal-retry");
+            const btnSkip = document.getElementById("btn-cal-skip");
+
+            if (btnRetry) {
+                btnRetry.onclick = () => {
+                    popup.style.display = "none";
+                    this.retryPoint();
+                };
+            }
+            if (btnSkip) {
+                btnSkip.onclick = () => {
+                    popup.style.display = "none";
+                    this.ctx.logW("cal", "User skipped calibration via popup.");
+                    this.finishSequence(); // Proceed to game
+                };
+            }
+        } else {
+            this.ctx.logE("cal", "Fail popup not found in DOM!");
+            // Fallback: Just finish if UI is broken
+            this.finishSequence();
+        }
+    }
+
+    retryPoint() {
+        this.ctx.logI("cal", "Retrying calibration point...");
+
+        // Reset state
+        this.state.running = true;
+        this.state.progress = 0;
+        this.state.displayProgress = 0;
+        this.state.inFailPopup = false; // Resume rendering
+
+        // Restore UI
+        const statusEl = document.getElementById("calibration-status");
+        if (statusEl) {
+            statusEl.style.display = 'block';
+            statusEl.textContent = "Look at the Magic Orb!";
+        }
+
+        // [FIX] Explicitly call SDK startCollectSamples
+        if (this.seeso && typeof this.seeso.startCollectSamples === 'function') {
+            this.seeso.startCollectSamples();
+        } else {
+            this.ctx.logW("cal", "seeso.startCollectSamples not available during retry");
+        }
+
+        // Restart watchdog
+        this.startCollection();
+
+        // Let's reset the UI button to "Retry" so user can physically click it again if needed
+        const btn = document.getElementById("btn-calibration-start");
+        if (btn) {
+            // Actually, if we auto-started collection above, we might not want to show the button?
+            // But if startCollectSamples failed/needs trigger, let's show button just in case.
+            // Wait, usually retry means "Try this point again". 
+            // If we called startCollectSamples automatically, we should HIDE the button.
+            // But if user needs to be ready, maybe showing button is better?
+            // User complained "behavior is weird".
+            // Let's AUTO-START (Hide button). Because having to click "Retry" on popup AND "Start Point" button is double work.
+
+            btn.style.display = "none"; // Hide start button, we auto-started via SDK
+        }
+    }
+
+    /**
+     * Binds to the SeeSo instance.
+     */
+    bindTo(seeso) {
+        if (!seeso) return;
+        this.seeso = seeso; // [NEW] Store reference
+
+        const { logI, logW, logE, setStatus, setState, requestRender, onCalibrationFinish } = this.ctx;
+        // ... (rest of bindTo) ...
+    }
+
+    // ... (rest of methods)
+
+    render(ctx, width, height, toCanvasLocalPoint) {
+        if (this.state.inFailPopup) return; // [NEW] Don't render if popup is open
+        if (!this.state.point) return;
+        // ... (rest of render)
     }
 
     /**
