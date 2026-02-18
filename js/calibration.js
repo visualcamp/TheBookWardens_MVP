@@ -241,14 +241,16 @@ export class CalibrationManager {
                 const btn = document.getElementById("btn-calibration-start");
                 if (btn) {
                     // Show button for user to 'Start Collection'
+                    // Restore Legacy UI: Place button near the dot
                     btn.style.display = "inline-block";
-                    btn.textContent = "Start";
-                    btn.style.pointerEvents = "auto";
+                    btn.style.position = 'absolute';
+                    // Center roughly (assuming button width ~80px or dynamic)
+                    // If button is wider, this might be slightly off, but restores "old behavior".
+                    btn.style.left = (x - 40) + 'px';
+                    btn.style.top = (y + 40) + 'px'; // Below the dot
 
-                    // Reset styling
-                    btn.style.position = '';
-                    btn.style.left = '';
-                    btn.style.top = '';
+                    btn.textContent = "Start Point"; // Matches index.html default
+                    btn.style.pointerEvents = "auto";
                 }
             });
             logI("sdk", "addCalibrationNextPointCallback bound (CalibrationManager)");
