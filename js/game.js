@@ -668,7 +668,8 @@ Game.typewriter = {
             // Instead of fading out an old chunk manually here, we SCHEDULE the death of the NEW chunk.
             // "I am born now, and I shall die in 4 seconds."
             // This ensures a smooth, independent pipeline regardless of whether the cursor pauses.
-            this.renderer.scheduleFadeOut(this.chunkIndex, 3000); // 3 seconds lifetime
+            // [FIX] Disabled FadeOut to ensure text stability for Replay Overlay
+            // this.renderer.scheduleFadeOut(this.chunkIndex, 3000); // 3 seconds lifetime
 
             // Wait for Animation to Finish (Promise-based) with Timeout Safety
             const chunkLen = this.renderer.chunks[this.chunkIndex].length;
