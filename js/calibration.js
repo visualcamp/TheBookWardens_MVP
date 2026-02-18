@@ -285,11 +285,9 @@ export class CalibrationManager {
                 };
             }
             if (btnSkip) {
-                btnSkip.onclick = () => {
-                    popup.style.display = "none";
-                    this.ctx.logW("cal", "User skipped calibration via popup.");
-                    this.finishSequence(); // Proceed to game
-                };
+                // [CHANGED] Hide Skip button per user request (Force Calibration)
+                btnSkip.style.display = "none";
+                btnSkip.onclick = null;
             }
         } else {
             this.ctx.logE("cal", "Fail popup not found in DOM!");
