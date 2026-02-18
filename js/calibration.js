@@ -205,7 +205,7 @@ export class CalibrationManager {
                 btn.disabled = false;
                 btn.style.opacity = "1";
                 btn.style.cursor = "pointer";
-                btn.style.boxShadow = "0 0 15px #00e5ff";
+                btn.style.boxShadow = "none";
             }
             if (frame) frame.style.borderColor = "#00ff00";
         } else {
