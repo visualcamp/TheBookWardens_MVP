@@ -872,6 +872,12 @@ export class TextRenderer {
                         w.element.style.transition = "none";
                         w.element.style.opacity = "1";
                         w.element.style.visibility = "visible";
+
+                        // [CRITICAL FIX] Ensure position is reset to "revealed" state (0px)
+                        // Otherwise it defaults to .tr-word (10px down), causing mismatch.
+                        w.element.style.transform = "translateY(0)";
+                        w.element.classList.add("revealed");
+
                         w.element.classList.remove("faded-out");
                         w.element.classList.remove("chunk-fade-out"); // Specific class used by fadeOutChunk
                         w.element.classList.remove("hidden");
