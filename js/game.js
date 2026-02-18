@@ -399,32 +399,64 @@ const Game = {
 
         this.switchScreen("screen-new-score");
 
-        // 2. Update UI Elements directly
-        const elInk = document.getElementById('report-ink-score');
-        const elRune = document.getElementById('report-rune-score');
-        const elGem = document.getElementById('report-gem-score');
-        const elInkCount = document.getElementById('report-ink-count');
-        const elRuneCount = document.getElementById('report-rune-count');
-        const elGemCount = document.getElementById('report-gem-count');
+        // 2. Reset Animation States (Invisible initially)
+        const rowStats = document.getElementById("report-stats-row");
+        const rowResources = document.getElementById("report-resource-row");
+        const secReward = document.getElementById("reward-section");
 
-        // 2. Update UI Elements directly (Animation Calls)
-        // Reset to 0 first for animation visual
-        if (elInk) elInk.innerText = "+0";
-        if (elRune) elRune.innerText = "+0";
-        if (elGem) elGem.innerText = "+0";
+        [rowStats, rowResources, secReward].forEach(el => {
+            if (el) {
+                el.style.opacity = "0";
+                el.style.transform = "translateY(30px)";
+                el.style.transition = "none"; // Disable transition for reset
+            }
+        });
 
-        // Animate Scores (with slight delays for staggered effect)
-        this.animateValue("report-ink-score", 0, finalInk, 1500, "+");
-        this.animateValue("report-rune-score", 0, finalRune, 1500, "+");
-        this.animateValue("report-gem-score", 0, finalGem, 1500, "+");
+        // 3. Start Sequence
+        // Force reflow
+        if (rowStats) void rowStats.offsetHeight;
 
-        // Show totals
-        if (elInkCount) elInkCount.innerText = "Current: " + finalInk;
-        if (elRuneCount) elRuneCount.innerText = "Current: " + finalRune;
-        if (elGemCount) elGemCount.innerText = "Current: " + finalGem;
+        // Restore transitions
+        [rowStats, rowResources, secReward].forEach(el => {
+            if (el) el.style.transition = "all 0.8s cubic-bezier(0.22, 1, 0.36, 1)";
+        });
 
-        // 3. Animate WPM
-        this.animateValue("report-wpm", 0, finalWPM, 1500);
+        // Step 1: Speed & Rank (Start immediately)
+        setTimeout(() => {
+            if (rowStats) {
+                rowStats.style.opacity = "1";
+                rowStats.style.transform = "translateY(0)";
+            }
+            this.animateValue("report-wpm", 0, finalWPM, 1500);
+        }, 100);
+
+        // Step 2: Resources (Ink, Rune, Gem) - Delay 800ms
+        setTimeout(() => {
+            if (rowResources) {
+                rowResources.style.opacity = "1";
+                rowResources.style.transform = "translateY(0)";
+            }
+            const elInk = document.getElementById('report-ink-score');
+            const elRune = document.getElementById('report-rune-score');
+            const elGem = document.getElementById('report-gem-score');
+
+            if (elInk) elInk.innerText = "+0";
+            if (elRune) elRune.innerText = "+0";
+            if (elGem) elGem.innerText = "+0";
+
+            this.animateValue("report-ink-score", 0, finalInk, 1500, "+");
+            this.animateValue("report-rune-score", 0, finalRune, 1500, "+");
+            this.animateValue("report-gem-score", 0, finalGem, 1500, "+");
+        }, 900);
+
+        // Step 3: Golden Key (Reward) - Delay 2000ms
+        setTimeout(() => {
+            if (secReward) {
+                secReward.style.opacity = "1";
+                secReward.style.transform = "translateY(0)";
+            }
+        }, 2200);
+
 
         // 4. Calculate Rank based on total score (Simple Mock Logic)
         const totalScore = finalInk + (finalRune * 10) + (finalGem * 5);
