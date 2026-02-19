@@ -9,6 +9,12 @@ export class VocabManager {
     init(vocabList) {
         this.vocabList = vocabList || [];
         this.currentIndex = 0;
+
+        // [PERF] Stop Eye Tracking during Word Forge (Pure UI)
+        if (window.__seeso && window.__seeso.seeso) {
+            console.log("[VocabManager] Pausing Eye Tracking for UI Phase...");
+            try { window.__seeso.seeso.stopTracking(); } catch (e) { }
+        }
     }
 
     loadVocab(index) {
@@ -118,6 +124,13 @@ export class VocabManager {
                 this.loadVocab(this.currentIndex);
             } else {
                 console.log("[VocabManager] Word Forge Complete.");
+
+                // [PERF] Resume Tracking for Reading Phase
+                if (window.__seeso && window.__seeso.seeso) {
+                    console.log("[VocabManager] Resuming Eye Tracking...");
+                    try { window.__seeso.seeso.startTracking(); } catch (e) { }
+                }
+
                 this.game.switchScreen("screen-wpm");
             }
         } else {
