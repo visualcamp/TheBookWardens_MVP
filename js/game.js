@@ -11,6 +11,8 @@ import { VocabManager } from './managers/VocabManager.js?v=FINAL_FIX_NOW';
 import { UIManager } from './core/UIManager.js?v=FINAL_FIX_NOW';
 import { GameLogic } from './core/GameLogic.js?v=FINAL_FIX_NOW';
 import { DOMManager } from './core/DOMManager.js?v=FINAL_FIX_NOW';
+import { memoryManager } from './managers/MemoryManager.js'; // [NEW] Central Cleanup
+
 const Game = {
     // Initialized in init()
     scoreManager: null,
@@ -674,6 +676,8 @@ Game.typewriter = {
                     wordSpacing: "0.4em",
                     padding: "20px"
                 });
+                // [MEMORY] Register Renderer
+                memoryManager.register(this.renderer);
             } else {
                 console.error("TextRenderer Container Not Found");
             }
@@ -683,6 +687,11 @@ Game.typewriter = {
     start() {
         console.log("[Typewriter] Starting Engine V2 (TextRenderer)...");
         this.init();
+
+        // [MEMORY] Register GazeDataManager
+        if (window.gazeDataManager) {
+            memoryManager.register(window.gazeDataManager);
+        }
 
         if (!this.renderer) return;
 
@@ -711,6 +720,9 @@ Game.typewriter = {
     },
 
     playNextParagraph() {
+        // [MEMORY] Clean slate for new paragraph (Prevents iOS Crash)
+        memoryManager.purgeAll();
+
         // [SAFETY] Immediately pause tracking to free up CPU for rendering
         // This prevents the "Tracking + Rendering" spike that crashes iOS WebKit
         Game.state.isTracking = false;

@@ -49,6 +49,25 @@ export class GazeDataManager {
         this.isCollectingLineStart = false;
     }
 
+    // [New] Memory Cleanup Method
+    dispose() {
+        // [MEMORY] Critical Clean
+        this.data.length = 0;
+        this.buffer.length = 0;
+        this.replayData = null;
+        this.pangLog.length = 0;
+        this.wpmData.length = 0;
+        this.lineMetadata = {};
+
+        // Reset State
+        this.maxLineIndexReached = -1;
+        this.firstContentTime = null;
+        this.lastTriggerTime = 0;
+        this.lastPosPeakTime = 0;
+
+        console.log("[GazeData] Disposed data arrays.");
+    }
+
     /**
      * Process a single gaze frame from SeeSo SDK
      */

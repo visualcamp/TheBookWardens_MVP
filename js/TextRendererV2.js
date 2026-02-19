@@ -50,6 +50,25 @@ export class TextRenderer {
         }
     }
 
+    // [New] Memory Cleanup Method
+    dispose() {
+        this.cancelAllAnimations();
+        if (this.container) this.container.innerHTML = "";
+
+        // Remove detached elements
+        if (this.cursor && this.cursor.parentNode) this.cursor.remove();
+        if (this.impactElement && this.impactElement.parentNode) this.impactElement.remove();
+
+        // Clear Arrays to release references
+        this.words = [];
+        this.chunks = [];
+        this.lines = [];
+        this.pages = [];
+        this.isLayoutLocked = false;
+
+        console.log("[TextRenderer] Disposed resources.");
+    }
+
     initStyles() {
         if (!this.container) return;
         this.container.style.position = "relative";
