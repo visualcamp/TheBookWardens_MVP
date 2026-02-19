@@ -401,6 +401,12 @@ function renderOverlay() {
   // --- Calibration: Magic Orb Style (Arcane Focus) ---
   calManager.render(els.canvas.getContext("2d"), els.canvas.width, els.canvas.height, toCanvasLocalPoint);
 
+  // [iOS OPTIMIZATION] Kill Gaze Dot for Performance
+  // Rendering the yellow dot every frame causes GPU crashes on high-res iPhones.
+  // We only allow it during calibration (handled above) or if explicitly requested on non-iOS.
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isIOS) return;
+
   // --- Gaze dot ---
   if (overlay.gaze && overlay.gaze.x != null && overlay.gaze.y != null) {
     const opacity = overlay.gazeOpacity !== undefined ? overlay.gazeOpacity : 0; // Default hidden if not requested
