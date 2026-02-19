@@ -7,7 +7,7 @@
  * 3. Handles 'Chunk' reveals just like V2, but only applies styles to active nodes.
  * 4. Drastically reduces DOM count (1000+ -> ~100) and GPU memory usage.
  */
-import { TextChunker } from './TextChunker.js';
+import { TextChunker } from './utils/TextChunker.js';
 
 export class VirtualTextRenderer {
     constructor(containerId, options = {}) {
