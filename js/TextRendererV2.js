@@ -425,6 +425,39 @@ export class TextRenderer {
             this.lines.push(this._finalizeLine(lineBuffer));
         }
 
+        // [OPTIMIZATION] Group words into Line Divs for Browser Virtualization
+        // This enables 'content-visibility: auto' to save memory on iOS.
+        if (this.lines.length > 0) {
+            // Check first word to see if already wrapped
+            const firstIndex = this.lines[0].wordIndices[0];
+            const isAlreadyWrapped = this.words[firstIndex].element.parentElement !== this.container;
+
+            if (!isAlreadyWrapped) {
+                this.lines.forEach(line => {
+                    const lineDiv = document.createElement('div');
+                    lineDiv.className = 'tr-line';
+
+                    // Native Virtualization Styles
+                    lineDiv.style.display = 'block';
+                    lineDiv.style.margin = '0';
+                    lineDiv.style.padding = '0';
+                    // 'contain: layout' isolates layout calc cost
+                    // 'content-visibility: auto' effectively virtualizes off-screen lines
+                    lineDiv.style.contain = 'layout style';
+                    lineDiv.style.contentVisibility = 'auto';
+                    lineDiv.style.containIntrinsicSize = 'auto 50px'; // Prevent scrollbar jitter
+
+                    // Move words
+                    line.wordIndices.forEach(idx => {
+                        lineDiv.appendChild(this.words[idx].element);
+                    });
+
+                    this.container.appendChild(lineDiv);
+                });
+                console.log(`[TextRenderer] Virtualized ${this.lines.length} lines.`);
+            }
+        }
+
         this.isLayoutLocked = true;
 
         // [CRITICAL] Reset Line Index for NEW Page / Layout Lock
