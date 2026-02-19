@@ -1522,18 +1522,47 @@ if (document.readyState === "loading") {
             <div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:5px;">
                 <strong>SYSTEM LOGS (${LOG_LIMIT} lines)</strong>
                 <div>
-                    <button onclick="document.getElementById('debug-viewer-overlay').style.display='none'" style="background:#444; color:white; border:none; padding:5px 10px;">CLOSE</button>
+                    <button id="btn-viewer-close" style="background:#444; color:white; border:none; padding:5px 10px;">CLOSE</button>
                     <button id="btn-copy-log" style="background:#0066cc; color:white; border:none; padding:5px 10px; margin-left:10px;">COPY</button>
+                    <button id="btn-report-log" style="background:#aa00cc; color:white; border:none; padding:5px 10px; margin-left:10px;">📤 REPORT</button>
                 </div>
             </div>
         `;
         overlay.appendChild(header);
 
-        // Content Area
-        const content = document.createElement('div');
-        content.id = 'debug-log-content';
-        content.style.cssText = "flex:1; overflow-y:auto; white-space:pre-wrap; word-break:break-all;";
-        overlay.appendChild(content);
+        // Close Handler
+        header.querySelector('#btn-viewer-close').onclick = () => {
+            document.getElementById('debug-viewer-overlay').style.display = 'none';
+        };
+
+        // Report Handler (Firebase)
+        header.querySelector('#btn-report-log').onclick = () => {
+            const btn = header.querySelector('#btn-report-log');
+            if (typeof firebase === 'undefined') { alert("Firebase SDK not loaded."); return; }
+
+            // Ensure Init
+            if (!firebase.apps.length && window.FIREBASE_CONFIG) {
+                try { firebase.initializeApp(window.FIREBASE_CONFIG); } catch (e) { }
+            }
+
+            btn.innerText = "SENDING...";
+            const report = {
+                timestamp: new Date().toISOString(),
+                userAgent: navigator.userAgent,
+                logs: history,
+                sessionId: window.Game ? window.Game.sessionId : 'unknown'
+            };
+
+            firebase.database().ref('debug_reports').push(report)
+                .then((snap) => {
+                    alert("Report Sent! ID: " + snap.key.slice(-4));
+                    btn.innerText = "✅ SENT";
+                })
+                .catch(err => {
+                    alert("Send Failed: " + err.message);
+                    btn.innerText = "❌ RETRY";
+                });
+        };
 
         // Copy Handler
         header.querySelector('#btn-copy-log').onclick = () => {
