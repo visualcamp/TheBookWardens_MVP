@@ -246,6 +246,7 @@ export class TextRenderer {
         this.chunks = [];
         this.lines = []; // [FIX] Reset lines
         this.isLayoutLocked = false; // [FIX] Unlock layout
+        this.lastCleanedChunkIndex = -1; // [OPTIMIZATION] Virtualization Lite
 
         if (!rawText) return;
 
@@ -477,6 +478,29 @@ export class TextRenderer {
     }
 
     revealChunk(chunkIndex, interval = 150) {
+        // [OPTIMIZATION] Virtualization Lite: Hide old chunks to save memory
+        const CLEANUP_THRESHOLD = 15; // Keep last ~4-5 lines visible
+        if (chunkIndex > CLEANUP_THRESHOLD) {
+            const cleaningIndexStart = (this.lastCleanedChunkIndex === undefined) ? -1 : this.lastCleanedChunkIndex;
+            const targetCleanIndex = chunkIndex - CLEANUP_THRESHOLD;
+
+            if (targetCleanIndex > cleaningIndexStart) {
+                for (let c = cleaningIndexStart + 1; c <= targetCleanIndex; c++) {
+                    const oldIndices = this.chunks[c];
+                    if (oldIndices) {
+                        oldIndices.forEach(idx => {
+                            const w = this.words[idx];
+                            if (w && w.element) {
+                                // display:none removes from Rendering Tree (Critical for iOS)
+                                w.element.style.display = "none";
+                            }
+                        });
+                    }
+                }
+                this.lastCleanedChunkIndex = targetCleanIndex;
+            }
+        }
+
         if (!this.isLayoutLocked) this.lockLayout();
         if (chunkIndex < 0 || chunkIndex >= this.chunks.length) return Promise.resolve();
 
