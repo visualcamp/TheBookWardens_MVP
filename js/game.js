@@ -73,8 +73,8 @@ const Game = {
                     clip-path: none !important;
                 }
 
-                /* Block Animations on everything EXCEPT Meteors */
-                .ios-chrome-mode *:not(.meteor) {
+                /* Block Animations on everything EXCEPT Meteors, Text words, and Cursor */
+                .ios-chrome-mode *:not(.meteor):not(.tr-word):not(.text-cursor) {
                     animation: none !important;
                     transition: none !important;
                 }
