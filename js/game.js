@@ -948,6 +948,12 @@ Game.typewriter = {
         return new Promise((resolve) => {
             console.log("[triggerGazeReplay] Preparing Gaze Replay...");
 
+            // [OPTIMIZATION] Stop tracking for replay & boss (JIT Logic)
+            if (Game.state.isTracking) {
+                Game.state.isTracking = false;
+                console.log("[Typewriter] Tracking STOPPED for Replay/Boss.");
+            }
+
             // [CHANGED] Upload Data to Firebase NOW (Background Sync)
             // We do this here because Replay start signifies "Paragraph Done".
             if (window.gazeDataManager && Game.sessionId) {

@@ -58,6 +58,11 @@ export class TextRenderer {
         this.container.style.lineHeight = this.options.lineHeight;
         this.container.style.padding = this.options.padding;
         this.container.style.textAlign = "left";
+
+        // [OPTIMIZATION] GPU Acceleration for Container
+        // Promotes text layer to compositor, reducing repaint cost during style changes (color/opacity)
+        this.container.style.willChange = "transform";
+        this.container.style.transform = "translateZ(0)";
     }
 
     prepareDynamic(chapterData, wpm = 150) {
@@ -79,10 +84,6 @@ export class TextRenderer {
         let tokenOffset = 0;
 
         chapterData.paragraphs.forEach(p => {
-            // Add paragraph break if needed? Usually text flows.
-            // But we might want a visual break.
-            // For now, simple concatenation.
-
             p.tokens.forEach(t => {
                 allTokens.push(t);
             });
@@ -103,7 +104,8 @@ export class TextRenderer {
         console.log(`[TextRenderer] Preparing Dynamic Text for WPM: ${wpm}`);
         const groupedChunks = TextChunker.process(allTokens, wpm, allHighlights);
 
-        // Render Chunks to DOM
+        // Render Chunks to DOM using DocumentFragment (Batch Insert)
+        const fragment = document.createDocumentFragment();
         let globalWordIndex = 0;
 
         // Create Highlight Map for O(1) Lookup
@@ -114,10 +116,6 @@ export class TextRenderer {
             const currentChunkIndices = [];
 
             chunkTokens.forEach((tokenObj) => {
-                // Determine if this is a Rune Word
-                // tokenObj has 'originalIndex' relative to 'allTokens' if passed correctly?
-                // Wait, TextChunker loop uses 'i' from 0..tokens.length.
-                // So tokenObj.originalIndex IS the global index if we passed allTokens.
                 const isRuneWord = highlightMap.has(tokenObj.originalIndex);
                 const highlightData = highlightMap.get(tokenObj.originalIndex);
 
@@ -127,9 +125,6 @@ export class TextRenderer {
                 if (isRuneWord) {
                     span.classList.add("rune-word");
                     span.dataset.wordId = highlightData.word_id;
-                    // Initial Style for Rune Word?
-                    // Bold? Glow? Handled by CSS or Logic later.
-                    // span.style.fontWeight = "bold"; // Example default
                 }
 
                 span.style.color = "#ffffff"; // Default
@@ -141,7 +136,8 @@ export class TextRenderer {
                 span.dataset.index = globalWordIndex;
                 span.textContent = tokenObj.t;
 
-                this.container.appendChild(span);
+                // [OPTIMIZATION] Append to Fragment instead of DOM
+                fragment.appendChild(span);
 
                 // Add to system
                 this.words.push({
@@ -159,6 +155,9 @@ export class TextRenderer {
 
             this.chunks.push(currentChunkIndices);
         });
+
+        // Single DOM Write
+        this.container.appendChild(fragment);
 
         console.log(`[TextRenderer] Dynamic Layout: ${this.chunks.length} chunks from ${allTokens.length} tokens.`);
 
@@ -476,6 +475,12 @@ export class TextRenderer {
                 // add a "breathing pause" to allow the eye to catch up.
                 if (isLineStart && w.index > 0) {
                     cumulativeDelay += 450;
+                }
+
+                // [JIT TRACKING] Ensure Tracking is ON when text appears
+                // This is a safety net in case it was disabled elsewhere.
+                if (window.Game && window.Game.state && !window.Game.state.isTracking) {
+                    window.Game.state.isTracking = true;
                 }
 
                 // Calculate execution time for this word
