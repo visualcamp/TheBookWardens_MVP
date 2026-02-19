@@ -1443,6 +1443,43 @@ if (document.readyState === "loading") {
     initGame();
 }
 
+// [CRITICAL] Immediate Splash Interaction Handler
+(function bindSplashEarly() {
+    const splash = document.getElementById('screen-splash');
+    if (!splash) return;
+
+    // Force pointer events
+    splash.style.pointerEvents = "auto";
+
+    const handleInteraction = (e) => {
+        if (window.Game && window.Game.introManager) {
+            // Ready to go
+            window.Game.dismissSplash();
+        } else {
+            // Not ready
+            console.warn("[Splash] Clicked before init complete.");
+
+            // 1. Show Feedback
+            let loader = document.getElementById('splash-loader-msg');
+            if (!loader) {
+                loader = document.createElement('div');
+                loader.id = 'splash-loader-msg';
+                loader.innerText = "Initializing Magic... Tap again.";
+                loader.style.cssText = "position:absolute; bottom:20%; width:100%; text-align:center; color:rgba(255,255,255,0.8); font-size:1.0rem; font-family:monospace; pointer-events:none;";
+                splash.appendChild(loader);
+            }
+
+            // 2. Force Init check
+            if (typeof initGame === 'function') {
+                initGame();
+            }
+        }
+    };
+
+    // Bind click only
+    splash.addEventListener('click', handleInteraction);
+})();
+
 
 // End of file
 
