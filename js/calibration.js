@@ -554,9 +554,10 @@ export class CalibrationManager {
         ctx.ellipse(0, 0, 7.5, 2.4, 0, 0, Math.PI * 2);
         ctx.lineWidth = 2.25; // 1.5 * 1.5
         ctx.strokeStyle = color;
-        // Optional: Add glow
-        ctx.shadowBlur = 6; // 4 * 1.5 = 6
-        ctx.shadowColor = color;
+        // [PERF] Kill Shadow for Stability on Mobile
+        // Heavy canvas effects during calibration cause GPU freezes on iOS/Android Chrome
+        // ctx.shadowBlur = 6; 
+        // ctx.shadowColor = color;
         ctx.stroke();
 
         ctx.restore();
