@@ -139,6 +139,10 @@ const Game = {
     // --- Browser Detection Moved to IntroManager ---
 
     switchScreen(screenId) {
+        // Log transition
+        const prev = document.querySelector('.screen.active');
+        console.log(`[Screen] Switch: ${prev ? prev.id : 'None'} -> ${screenId}`);
+
         // [FIX] Ensure clean state transition
         document.querySelectorAll('.screen').forEach(el => {
             el.classList.remove('active');
@@ -739,7 +743,7 @@ Game.typewriter = {
         }
 
         const paraData = this.paragraphs[this.currentParaIndex];
-        console.log(`[Typewriter] Playing Para ${this.currentParaIndex}`);
+        console.log(`[Content] Starting Paragraph ${this.currentParaIndex + 1}/${this.paragraphs.length}`);
 
         // 1. Prepare Content (Dynamic DSC Mode)
         // Wrap single paragraph in chapter structure for renderer
