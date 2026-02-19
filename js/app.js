@@ -615,6 +615,14 @@ function attachSeesoCallbacks() {
     seeso.addGazeCallback((gazeInfo) => {
       lastGazeAt = performance.now();
 
+      // [CRITICAL PERFORMANCE GUARD]
+      // If Game logic explicitly requests pause (e.g. heavy rendering), abort immediately.
+      // This saves CPU for the main thread (iOS Crash Prevention).
+      if (window.Game && window.Game.state &&
+        !window.Game.state.isTracking && !window.Game.state.isOwlTracker) {
+        return;
+      }
+
       // Raw values (for HUD/log)
       const xRaw = gazeInfo?.x;
       const yRaw = gazeInfo?.y;

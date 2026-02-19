@@ -296,7 +296,7 @@ const Game = {
 
     // Called by app.js (SeeSo overlay)
     onGaze(x, y) {
-        // Owl Interaction
+        // Owl Interaction (Lightweight, keep active if needed, but usually isTracking is true here too)
         if (this.state.isOwlTracker) {
             const pupils = document.querySelectorAll('.pupil');
             const cx = window.innerWidth / 2;
@@ -313,6 +313,11 @@ const Game = {
             });
             return;
         }
+
+        // [CRITICAL PERFORMANCE GUARD]
+        // If tracking is paused (e.g. during heavy rendering/scrolling), IGNORE gaze events.
+        // This prevents iOS/Mobile crashes due to CPU overload.
+        if (!this.state.isTracking) return;
 
         // Typewriter Gaze Feedback
         if (this.typewriter) {
@@ -706,8 +711,12 @@ Game.typewriter = {
     },
 
     playNextParagraph() {
+        // [SAFETY] Immediately pause tracking to free up CPU for rendering
+        // This prevents the "Tracking + Rendering" spike that crashes iOS WebKit
+        Game.state.isTracking = false;
+        console.log("[Typewriter] Tracking PAUSED for paragraph transition (Resource Safety).");
+
         // [SAFETY FIX] Reset Scroll Position to (0,0) BEFORE rendering new content.
-        // This prevents lingering scroll from previous paragraphs from affecting lockLayout coordinates.
         window.scrollTo(0, 0);
         const screenRead = document.getElementById('screen-read');
         if (screenRead) screenRead.scrollTop = 0;
@@ -717,82 +726,74 @@ Game.typewriter = {
 
         const gdm = window.gazeDataManager;
         if (gdm) {
-            // Function Call (Preferred)
             if (typeof gdm.resetTriggers === 'function') {
                 gdm.resetTriggers();
             } else {
-                // FALLBACK: Manual Reset (If function missing in cached JS)
-                console.warn("[Typewriter] resetTriggers function missing! Performing Manual Reset.");
                 gdm.maxLineIndexReached = -1;
                 gdm.firstContentTime = null;
                 gdm.lastTriggerTime = 0;
                 gdm.pendingReturnSweep = null;
                 if (gdm.pangLog) gdm.pangLog = [];
             }
-            console.log("[Typewriter] Triggers Reset Check Complete.");
         }
 
         if (this.currentParaIndex >= this.paragraphs.length) {
-            // All paragraphs done. Trigger FINAL BOSS.
             this.triggerFinalBossBattle();
             return;
         }
 
-        const paraData = this.paragraphs[this.currentParaIndex];
-        console.log(`[Typewriter] Playing Para ${this.currentParaIndex}`);
+        // [STRATEGY] "Yield to Main Thread"
+        // Give the browser 50ms to process the 'pause tracking' command and clear the stack
+        // before starting the heavy 'prepareDynamic' operation.
+        setTimeout(() => {
+            const paraData = this.paragraphs[this.currentParaIndex];
+            console.log(`[Typewriter] Playing Para ${this.currentParaIndex}`);
 
-        // 1. Prepare Content (Dynamic DSC Mode)
-        // Wrap single paragraph in chapter structure for renderer
-        const currentWPM = Game.wpm || 150;
-        this.renderer.prepareDynamic({ paragraphs: [paraData] }, currentWPM);
+            // 1. Prepare Content (Heavy DOM Operation)
+            const currentWPM = Game.wpm || 150;
+            this.renderer.prepareDynamic({ paragraphs: [paraData] }, currentWPM);
 
-        this.chunkIndex = 0;
-        this.lineStats.clear(); // Reset reading stats for new page
+            this.chunkIndex = 0;
+            this.lineStats.clear();
 
-        // [FIX] Register Cursor with SceneManager (Cursor is recreated directly in prepare())
-        if (Game.sceneManager && this.renderer.cursor) {
-            Game.sceneManager.setCursorReference(this.renderer.cursor);
-        }
+            if (Game.sceneManager && this.renderer.cursor) {
+                Game.sceneManager.setCursorReference(this.renderer.cursor);
+            }
 
-        // 2. Lock Layout (Next Frame to allow DOM render)
-        requestAnimationFrame(() => {
-            this.renderer.lockLayout();
-            const debugEl = document.getElementById('line-detect-result');
-            if (debugEl) debugEl.textContent = `Lines Cached: ${this.renderer.lines.length}`;
+            // 2. Lock Layout (Next Frame)
+            requestAnimationFrame(() => {
+                this.renderer.lockLayout();
 
-            // Resume Game Loop safely after layout is ready
-            this.isPaused = false;
+                // Debug Info
+                const debugEl = document.getElementById('line-detect-result');
+                if (debugEl) debugEl.textContent = `Lines Cached: ${this.renderer.lines.length}`;
 
-            // [CRITICAL FIX] Re-enable Tracking!
-            // Tracking is disabled in 'confrontVillain' (Mid-Boss).
-            // We must re-enable it here for the next paragraph.
-            Game.state.isTracking = true;
-            console.log("[Typewriter] Tracking Re-enabled for new paragraph.");
+                this.isPaused = false;
 
-            // 3. Start Reading Flow
-            // UX IMPROVEMENT: Hide cursor initially. 
-            // The screen 'fadeIn' animation shifts the text container. 
-            // If we show the cursor immediately, it looks like it's floating/misaligned.
-            if (this.renderer.cursor) this.renderer.cursor.style.opacity = "0";
+                // [CRITICAL] Re-enable Tracking only AFTER the heavy lifting is done
+                Game.state.isTracking = true;
+                console.log("[Typewriter] Tracking RESUMED. Layout locked.");
 
-            // Wait for measurement and pagination
-            setTimeout(() => {
-                if (this.renderer) {
-                    // Start from Page 0
-                    this.renderer.showPage(0).then(() => {
-                        this.renderer.resetToStart(); // Aligns correctly
-                        if (this.renderer.cursor) this.renderer.cursor.style.opacity = "1";
-                        console.log("[Typewriter] Page 0 Ready.");
+                // 3. Start Reading Flow
+                if (this.renderer.cursor) this.renderer.cursor.style.opacity = "0";
 
-                        // Start Text after full delay
-                        setTimeout(() => {
-                            this.startTime = Date.now();
-                            this.tick();
-                        }, 1000); // Reduced from 3000 to 1000 for snappier page loads
-                    });
-                }
-            }, 600);
-        });
+                // Wait for measurement and pagination
+                setTimeout(() => {
+                    if (this.renderer) {
+                        this.renderer.showPage(0).then(() => {
+                            this.renderer.resetToStart();
+                            if (this.renderer.cursor) this.renderer.cursor.style.opacity = "1";
+                            console.log("[Typewriter] Page 0 Ready.");
+
+                            setTimeout(() => {
+                                this.startTime = Date.now();
+                                this.tick();
+                            }, 1000);
+                        });
+                    }
+                }, 600);
+            });
+        }, 50); // Hard breathing pause
     },
 
     tick() {
