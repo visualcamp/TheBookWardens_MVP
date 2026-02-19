@@ -195,6 +195,15 @@ const Game = {
         }, 1000);
     },
 
+    dismissSplash() {
+        if (this.introManager) {
+            this.introManager.dismissSplash();
+        } else {
+            console.error("IntroManager not ready!");
+            this.switchScreen("screen-home");
+        }
+    },
+
     // --- Browser Detection Moved to IntroManager ---
 
     switchScreen(screenId) {
