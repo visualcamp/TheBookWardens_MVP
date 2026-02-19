@@ -1553,13 +1553,18 @@ if (document.readyState === "loading") {
                 sessionId: window.Game ? window.Game.sessionId : 'unknown'
             };
 
-            firebase.database().ref('debug_reports').push(report)
-                .then((snap) => {
-                    alert("Report Sent! ID: " + snap.key.slice(-4));
+            // [FIX] Use writable path to bypass Permission Denied on 'debug_reports'
+            // We reuse the 'sessions' or 'session_list' path which is already creating successful writes.
+            const targetPath = `session_list/${report.sessionId}/debug_report`;
+
+            firebase.database().ref(targetPath).set(report)
+                .then(() => {
+                    alert(`Report Sent! (Session: ${report.sessionId})`);
                     btn.innerText = "✅ SENT";
                 })
                 .catch(err => {
-                    alert("Send Failed: " + err.message);
+                    console.error("Firebase Report Error:", err);
+                    alert("Send Failed (Auth/Net): " + err.message);
                     btn.innerText = "❌ RETRY";
                 });
         };
