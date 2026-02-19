@@ -1409,6 +1409,158 @@ if (document.readyState === "loading") {
 })();
 
 
+/* -------------------------------------------------------------------------- */
+/* [TOOL] PERSISTENT DEBUG LOGGER (Crash Report System)                       */
+/* -------------------------------------------------------------------------- */
+(function InitDebugSystem() {
+    const LOG_LIMIT = 500;
+    const STORAGE_KEY = 'TBW_Debug_Logs';
+    const CRASH_KEY = 'TBW_Has_Crashed';
+
+    // 1. History Manager
+    const history = [];
+    const saveLogs = () => {
+        try {
+            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(-LOG_LIMIT)));
+        } catch (e) { /* Quota exceeded */ }
+    };
+
+    // Load previous logs
+    try {
+        const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+        if (Array.isArray(saved)) history.push(...saved);
+        history.push({ type: 'sys', msg: '--- NEW SESSION START ---', time: new Date().toISOString() });
+    } catch (e) { }
+
+    // 2. Console Hook
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+
+    function hook(type, originalFn, args) {
+        // Run original
+        originalFn.apply(console, args);
+
+        // Save to history
+        const msg = args.map(a =>
+            (typeof a === 'object') ? JSON.stringify(a, null, 2) : String(a)
+        ).join(' ');
+
+        history.push({ type, msg, time: new Date().toISOString() });
+        if (history.length > LOG_LIMIT + 100) history.splice(0, 100); // Trim
+
+        saveLogs(); // Persist
+
+        // UI Feedback
+        if (type === 'error') {
+            const btn = document.getElementById('debug-trigger-btn');
+            if (btn) {
+                btn.style.backgroundColor = 'red';
+                btn.style.opacity = '1.0';
+            }
+        }
+    }
+
+    console.log = (...args) => hook('log', originalLog, args);
+    console.warn = (...args) => hook('warn', originalWarn, args);
+    console.error = (...args) => hook('error', originalError, args);
+
+    // 3. Crash Detection
+    window.onerror = function (msg, url, line, col, error) {
+        history.push({ type: 'CRASH', msg: `Global Error: ${msg} @ ${line}:${col}`, time: new Date().toISOString() });
+        saveLogs();
+        sessionStorage.setItem(CRASH_KEY, 'true');
+    };
+
+    // 4. GUI Layer
+    function createGUI() {
+        // A. Trigger Button (Tiny, Transparent)
+        const btn = document.createElement('div');
+        btn.id = 'debug-trigger-btn';
+        btn.innerText = '🐞';
+        btn.style.cssText = `
+            position: fixed; bottom: 10px; right: 10px; width: 30px; height: 30px;
+            background: rgba(0,0,0,0.2); border-radius: 50%; color: white;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; cursor: pointer; z-index: 999999;
+            user-select: none; opacity: 0.3; transition: all 0.3s;
+        `;
+
+        // Check if crashed last time
+        if (sessionStorage.getItem(CRASH_KEY) === 'true') {
+            btn.style.backgroundColor = 'red';
+            btn.style.opacity = '1.0';
+            sessionStorage.removeItem(CRASH_KEY); // Reset flag
+        }
+
+        btn.onclick = () => {
+            const viewer = document.getElementById('debug-viewer-overlay');
+            if (viewer) {
+                viewer.style.display = (viewer.style.display === 'none') ? 'flex' : 'none';
+                if (viewer.style.display === 'flex') renderLogs(viewer);
+            }
+        };
+        document.body.appendChild(btn);
+
+        // B. Viewer Overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'debug-viewer-overlay';
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.95); z-index: 1000000; color: #0f0;
+            font-family: monospace; font-size: 12px; display: none;
+            flex-direction: column; padding: 10px; box-sizing: border-box;
+        `;
+
+        // Header
+        const header = document.createElement('div');
+        header.innerHTML = `
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:5px;">
+                <strong>SYSTEM LOGS (${LOG_LIMIT} lines)</strong>
+                <div>
+                    <button onclick="document.getElementById('debug-viewer-overlay').style.display='none'" style="background:#444; color:white; border:none; padding:5px 10px;">CLOSE</button>
+                    <button id="btn-copy-log" style="background:#0066cc; color:white; border:none; padding:5px 10px; margin-left:10px;">COPY</button>
+                </div>
+            </div>
+        `;
+        overlay.appendChild(header);
+
+        // Content Area
+        const content = document.createElement('div');
+        content.id = 'debug-log-content';
+        content.style.cssText = "flex:1; overflow-y:auto; white-space:pre-wrap; word-break:break-all;";
+        overlay.appendChild(content);
+
+        // Copy Handler
+        header.querySelector('#btn-copy-log').onclick = () => {
+            const text = history.map(h => `[${h.time.split('T')[1].slice(0, 8)}] [${h.type}] ${h.msg}`).join('\n');
+            navigator.clipboard.writeText(text).then(() => alert('Copied to Clipboard!'));
+        };
+
+        document.body.appendChild(overlay);
+    }
+
+    function renderLogs(container) {
+        const content = container.querySelector('#debug-log-content');
+        if (!content) return;
+        content.innerHTML = history.map(h => {
+            const color = h.type === 'error' || h.type === 'CRASH' ? '#ff5555' : (h.type === 'warn' ? '#ffaa00' : '#cccccc');
+            return `<div style="color:${color}; margin-bottom:4px; border-bottom:1px solid #222;">
+                <span style="color:#555;">${h.time.split('T')[1].slice(0, 8)}</span> 
+                <span style="font-weight:bold;">[${h.type.toUpperCase()}]</span> 
+                ${h.msg.replace(/</g, '&lt;')}
+            </div>`;
+        }).join('');
+        content.scrollTop = content.scrollHeight;
+    }
+
+    // Init GUI after body load
+    if (document.body) createGUI();
+    else document.addEventListener('DOMContentLoaded', createGUI);
+
+})();
+
+
 // End of file
 
 
