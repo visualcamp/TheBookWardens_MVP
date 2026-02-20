@@ -280,7 +280,16 @@ function ensureLogPanel() {
         crashLogs: crashLogs.length > 0 ? crashLogs : null // Previous Session (Pre-Crash)
       };
 
-      await db.ref("logs/" + sessionId).set(uploadData);
+      // Timeout Promise (10s)
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout (10s)")), 10000)
+      );
+
+      // Race: Upload vs Timeout
+      await Promise.race([
+        db.ref("logs/" + sessionId).set(uploadData),
+        timeout
+      ]);
 
       let msg = `✅ Upload Success!\nSession ID: ${sessionId}`;
       if (crashLogs.length > 0) msg += `\n(Recovered ${crashLogs.length} lines from crash)`;
