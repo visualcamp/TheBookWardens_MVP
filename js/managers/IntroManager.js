@@ -10,63 +10,78 @@ export class IntroManager {
     }
 
     bindEvents() {
-        const startBtn = document.getElementById("btn-start-game");
+        const tryBind = () => {
+            const startBtn = document.getElementById("btn-start-game");
+            if (!startBtn) return false;
 
-        if (!startBtn) {
-            console.error("FATAL: Start Button Not Found!");
-            return;
-        }
+            const handleStart = async (e) => {
+                if (e && e.type === 'touchend') e.preventDefault(); // Prevent ghost clicks
+                if (startBtn.classList.contains("loading")) return;
 
-        const handleStart = async (e) => {
-            if (e && e.type === 'touchend') e.preventDefault(); // Prevent ghost clicks on mobile
-            if (startBtn.disabled) return;
+                // 1. Immediate UI Feedback
+                startBtn.classList.add("loading");
+                startBtn.innerText = "Initializing...";
+                startBtn.disabled = true;
 
-            // 1. Immediate UI Feedback
-            startBtn.disabled = true;
-            startBtn.classList.add("loading");
-            startBtn.innerText = "Initializing...";
+                try {
+                    // 2. Check Browser (Sync)
+                    if (this.isInAppBrowser()) {
+                        this.openSystemBrowser();
+                        this.resetStartBtn(startBtn);
+                        return;
+                    }
 
-            try {
-                // 2. Check In-App Browser (Sync Check)
-                if (this.isInAppBrowser()) {
-                    this.openSystemBrowser();
+                    // 3. Eye Tracking Init (Async - Needs User Gesture)
+                    if (typeof window.startEyeTracking !== 'function') {
+                        throw new Error("System Error: SDK Module Missing. Reload needed.");
+                    }
+
+                    console.log("[IntroManager] Requesting Eye Tracking Boot...");
+                    const success = await window.startEyeTracking();
+
+                    if (!success) {
+                        throw new Error("Initialization Failed. Check Camera Permissions.");
+                    }
+
+                    // 4. Success -> Start Intro
+                    this.startRiftIntro();
+
+                } catch (error) {
+                    console.error("[IntroManager] Boot Error:", error);
+                    alert("Start Failed: " + error.message);
                     this.resetStartBtn(startBtn);
-                    return;
                 }
+            };
 
-                // 3. Initialize Eye Tracking SDK (Async - Needs User Gesture Context)
-                if (typeof window.startEyeTracking !== 'function') {
-                    throw new Error("System Error: SDK Module Missing. Please refresh.");
-                }
+            // Remove previous listeners
+            startBtn.onclick = null;
+            // Clean Clone to wipe all listeners (if any)
+            const newBtn = startBtn.cloneNode(true);
+            startBtn.parentNode.replaceChild(newBtn, startBtn);
 
-                console.log("[IntroManager] Requesting Eye Tracking Boot...");
-                const success = await window.startEyeTracking();
+            // Bind New Listeners
+            newBtn.addEventListener('touchend', (e) => handleStart(e), { passive: false });
+            newBtn.addEventListener('click', (e) => handleStart(e));
 
-                if (!success) {
-                    throw new Error("Initialization Failed. Check Camera Permissions.");
-                }
-
-                // 4. Success -> Start Intro
-                this.startRiftIntro();
-
-            } catch (error) {
-                console.error("[IntroManager] Boot Error:", error);
-                alert("Start Failed: " + error.message);
-                this.resetStartBtn(startBtn);
-            }
+            console.log("[IntroManager] Start Button Bound Successfully.");
+            return true;
         };
 
-        // Remove previous listeners to be safe
-        startBtn.onclick = null;
-
-        // Touch Event (Superior for Mobile)
-        startBtn.addEventListener('touchend', (e) => handleStart(e), { passive: false });
-        // Click Event (Desktop Fallback)
-        startBtn.addEventListener('click', (e) => handleStart(e));
+        // Try immediately
+        if (!tryBind()) {
+            console.warn("[IntroManager] Start Button not found. Polling...");
+            // Poll every 500ms
+            const poll = setInterval(() => {
+                if (tryBind()) clearInterval(poll);
+            }, 500);
+            this.game.trackInterval(poll); // Auto-cleanup
+        }
 
         // --- DEBUG: Mission Report Shortcut ---
         this.createDebugReportButton();
     }
+
+
 
     createDebugReportButton() {
         // Prevent duplicate button
