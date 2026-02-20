@@ -27,7 +27,7 @@ window.gazeDataManager = gazeDataManager;
 // Dev key: for localhost
 const LICENSE_KEY = window.location.hostname === "selfso2014.github.io"
   ? "prod_srdpyuuaumnsqoyk2pvdci0rg3ahsr923bshp32u"
-  : "dev_1ntzip9admm6g0upynw3gooycnecx0vl93hz8nox";
+  : "prod_srdpyuuaumnsqoyk2pvdci0rg3ahsr923bshp32u";
 
 const DEBUG_LEVEL = (() => {
   const params = new URLSearchParams(location.search);
