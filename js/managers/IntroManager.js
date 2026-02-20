@@ -11,61 +11,58 @@ export class IntroManager {
 
     bindEvents() {
         const startBtn = document.getElementById("btn-start-game");
-        if (startBtn) {
-            startBtn.onclick = async () => {
-                // Prevent double clicks & Show Loading immediately
-                startBtn.disabled = true;
-                startBtn.classList.add("loading");
-                startBtn.innerText = "Initializing...";
 
-                // 1. Check In-App Browser
+        if (!startBtn) {
+            console.error("FATAL: Start Button Not Found!");
+            return;
+        }
+
+        const handleStart = async (e) => {
+            if (e && e.type === 'touchend') e.preventDefault(); // Prevent ghost clicks on mobile
+            if (startBtn.disabled) return;
+
+            // 1. Immediate UI Feedback
+            startBtn.disabled = true;
+            startBtn.classList.add("loading");
+            startBtn.innerText = "Initializing...";
+
+            try {
+                // 2. Check In-App Browser (Sync Check)
                 if (this.isInAppBrowser()) {
                     this.openSystemBrowser();
                     this.resetStartBtn(startBtn);
                     return;
                 }
 
-                /* 
-                // 2. Fullscreen Request (REMOVED per user preference)
-                // Restoration of original behavior: Do not force fullscreen.
-                try {
-                    if (document.documentElement.requestFullscreen) {
-                        await document.documentElement.requestFullscreen();
-                    }
-                } catch (e) {
-                    console.warn("Fullscreen deferred: " + e.message);
-                }
-                */
-
-                // 3. Initialize Eye Tracking SDK
-                try {
-                    console.log("[IntroManager] Requesting Eye Tracking Boot...");
-                    if (typeof window.startEyeTracking === 'function') {
-                        // Must be called DIRECTLY in event handler for mobile permissions
-                        const success = await window.startEyeTracking();
-                        if (!success) {
-                            console.error("[IntroManager] Eye Tracking Init Failed!");
-                            alert("Eye tracking failed to initialize. Please check camera permissions.");
-                            this.resetStartBtn(startBtn);
-                            return; // Stop here
-                        }
-                    } else {
-                        console.error("[IntroManager] startEyeTracking function not found!");
-                        alert("System Error: Tracking module missing.");
-                        this.resetStartBtn(startBtn);
-                        return;
-                    }
-                } catch (e) {
-                    console.error("[IntroManager] SDK Boot Error:", e);
-                    alert("Error starting eye tracking: " + e.message);
-                    this.resetStartBtn(startBtn);
-                    return;
+                // 3. Initialize Eye Tracking SDK (Async - Needs User Gesture Context)
+                if (typeof window.startEyeTracking !== 'function') {
+                    throw new Error("System Error: SDK Module Missing. Please refresh.");
                 }
 
-                // 4. Start Rift Intro
+                console.log("[IntroManager] Requesting Eye Tracking Boot...");
+                const success = await window.startEyeTracking();
+
+                if (!success) {
+                    throw new Error("Initialization Failed. Check Camera Permissions.");
+                }
+
+                // 4. Success -> Start Intro
                 this.startRiftIntro();
-            };
-        }
+
+            } catch (error) {
+                console.error("[IntroManager] Boot Error:", error);
+                alert("Start Failed: " + error.message);
+                this.resetStartBtn(startBtn);
+            }
+        };
+
+        // Remove previous listeners to be safe
+        startBtn.onclick = null;
+
+        // Touch Event (Superior for Mobile)
+        startBtn.addEventListener('touchend', (e) => handleStart(e), { passive: false });
+        // Click Event (Desktop Fallback)
+        startBtn.addEventListener('click', (e) => handleStart(e));
 
         // --- DEBUG: Mission Report Shortcut ---
         this.createDebugReportButton();
