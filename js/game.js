@@ -1173,119 +1173,179 @@ Game.typewriter = {
         this.updateGazeStats(x, y);
     },
 
+    // [Feature] Floating Text Effect (Restored)
+    spawnFloatingText(element, text, type = "normal") {
+        if (!element) return;
+
+        const floatEl = document.createElement("div");
+        floatEl.textContent = text;
+        floatEl.className = "floating-text " + type;
+
+        // Style
+        floatEl.style.position = "absolute";
+        floatEl.style.left = "50%";
+        floatEl.style.top = "50%";
+        floatEl.style.transform = "translate(-50%, -50%)"; // Center
+        floatEl.style.color = type === "error" ? "#ff5252" : (type === "success" ? "#69f0ae" : "#fff");
+        floatEl.style.fontSize = "1.5rem";
+        floatEl.style.fontWeight = "bold";
+        floatEl.style.pointerEvents = "none";
+        floatEl.style.whiteSpace = "nowrap";
+        floatEl.style.textShadow = "0 2px 4px rgba(0,0,0,0.8)";
+        floatEl.style.zIndex = "1000";
+        floatEl.style.opacity = "1";
+        floatEl.style.transition = "all 1s ease-out";
+
+        element.appendChild(floatEl);
+
+        // Animate
+        requestAnimationFrame(() => {
+            floatEl.style.top = "20%"; // Move Up
+            floatEl.style.opacity = "0";
+        });
+
+        // Cleanup
+        setTimeout(() => {
+            if (floatEl.parentNode) floatEl.parentNode.removeChild(floatEl);
+        }, 1000);
+    },
+
     checkBossAnswer(optionIndex) {
-        const currentIndex = this.currentParaIndex;
-        // Debugging
-        const quiz = this.quizzes[currentIndex];
+        try {
+            // [Safety] Find Quiz Data (Safely)
+            const quiz = (this.currentChapter && this.currentChapter.boss_quiz)
+                ? this.currentChapter.boss_quiz
+                : (this.quizzes ? this.quizzes[this.currentParaIndex] : null);
 
-        // Correct Answer Check
-        // Correct Answer Check
-        if (optionIndex === quiz.a) {
-            // [FIX] Disable ALL buttons immediately to prevent double-click / race conditions
-            const allBtns = document.querySelectorAll("#boss-options button");
-            allBtns.forEach(b => b.disabled = true);
-
-            // SUCCESS
-            // logic moved to flying resource callback
-            // Game.addGems(10); 
-
-            // Trigger Visuals
-            const btn = allBtns[optionIndex];
-            if (btn && typeof Game.spawnFlyingResource === 'function') {
-                const rect = btn.getBoundingClientRect();
-                Game.spawnFlyingResource(rect.left + rect.width / 2, rect.top + rect.height / 2, 10, 'gem');
-            } else {
-                Game.addGems(10); // Fallback
-                console.log("Boss Defeated! +10 Gems");
+            if (!quiz) {
+                console.warn("[Game] No quiz data found for index " + this.currentParaIndex);
+                this.forceAdvanceStage(); // Safety Fallback
+                return;
             }
 
-            // Hide Boss UI after animation (1.0s delay)
-            const villainScreen = document.getElementById("screen-boss");
-            if (villainScreen) {
-                // Just prevent interaction immediately
-                villainScreen.style.pointerEvents = "none";
-            }
-            // Logic for next screen is handled below with delay
+            // Correct Answer?
+            if (optionIndex === quiz.a) {
+                // [FIX] Disable ALL buttons immediately
+                const allBtns = document.querySelectorAll("#boss-options button, #boss-quiz-options button");
+                allBtns.forEach(b => b.disabled = true);
 
-            // Check if this was the Last Paragraph
-            if (this.currentParaIndex >= this.paragraphs.length - 1) {
-                // [CHANGED] Instead of Victory, go to FINAL BOSS
-                console.log("[Game] All paragraphs done. Summoning ARCH-VILLAIN...");
-                setTimeout(() => {
-                    // 1. FORCE HIDE MID BOSS SCREEN
-                    const vs = document.getElementById("screen-boss");
-                    if (vs) {
-                        vs.style.display = "none";
-                        vs.classList.remove("active");
-                        vs.style.pointerEvents = "auto";
-                    }
+                // SUCCESS
+                // 1. Logic moved to flying resource callback if possible
 
-                    // 2. Log Transition
-                    console.log("Direct Trigger Final Boss (v14.1.32)! Skip GameLogic.");
+                // Trigger Visuals
+                const btn = document.querySelectorAll("#boss-quiz-options button")[optionIndex];
+                if (btn && typeof Game.spawnFlyingResource === 'function') {
+                    const rect = btn.getBoundingClientRect();
+                    Game.spawnFlyingResource(rect.left + rect.width / 2, rect.top + rect.height / 2, 10, 'gem');
+                } else {
+                    Game.addGems(10);
+                    // Try Floating Text
+                    try {
+                        this.spawnFloatingText(document.querySelector(".boss-dialog-box"), "+10 Gems!", "success");
+                    } catch (e) { }
+                }
 
-                    // 3. FORCE SWITCH SCREEN (Manual)
-                    const aliceScreen = document.getElementById("screen-alice-battle");
-                    if (aliceScreen) {
-                        // Hide all screens
-                        document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
-                        // Show Alice Screen
-                        aliceScreen.classList.add('active');
-                        aliceScreen.style.display = "flex";
-                    } else {
-                        console.error("ERROR: screen-alice-battle element missing!");
-                    }
+                // Hide Boss UI after animation (1.0s delay)
+                const villainScreen = document.getElementById("screen-boss");
+                if (villainScreen) villainScreen.style.pointerEvents = "none";
 
-                    // 4. INIT ALICE BATTLE (WITH DATA)
+                // Check if Last Paragraph
+                if (this.currentParaIndex >= this.paragraphs.length - 1) {
+                    // GO TO FINAL BOSS
+                    console.log("[Game] All paragraphs done. Summoning ARCH-VILLAIN...");
                     setTimeout(() => {
-                        if (window.AliceBattleRef) {
-                            const currentStats = {
-                                ink: Game.state.ink,
-                                rune: Game.state.rune,
-                                gem: Game.state.gems
-                            };
-                            window.AliceBattleRef.init(currentStats);
-                        } else {
-                            console.error("FATAL: AliceBattleRef NOT FOUND!");
-                        }
-                    }, 100);
+                        this.triggerFinalBossBattleSequence();
+                    }, 1000);
+                } else {
+                    // GO TO NEXT PARAGRAPH
+                    const villainModal = document.getElementById("villain-modal");
+                    if (villainModal) villainModal.style.display = "none";
 
-                }, 1000);
-            } else {
-                // GO TO NEXT PARAGRAPH
-                // Force hide villain modal if exists
-                const villainModal = document.getElementById("villain-modal");
-                if (villainModal) villainModal.style.display = "none";
+                    this.currentParaIndex++;
+                    console.log(`[Game] Advancing to Stage ${this.currentParaIndex + 1}...`);
 
-                this.currentParaIndex++;
-                console.log(`[Game] Advancing to Stage ${this.currentParaIndex + 1}...`);
+                    // Reset State
+                    this.chunkIndex = 0;
+                    this.lineStats.clear();
 
-                // Reset State for Next Paragraph
-                this.chunkIndex = 0;
-                this.lineStats.clear();
-                // Note: Do NOT resume 'isPaused' here. It will be resumed inside playNextParagraph() after content is ready.
-
-                // Ensure clean transition with shorter delay (1.5s) per request
-                setTimeout(() => {
-                    Game.switchScreen("screen-read");
-                    // Wait a bit for screen transition before starting text
                     setTimeout(() => {
-                        this.chunkIndex = 0; // Double ensure reset
-                        this.playNextParagraph();
-                    }, 500);
-                }, 1500); // Reduced from 3000 to 1500
-            }
-        } else {
-            // FAILURE
-            Game.addGems(-10); // -10 Gem (Penalty)
-            Game.spawnFloatingText(document.querySelector(".boss-dialog-box"), "-10 Gems", "error");
+                        Game.switchScreen("screen-read");
+                        setTimeout(() => {
+                            this.chunkIndex = 0;
+                            this.playNextParagraph();
+                        }, 500);
+                    }, 1500);
+                }
+            } else {
+                // FAILURE
+                Game.addGems(-10);
+                try {
+                    this.spawnFloatingText(document.querySelector(".boss-dialog-box"), "-10 Gems", "error");
+                } catch (e) { console.warn("FloatingText failed", e); }
 
-            const btn = document.querySelectorAll("#boss-quiz-options button")[optionIndex];
-            if (btn) {
-                btn.style.background = "#c62828";
-                btn.innerText += " (Wrong)";
-                btn.disabled = true;
+                const btns = document.querySelectorAll("#boss-quiz-options button");
+                if (btns && btns[optionIndex]) {
+                    btns[optionIndex].style.background = "#c62828";
+                    btns[optionIndex].innerText += " (Wrong)";
+                    btns[optionIndex].disabled = true;
+                }
             }
+        } catch (e) {
+            console.error("[Game] checkBossAnswer Critical Error:", e);
+            alert("Error processing answer. Moving to next stage.");
+            // Force Advance
+            this.forceAdvanceStage();
         }
+    },
+
+    // [New] Helper to force advance on error
+    forceAdvanceStage() {
+        this.currentParaIndex++;
+        setTimeout(() => {
+            Game.switchScreen("screen-read");
+            setTimeout(() => { this.playNextParagraph(); }, 500);
+        }, 1000);
+    },
+
+    // Extracted Helper: Trigger Final Boss
+    triggerFinalBossBattleSequence() {
+        // 1. FORCE HIDE MID BOSS SCREEN
+        const vs = document.getElementById("screen-boss");
+        if (vs) {
+            vs.style.display = "none";
+            vs.classList.remove("active");
+            vs.style.pointerEvents = "auto";
+        }
+
+        // 2. Log
+        console.log("Direct Trigger Final Boss (v14.1.32)! Skip GameLogic.");
+
+        // 3. FORCE SWITCH SCREEN (Manual)
+        const aliceScreen = document.getElementById("screen-alice-battle");
+        if (aliceScreen) {
+            // Hide all screens
+            document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+            // Show Alice Screen
+            aliceScreen.classList.add('active');
+            aliceScreen.style.display = "flex";
+        } else {
+            console.error("ERROR: screen-alice-battle element missing!");
+            return;
+        }
+
+        // 4. INIT ALICE BATTLE (WITH DATA)
+        setTimeout(() => {
+            if (window.AliceBattleRef) {
+                const currentStats = {
+                    ink: Game.state.ink,
+                    rune: Game.state.rune,
+                    gem: Game.state.gems
+                };
+                window.AliceBattleRef.init(currentStats);
+            } else {
+                console.error("FATAL: AliceBattleRef NOT FOUND!");
+            }
+        }, 100);
     },
 
     // [State] Simple Battle System (Delegated to GameLogic)
