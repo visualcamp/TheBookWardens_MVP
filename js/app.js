@@ -30,10 +30,82 @@ const LICENSE_KEY = window.location.hostname === "selfso2014.github.io"
   : "dev_1ntzip9admm6g0upynw3gooycnecx0vl93hz8nox";
 
 const DEBUG_LEVEL = (() => {
-  const v = new URLSearchParams(location.search).get("debug");
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0; // Default: 0 (Hidden)
+  const params = new URLSearchParams(location.search);
+  // [MOD] Default: 1 (Enabled) if no param, or ?debug=1
+  // If ?debug=0, then 0 (Hidden)
+  if (!params.has("debug")) return 1;
+
+  const n = Number(params.get("debug"));
+  return Number.isFinite(n) ? n : 0;
 })();
+
+// --- [NEW] Debug Meter: Memory Leak Tracker ---
+const activeRafs = new Set();
+const listenerCounts = {};
+let totalListeners = 0;
+
+// Hook RAF
+const originalRAF = window.requestAnimationFrame;
+const originalCAF = window.cancelAnimationFrame;
+
+window.requestAnimationFrame = (cb) => {
+  const id = originalRAF((t) => {
+    activeRafs.delete(id);
+    if (cb) cb(t);
+  });
+  activeRafs.add(id);
+  return id;
+};
+
+window.cancelAnimationFrame = (id) => {
+  activeRafs.delete(id);
+  originalCAF(id);
+};
+
+// Hook Event Listeners
+const originalAdd = EventTarget.prototype.addEventListener;
+const originalRemove = EventTarget.prototype.removeEventListener;
+
+EventTarget.prototype.addEventListener = function (type, listener, options) {
+  listenerCounts[type] = (listenerCounts[type] || 0) + 1;
+  totalListeners++;
+  return originalAdd.call(this, type, listener, options);
+};
+
+EventTarget.prototype.removeEventListener = function (type, listener, options) {
+  if (listenerCounts[type] > 0) {
+    listenerCounts[type]--;
+    totalListeners--;
+  }
+  return originalRemove.call(this, type, listener, options);
+};
+
+// Start 1s Metric Loop
+setInterval(() => {
+  // Only log if debug is enabled OR to console if critical
+  const rafCount = activeRafs.size;
+
+  const metricData = {
+    ts: new Date().toISOString(),
+    rafCount: rafCount,
+    rafs: Array.from(activeRafs),
+    listenerCount: totalListeners,
+    listeners: { ...listenerCounts },
+    buffers: {}
+  };
+
+  // Log format requested by user
+  logBase("INFO", "Meter", `RAF:${rafCount} | LSN:${totalListeners} | BUF:?`, metricData);
+
+  // Critical Warnings (iOS Crash Prevention)
+  if (rafCount > 2) {
+    logE("CRITICAL", `RAF > 2: [${Array.from(activeRafs)}]`);
+  }
+  if (totalListeners > 60) {
+    logE("CRITICAL", `LSN > 60:`, listenerCounts);
+  }
+
+}, 1000);
 
 // ---------- DOM ----------
 const els = {
@@ -69,89 +141,200 @@ function safeJson(v) {
 }
 
 function ensureLogPanel() {
-  if (DEBUG_LEVEL === 0) return null; // Don't create panel if debug is off
+  // Always create panel structure, but hide if debug=0
+  // (We want it available for activation via secret gesture or URL param changes if we implement that later)
+  // For now, respect DEBUG_LEVEL
+  if (DEBUG_LEVEL === 0) return null;
 
-  let panel = document.getElementById("debugLogPanel");
-  if (panel) return panel;
+  let container = document.getElementById("debugContainer");
+  if (container) return document.getElementById("debugLogPanel");
 
-  panel = document.createElement("pre");
+  // Main Container
+  container = document.createElement("div");
+  container.id = "debugContainer";
+  container.style.position = "fixed";
+  container.style.right = "20px";
+  container.style.bottom = "80px"; // Moved up to avoid bottom nav bars
+  container.style.zIndex = "99999";
+  container.style.display = "flex";
+  container.style.flexDirection = "column";
+  container.style.alignItems = "flex-end";
+  container.style.gap = "10px"; // Increased gap
+
+  // Toggle Button (Mini Mode)
+  const btnToggle = document.createElement("button");
+  btnToggle.textContent = "🐞";
+  btnToggle.style.fontSize = "32px"; // Bigger icon
+  btnToggle.style.width = "56px"; // Bigger touch target
+  btnToggle.style.height = "56px";
+  btnToggle.style.borderRadius = "50%";
+  btnToggle.style.border = "2px solid rgba(255,255,255,0.4)";
+  btnToggle.style.background = "rgba(0,0,0,0.7)";
+  btnToggle.style.color = "#fff";
+  btnToggle.style.cursor = "pointer";
+  btnToggle.style.boxShadow = "0 4px 12px rgba(0,0,0,0.6)";
+  btnToggle.style.transition = "transform 0.2s";
+
+  // Panel (Hidden by default)
+  const panel = document.createElement("pre");
   panel.id = "debugLogPanel";
-  panel.style.position = "fixed";
-  panel.style.right = "12px";
-  panel.style.bottom = "12px";
-  panel.style.width = "560px";
-  panel.style.maxWidth = "calc(100vw - 24px)";
-  panel.style.height = "320px";
-  panel.style.maxHeight = "40vh";
+  panel.style.display = "none";
+  panel.style.width = "340px"; // Slightly wider
+  panel.style.height = "250px"; // Slightly taller
   panel.style.overflow = "auto";
-  panel.style.padding = "10px";
-  panel.style.borderRadius = "10px";
-  panel.style.background = "rgba(0,0,0,0.75)";
-  panel.style.color = "#d7f7d7";
-  panel.style.fontFamily =
-    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
-  panel.style.fontSize = "12px";
-  panel.style.lineHeight = "1.35";
-  panel.style.zIndex = "99999";
+  panel.style.padding = "12px";
+  panel.style.borderRadius = "12px";
+  panel.style.background = "rgba(0,0,0,0.9)";
+  panel.style.color = "#0f0";
+  panel.style.fontFamily = "monospace";
+  panel.style.fontSize = "11px";
   panel.style.whiteSpace = "pre-wrap";
   panel.style.wordBreak = "break-word";
-  panel.style.userSelect = "text";
+  panel.style.border = "1px solid #444";
+  panel.style.marginBottom = "5px";
 
-  const header = document.createElement("div");
-  header.style.position = "fixed";
-  header.style.right = "12px";
-  header.style.bottom = "340px";
-  header.style.width = panel.style.width;
-  header.style.maxWidth = panel.style.maxWidth;
-  header.style.display = "flex";
-  header.style.gap = "8px";
-  header.style.zIndex = "99999";
+  // Toolbar
+  const toolbar = document.createElement("div");
+  toolbar.style.display = "none";
+  toolbar.style.gap = "8px"; // Increased gap
+  toolbar.style.flexWrap = "wrap"; // Allow wrapping
+  toolbar.style.justifyContent = "flex-end";
 
-  const btnCopy = document.createElement("button");
-  btnCopy.textContent = "Copy Logs";
-  btnCopy.style.padding = "6px 10px";
-  btnCopy.style.borderRadius = "8px";
-  btnCopy.style.border = "1px solid rgba(255,255,255,0.2)";
-  btnCopy.style.background = "rgba(255,255,255,0.08)";
-  btnCopy.style.color = "white";
-  btnCopy.onclick = async () => {
+  let isExpanded = false;
+
+  const createBtn = (text, onClick, color = "#fff", bg = "#333") => {
+    const b = document.createElement("button");
+    b.textContent = text;
+    b.style.padding = "8px 14px"; // Larger touch area
+    b.style.fontSize = "13px";
+    b.style.fontWeight = "bold";
+    b.style.borderRadius = "6px";
+    b.style.border = "1px solid #666";
+    b.style.background = bg;
+    b.style.color = color;
+    b.style.cursor = "pointer";
+    b.onclick = onClick;
+    return b;
+  };
+
+  // Copy
+  toolbar.appendChild(createBtn("📋 Copy", async () => {
     try {
-      await navigator.clipboard.writeText(panel.textContent || "");
-      logI("ui", "Logs copied to clipboard");
+      await navigator.clipboard.writeText(JSON.stringify(LOG_BUFFER, null, 2));
+      const originalText = panel.textContent;
+      panel.textContent += "\n[System] Copied to Clipboard!";
+      panel.scrollTop = panel.scrollHeight;
+      setTimeout(() => alert("Logs Copied!"), 100);
+    } catch (e) { alert("Copy Failed"); }
+  }));
+
+  // Clear
+  toolbar.appendChild(createBtn("🗑️ Clear", () => {
+    LOG_BUFFER.length = 0;
+    panel.textContent = "";
+    // [NEW] Clear LocalStorage too
+    try { localStorage.removeItem("debug_log_backup"); } catch (e) { }
+  }, "#ff8a80"));
+
+  // Upload (DB)
+  const btnUpload = createBtn("☁️ Upload DB", async () => {
+    // UI Feedback: Loading
+    const originalText = btnUpload.textContent;
+    btnUpload.textContent = "⏳ Sending...";
+    btnUpload.disabled = true;
+    btnUpload.style.opacity = "0.7";
+    btnUpload.style.cursor = "wait";
+
+    if (!window.firebase) {
+      alert("Error: Firebase SDK not loaded.");
+      resetBtn();
+      return;
+    }
+
+    try {
+      // [FIX] Ensure Firebase App is initialized
+      if (!firebase.apps.length) {
+        if (window.FIREBASE_CONFIG) {
+          firebase.initializeApp(window.FIREBASE_CONFIG);
+        } else {
+          throw new Error("Missing window.FIREBASE_CONFIG");
+        }
+      }
+
+      const db = firebase.database();
+      const sessionId = "session_" + Date.now();
+
+      // [NEW] Retrieve Crashed Logs from LocalStorage
+      let crashLogs = [];
+      try {
+        const stored = localStorage.getItem("debug_log_backup");
+        if (stored) crashLogs = JSON.parse(stored);
+      } catch (e) { console.warn("No crash logs found"); }
+
+      // Merge: Crash Logs (Old) + Current Logs (New)
+      // If crash logs exist, they are likely from the session that just died.
+      const uploadData = {
+        ua: navigator.userAgent,
+        timestamp: new Date().toISOString(),
+        logs: LOG_BUFFER, // Current Session (Post-Crash)
+        crashLogs: crashLogs.length > 0 ? crashLogs : null // Previous Session (Pre-Crash)
+      };
+
+      // Timeout Promise (10s)
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout (10s)")), 10000)
+      );
+
+      // Race: Upload vs Timeout
+      await Promise.race([
+        db.ref("logs/" + sessionId).set(uploadData),
+        timeout
+      ]);
+
+      let msg = `✅ Upload Success!\nSession ID: ${sessionId}`;
+      if (crashLogs.length > 0) msg += `\n(Recovered ${crashLogs.length} lines from crash)`;
+      alert(msg);
+
+      panel.textContent += `\n[System] Uploaded to: logs/${sessionId}`;
+      // Clear backup after successful upload to avoid duplicate uploads
+      localStorage.removeItem("debug_log_backup");
+
     } catch (e) {
-      logE("ui", "Failed to copy logs", e);
+      console.error(e);
+      alert("❌ Upload Failed: " + e.message);
+    } finally {
+      resetBtn();
+    }
+
+    function resetBtn() {
+      btnUpload.textContent = originalText;
+      btnUpload.disabled = false;
+      btnUpload.style.opacity = "1";
+      btnUpload.style.cursor = "pointer";
+    }
+  }, "#40c4ff", "#01579b"); // Blue color
+
+  toolbar.appendChild(btnUpload);
+
+  // Toggle Logic
+  btnToggle.onclick = () => {
+    isExpanded = !isExpanded;
+    panel.style.display = isExpanded ? "block" : "none";
+    toolbar.style.display = isExpanded ? "flex" : "none";
+    btnToggle.textContent = isExpanded ? "❌" : "🐞";
+    if (isExpanded) {
+      panel.scrollTop = panel.scrollHeight;
+      btnToggle.style.transform = "scale(0.9)";
+    } else {
+      btnToggle.style.transform = "scale(1)";
     }
   };
 
-  const btnClear = document.createElement("button");
-  btnClear.textContent = "Clear Logs";
-  btnClear.style.padding = "6px 10px";
-  btnClear.style.borderRadius = "8px";
-  btnClear.style.border = "1px solid rgba(255,255,255,0.2)";
-  btnClear.style.background = "rgba(255,255,255,0.08)";
-  btnClear.style.color = "white";
-  btnClear.onclick = () => {
-    LOG_BUFFER.length = 0;
-    panel.textContent = "";
-    logI("ui", "Logs cleared");
-  };
+  container.appendChild(panel);
+  container.appendChild(toolbar);
+  container.appendChild(btnToggle);
+  document.body.appendChild(container);
 
-  const badge = document.createElement("div");
-  badge.textContent = `debug=${DEBUG_LEVEL}`;
-  badge.style.marginLeft = "auto";
-  badge.style.padding = "6px 10px";
-  badge.style.borderRadius = "999px";
-  badge.style.border = "1px solid rgba(255,255,255,0.2)";
-  badge.style.background = "rgba(255,255,255,0.08)";
-  badge.style.color = "white";
-  badge.style.fontSize = "12px";
-
-  header.appendChild(btnCopy);
-  header.appendChild(btnClear);
-  header.appendChild(badge);
-
-  document.body.appendChild(header);
-  document.body.appendChild(panel);
   return panel;
 }
 
@@ -481,9 +664,9 @@ async function ensureCamera() {
     mediaStream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: "user",
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-        frameRate: { ideal: 30, max: 60 },
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+        frameRate: { ideal: 30, max: 30 },
       },
       audio: false,
     });
@@ -552,10 +735,11 @@ function attachSeesoCallbacks() {
     const stName = SDK?.TrackingState ? enumName(SDK.TrackingState, stVal) : String(stVal);
 
     // IMPORTANT: string message so NaN/undefined remains visible
-    logI("gaze", `xy x=${fmt(xRaw)} y=${fmt(yRaw)} state=${stName}(${fmt(stVal)}) conf=${fmt(conf)}`);
+    // [MOD] Removed per user request (too noisy)
+    // logI("gaze", `xy x=${fmt(xRaw)} y=${fmt(yRaw)} state=${stName}(${fmt(stVal)}) conf=${fmt(conf)}`);
 
-    // Also reflect on HUD
-    setGazeInfo(`gaze: x=${fmt(xRaw)}  y=${fmt(yRaw)}  state=${stName}(${fmt(stVal)})  conf=${fmt(conf)}`);
+    // [MOD] Removed per user request (too noisy)
+    // setGazeInfo(`gaze: x=${fmt(xRaw)}  y=${fmt(yRaw)}  state=${stName}(${fmt(stVal)})  conf=${fmt(conf)}`);
 
     if ((typeof xRaw !== "number" || typeof yRaw !== "number") && DEBUG_LEVEL >= 2) {
       logD("gaze", "schema", { keys: g ? Object.keys(g) : null });
@@ -640,10 +824,11 @@ async function initSeeso() {
 
     seeso = new SeesoClass();
     window.__seeso = { SDK, seeso };
-
-    setState("sdk", "constructed");
-    logI("sdk", "module loaded", { exportedKeys: Object.keys(SDK || {}) });
-    // [REMOVED] Intermediate Toast: "Spells Loaded!"
+      // Initialize Engine
+      // [REVERT] Use full features as requested (Stable)
+      const userStatusOption = SDK?.UserStatusOption
+        ? new SDK.UserStatusOption(true, true, true)
+        : { useAttention: true, useBlink: true, useDrowsiness: true };
 
   } catch (e) {
     setState("sdk", "load_failed");
@@ -675,9 +860,18 @@ async function initSeeso() {
       if (window.updateLoadingProgress) window.updateLoadingProgress(0, "Hero Not Found :(");
       return false;
     }
+  return initPromise;
+}
 
-    setState("sdk", "initialized");
-    // [REMOVED] Intermediate Toast: "Focusing..."
+// Auto-start preload after short delay
+// [CHANGE] Manual Trigger Only: Do not auto-preload on load.
+// setTimeout(preloadSDK, 500);
+
+// Modified initSeeso (now just waits for preload)
+async function initSeeso() {
+  if (!initPromise) preloadSDK();
+  try {
+    await initPromise;
     return true;
   } catch (e) {
     setState("sdk", "init_exception");
@@ -735,11 +929,20 @@ function startCalibration() {
     overlay.calPointCount = 0;
 
     if (ok) {
+      // [FIX] Prevent duplicate loops
+      if (overlay.rafId) {
+        cancelAnimationFrame(overlay.rafId);
+        overlay.rafId = null;
+      }
+
       // Start single animation loop for calibration
       const tick = () => {
-        if (!overlay.calRunning) return;
+        if (!overlay.calRunning) {
+          overlay.rafId = null;
+          return;
+        }
         renderOverlay();
-        requestAnimationFrame(tick);
+        overlay.rafId = requestAnimationFrame(tick);
       };
       tick();
     }

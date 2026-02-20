@@ -10,32 +10,76 @@ export class IntroManager {
     }
 
     bindEvents() {
-        const startBtn = document.getElementById("btn-start-game");
-        if (startBtn) {
-            startBtn.onclick = async () => {
-                // 1. Check In-App Browser
-                if (this.isInAppBrowser()) {
-                    this.openSystemBrowser();
-                    return;
-                }
+        const tryBind = () => {
+            const startBtn = document.getElementById("btn-start-game");
+            if (!startBtn) return false;
 
-                // 2. Fullscreen Request
+            const handleStart = async (e) => {
+                if (e && e.type === 'touchend') e.preventDefault(); // Prevent ghost clicks
+                if (startBtn.classList.contains("loading")) return;
+
+                // 1. Immediate UI Feedback
+                startBtn.classList.add("loading");
+                startBtn.innerText = "Initializing...";
+                startBtn.disabled = true;
                 try {
-                    if (document.documentElement.requestFullscreen) {
-                        await document.documentElement.requestFullscreen();
+                    // 2. Check Browser (Sync)
+                    if (this.isInAppBrowser()) {
+                        this.openSystemBrowser();
+                        this.resetStartBtn(startBtn);
+                        return;
                     }
-                } catch (e) {
-                    console.warn("Fullscreen deferred: " + e.message);
-                }
 
-                // 3. Start Rift Intro
-                this.startRiftIntro();
+                    // 3. Eye Tracking Init (Async - Needs User Gesture)
+                    if (typeof window.startEyeTracking !== 'function') {
+                        throw new Error("System Error: SDK Module Missing. Reload needed.");
+                    }
+                    console.log("[IntroManager] Requesting Eye Tracking Boot...");
+                    const success = await window.startEyeTracking();
+
+                    if (!success) {
+                        throw new Error("Initialization Failed. Check Camera Permissions.");
+                    }
+
+                    // 4. Success -> Start Intro
+                    this.startRiftIntro();
+
+                } catch (error) {
+                    console.error("[IntroManager] Boot Error:", error);
+                    alert("Start Failed: " + error.message);
+                    this.resetStartBtn(startBtn);
+                }
             };
+
+            // Remove previous listeners
+            startBtn.onclick = null;
+            // Clean Clone to wipe all listeners (if any)
+            const newBtn = startBtn.cloneNode(true);
+            startBtn.parentNode.replaceChild(newBtn, startBtn);
+
+            // Bind New Listeners
+            newBtn.addEventListener('touchend', (e) => handleStart(e), { passive: false });
+            newBtn.addEventListener('click', (e) => handleStart(e));
+
+            console.log("[IntroManager] Start Button Bound Successfully.");
+            return true;
+        };
+
+        // Try immediately
+        if (!tryBind()) {
+            console.warn("[IntroManager] Start Button not found. Polling...");
+            // Poll every 500ms
+            const poll = setInterval(() => {
+                if (tryBind()) clearInterval(poll);
+            }, 500);
+            this.game.trackInterval(poll); // Auto-cleanup
         }
 
         // --- DEBUG: Mission Report Shortcut ---
         this.createDebugReportButton();
     }
+
+
 
     createDebugReportButton() {
         // Prevent duplicate button
@@ -156,9 +200,9 @@ export class IntroManager {
         if (villainContainer) villainContainer.style.opacity = 1;
 
         // Start light meteors
-        const lightMeteorLoop = setInterval(() => {
+        const lightMeteorLoop = this.game.trackInterval(setInterval(() => {
             if (Math.random() > 0.7) this.spawnMeteor(meteorLayer);
-        }, 300);
+        }, 300));
 
         await wait(1500);
         clearInterval(lightMeteorLoop);
@@ -172,10 +216,10 @@ export class IntroManager {
         if (this.game.sceneManager) this.game.sceneManager.showStoryText("The words are fading...<br>WARDEN, RESTORE THE STORY!");
         if (textContainer) textContainer.classList.add("rift-damaged");
 
-        const heavyMeteorLoop = setInterval(() => {
+        const heavyMeteorLoop = this.game.trackInterval(setInterval(() => {
             this.spawnMeteor(meteorLayer);
             this.spawnMeteor(meteorLayer);
-        }, 100);
+        }, 100));
 
         await wait(3000);
         await wait(800);
